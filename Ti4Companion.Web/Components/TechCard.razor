@@ -1,58 +1,39 @@
-@* A technology rendered as a card, laid out like the physical cards: faction marker top-left (circular,
-   for faction techs), prerequisites stacked at the bottom-left, the tech-point colour symbol bottom-right.
-   Unit upgrades show the unit image and Cost/Combat/Move/Capacity stat boxes instead. Clickable to add. *@
-@using System.Text.RegularExpressions
+@* A technology rendered as a card. Unit-upgrade techs delegate to the shared UnitCardView (unit
+   silhouette by type, ★ ability keywords, stat boxes at the bottom). Other techs keep the printed
+   layout: faction marker top-left (circular), prerequisites bottom-left, the tech-point colour symbol
+   bottom-right. Clickable to add. *@
 
-<div class="techcard @(Compact ? "compact" : "") @(OnClick.HasDelegate ? "clickable" : "")" style="--tc:@ColorHex(Tech.Color)" @onclick="HandleClick">
-    @if (Tech.FactionId is not null)
-    {
-        var f = Store.Faction(Tech.FactionId);
-        <span class="tc-fac" title="@FactionName(f)">
-            @if (f is { IconPath: { } ip } && !string.IsNullOrEmpty(ip)) { <img src="@ip" alt="" /> }
-            else { <span class="tc-facfb">★</span> }
-        </span>
-    }
-
-    <div class="tc-pre">
-        @foreach (var ch in Tech.Prerequisites) { <TechIcon Letter="ch" Size="@(Compact ? 14 : 18)" /> }
-    </div>
-
-    <div class="tc-body">
-        <div class="tc-name">@Loc.Pick(Tech.Name, Tech.NameDe)</div>
-
-        @if (Tech.Color == TechColor.Unit)
+@if (Tech.Color == TechColor.Unit)
+{
+    <UnitCardView Vm="BuildUnitVm()" Compact="Compact" OnClick="OnClick" />
+}
+else
+{
+    <div class="techcard @(Compact ? "compact" : "") @(OnClick.HasDelegate ? "clickable" : "")" style="--tc:@ColorHex(Tech.Color)" @onclick="HandleClick">
+        @if (Tech.FactionId is not null)
         {
-            var stats = UnitStats();
-            var abilities = UnitAbilities();
+            var f = Store.Faction(Tech.FactionId);
+            <span class="tc-fac" title="@FactionName(f)">
+                @if (f is { IconPath: { } ip } && !string.IsNullOrEmpty(ip)) { <img src="@ip" alt="" /> }
+                else { <span class="tc-facfb">★</span> }
+            </span>
+        }
+
+        <div class="tc-pre">
+            @foreach (var ch in Tech.Prerequisites) { <TechIcon Letter="ch" Size="@(Compact ? 14 : 18)" /> }
+        </div>
+
+        <div class="tc-body">
+            <div class="tc-name">@Loc.Pick(Tech.Name, Tech.NameDe)</div>
             @if (!Compact)
             {
-                <div class="tc-unit">
-                    @if (UnitImg is not null) { <img src="@UnitImg" class="tc-unitimg" alt="" /> }
-                    else { <UnitImage Size="44" Label="@Loc.Pick(Tech.Name, Tech.NameDe)" /> }
-                    @if (!string.IsNullOrWhiteSpace(abilities)) { <div class="tc-abil">@abilities</div> }
-                </div>
+                <div class="tc-desc">@Loc.Pick(Tech.Text, Tech.TextDe)</div>
             }
-            @if (stats.Count > 0)
-            {
-                <div class="tc-stats">
-                    @foreach (var (label, val) in stats)
-                    {
-                        <div class="tc-stat"><span class="v">@val</span><span class="l">@label</span></div>
-                    }
-                </div>
-            }
-        }
-        else if (!Compact)
-        {
-            <div class="tc-desc">@Loc.Pick(Tech.Text, Tech.TextDe)</div>
-        }
-    </div>
+        </div>
 
-    @if (Tech.Color != TechColor.Unit)
-    {
         <div class="tc-point"><TechIcon Color="Tech.Color" Size="@(Compact ? 24 : 36)" /></div>
-    }
-</div>
+    </div>
+}
 
 @code {
     [Parameter, EditorRequired] public TechnologyDto Tech { get; set; } = default!;
@@ -65,47 +46,28 @@
 
     private string FactionName(FactionDto? f) => f is null ? Loc["tech.faction"] : Loc.Pick(f.Name, f.NameDe);
 
-    private static readonly Regex StatRx =
-        new(@"\b(Cost|Combat|Move|Capacity)\s+(\d+(?:\(x\d+\))?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private List<(string Label, string Value)> UnitStats()
+    private UnitCardVM BuildUnitVm()
     {
-        var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (Match m in StatRx.Matches(Tech.Text ?? ""))
-            found[m.Groups[1].Value] = m.Groups[2].Value;
-        var result = new List<(string, string)>();
-        void Add(string key, string locKey) { if (found.TryGetValue(key, out var v)) result.Add((Loc[locKey], v)); }
-        Add("Cost", "unit.cost");
-        Add("Combat", "unit.combat");
-        Add("Move", "unit.move");
-        Add("Capacity", "unit.capacity");
-        return result;
+        var (stats, abilities, desc) = UnitText.ParseTechText(Loc.Pick(Tech.Text, Tech.TextDe), Tech.UnitType, StatLabel);
+        return new UnitCardVM(
+            Loc.Pick(Tech.Name, Tech.NameDe),
+            ColorHex(Tech.Color),
+            Tech.UnitType,
+            Tech.FactionId,
+            Tech.Prerequisites,
+            string.IsNullOrWhiteSpace(desc) ? null : desc,
+            abilities,
+            stats);
     }
 
-    private string UnitAbilities()
+    private string StatLabel(string key) => key.ToLowerInvariant() switch
     {
-        var rest = StatRx.Replace(Tech.Text ?? "", "");
-        rest = Regex.Replace(rest, @"[ ,.;]{2,}", " ").Trim(' ', ',', '.', ';');
-        return rest;
-    }
-
-    private string? UnitImg
-    {
-        get
-        {
-            var n = (Tech.Name ?? "").ToLowerInvariant();
-            if (n.Contains("carrier")) return "units/carrier.png";
-            if (n.Contains("cruiser")) return "units/cruiser.png";
-            if (n.Contains("destroyer")) return "units/destroyer.png";
-            if (n.Contains("fighter")) return "units/fighter.png";
-            if (n.Contains("infantry") || n.Contains("ground force")) return "units/infantry.png";
-            if (n.Contains("pds")) return "units/pds.png";
-            if (n.Contains("dock") || n.Contains("factory")) return "units/spacedock.png";
-            if (n.Contains("dreadnought")) return "units/dreadnought.webp";
-            if (n.Contains("war sun") || n.Contains("warsun")) return "units/warsun.webp";
-            return null; // flagships and bespoke faction units → generic placeholder
-        }
-    }
+        "cost" => Loc["unit.cost"],
+        "combat" => Loc["unit.combat"],
+        "move" => Loc["unit.move"],
+        "capacity" => Loc["unit.capacity"],
+        _ => key,
+    };
 
     private static string ColorHex(TechColor c) => c switch
     {

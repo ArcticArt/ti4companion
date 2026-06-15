@@ -249,7 +249,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .color-btn.sel { background: color-mix(in srgb, var(--cc) 18%, var(--panel-2)); border-color: var(--cc); box-shadow: 0 0 0 1px var(--cc); }
 
 /* tech browser / catalog (control view search results) */
-.tech-cat { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .5rem; }
+.tech-cat { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); grid-auto-rows: 1fr; gap: .5rem; }
 .tech-cat .tc-owned { color: var(--good); font-size: .72rem; }
 
 /* ---- Tech card (all equal size; prereqs left stacked, tech point right large) ---- */
@@ -273,22 +273,77 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Coloured name with a tech-colour → white gradient, like the printed cards. */
 .techcard .tc-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .9rem; line-height: 1.1;
     background: linear-gradient(90deg, var(--tc), #ffffff 85%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* unit names stay solid white, not the tech-colour gradient */
+.techcard.unitcard .tc-name { background: none; color: var(--text); -webkit-text-fill-color: var(--text); position: relative; z-index: 1; }
 .techcard.compact .tc-name { font-size: .8rem; }
 .techcard .tc-desc { font-size: .8rem; color: var(--text); line-height: 1.25; }
 /* Research point sits at the bottom-right, like the card. */
 .techcard .tc-point { display: flex; align-items: flex-end; justify-content: center; }
-.techcard .tc-unit { display: flex; align-items: center; gap: .5rem; }
-.techcard .tc-unitimg { width: 84px; height: 46px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
-.techcard .tc-abil { font-size: .74rem; color: var(--text); line-height: 1.18; }
-.techcard .tc-stats { display: flex; gap: .3rem; margin-top: .25rem; }
+/* ---- Unit cards (shared by unit-upgrade techs and base UnitCard): name on top, abilities + stats
+   pinned at the very bottom, silhouette placed by type (side / centred / backdrop). ---- */
+.techcard.unitcard { display: flex; }                              /* override the 3-col tech grid */
+.techcard.unitcard .tc-body { flex: 1; min-width: 0; display: flex; flex-direction: column;
+    position: relative; z-index: 1; }
+.techcard.unitcard .tc-foot { margin-top: auto; }                  /* abilities + stats sink to the bottom */
+.techcard.unitcard.has-gutter .tc-body { padding-left: 1.9rem; }   /* clear the marker / prereq pips */
+.techcard.unitcard.compact.has-gutter .tc-body { padding-left: 1.4rem; }
+.techcard.unitcard .tc-pre { position: absolute; left: .35rem; bottom: .5rem; min-width: 0; }
+
+/* unit silhouette: absolute so the text can sit beside or over it. */
+.techcard .tc-unitart { position: absolute; object-fit: contain; pointer-events: none; z-index: 0; }
+/* the prose sits vertically centred (beside the side image / over the backdrop silhouette). */
+.techcard.unitcard .tc-desc { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+/* side mode: silhouette right, vertically centred; prose padded to its left. */
+.techcard.unitcard.side .tc-unitart { right: .45rem; top: 46%; transform: translateY(-50%);
+    width: 38%; max-height: 52%; opacity: .9; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+.techcard.unitcard.side .tc-desc { padding-right: 39%; }
+/* centred mode: big ships are the focus, vertically centred (a gap on tall equal-height cards is
+   preferred over an over-large / clipped silhouette). */
+.techcard.unitcard.centered .tc-unitart { left: 50%; top: 42%; transform: translate(-50%, -50%);
+    width: 56%; max-height: 56%; opacity: .92; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+/* with abilities (dreadnought/destroyer) lift + shrink so the ★ line and stats stay clear of it */
+.techcard.unitcard.centered.hasabils .tc-unitart { top: 33%; max-height: 46%; }
+.techcard.unitcard.centered .tc-abils { justify-content: center; }
+.techcard.unitcard.centered .tc-foot { text-shadow: 0 1px 2px rgba(0,0,0,.85); }
+/* backdrop mode (flagships, dreadnought II, war sun): silhouette behind the text, filled solid black
+   with a white outline that glows and falls off outward. */
+.techcard.unitcard.backdrop .tc-unitart { right: 0; top: 43%; transform: translateY(-50%);
+    width: 82%; max-height: 84%; opacity: .9;
+    filter: brightness(0) drop-shadow(0 0 1px rgba(255,255,255,.9)) drop-shadow(0 0 3px rgba(255,255,255,.55)) drop-shadow(0 0 7px rgba(255,255,255,.28)); }
+/* crisp dark contour around the text so it reads cleanly against the white glow */
+.techcard.unitcard.backdrop .tc-body { text-shadow:
+    -1px -1px 0 #05080f, 1px -1px 0 #05080f, -1px 1px 0 #05080f, 1px 1px 0 #05080f,
+    0 0 3px #05080f, 0 0 4px #05080f; }
+
+/* abilities like the printed cards: a white four-point ✦ then the keyword in bold */
+.techcard .tc-abils { display: flex; flex-wrap: wrap; align-items: center; gap: .05rem .7rem; margin-top: .25rem; }
+.techcard .tc-abil { display: inline-flex; align-items: center; gap: .22em; font-size: .72rem; color: var(--text); line-height: 1.3; white-space: nowrap; }
+.techcard .tc-abil .star { color: var(--text); font-size: .82em; }
+.techcard .tc-abil b { font-weight: 700; letter-spacing: .02em; }
+.techcard .tc-abil .av { font-weight: 600; }
+
+.techcard .tc-stats { display: flex; gap: .3rem; margin-top: .3rem; }
 .techcard .tc-stat { flex: 1; text-align: center; background: #0c1426; border: 1px solid var(--panel-border); border-radius: 7px; padding: .15rem .1rem; }
-.techcard .tc-stat .v { display: block; font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--text); font-size: 1rem; }
-.techcard .tc-stat .l { display: block; font-size: .55rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-faint); }
+.techcard .tc-stat .v { display: flex; align-items: center; justify-content: center; gap: .2rem;
+    font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--text); font-size: 1rem; }
+.techcard .tc-stat .l { display: block; font-size: .55rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text); }
+/* fighter/infantry cost symbols + combat dice: a tight stack of small icons beside the number. */
+.techcard .tc-stat .statmult { display: inline-flex; flex-direction: column; gap: 1px; justify-content: center; }
+.techcard .tc-stat .statmult img { object-fit: contain; opacity: .95; }
+.techcard .tc-stat .statmult.cost img { width: 13px; height: 11px; }
+.techcard .tc-stat .statmult.dice img { width: 9px; height: 9px; }
+/* 3 dice (war sun): bow the middle one out to the right so they arc around the number */
+.techcard .tc-stat .statmult.dice.n3 img:nth-child(2) { transform: translateX(3px); }
 
 /* tech cards on the wall display: compact, in a fixed grid */
 .beamer .techgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13vw, 1fr)); gap: .5vh .6vw; align-content: start; overflow: hidden; }
 .beamer .techcard { min-height: 0; background: var(--panel-2); }
 .beamer .techcard .tc-name { font-size: clamp(.65rem, .92vw, 1.15rem); }
+/* keep unit cards inside the narrow wall column (the silhouette is % so it scales already) */
+.beamer .tc-abil { font-size: clamp(.5rem, .68vw, .8rem); white-space: normal; }
+.beamer .tc-stat .v { font-size: clamp(.7rem, 1vw, 1.1rem); }
+.beamer .tc-stat .statmult.cost img { width: clamp(8px, .9vw, 13px); height: auto; }
+.beamer .tc-stat .statmult.dice img { width: clamp(6px, .65vw, 9px); height: auto; }
 .beamer .tech-player { color: var(--gold); font-weight: 700; font-size: clamp(.8rem, 1.1vw, 1.4rem); margin: .4vh 0 .1vh; }
 
 /* agenda */

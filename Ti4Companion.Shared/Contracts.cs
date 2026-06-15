@@ -20,7 +20,7 @@ public record ObjectiveDto(
 
 public record TechnologyDto(
     string Id, string Name, string NameDe, TechColor Color, string Prerequisites,
-    string Text, string TextDe, Expansion Expansion, string? FactionId);
+    string Text, string TextDe, Expansion Expansion, string? FactionId, UnitType UnitType);
 
 public record AgendaDto(
     string Id, string Name, string NameDe, AgendaType Type, string Elect,
@@ -30,13 +30,26 @@ public record PlanetDto(
     string Id, string Name, string NameDe, PlanetTrait Trait,
     int Resources, int Influence, string? HomeFactionId, bool Legendary, Expansion Expansion);
 
+/// <summary>A buildable unit at its base level (standard units + faction "Stufe I" units, flagships and
+/// mechs). Stats are structured for a future production planner; the level-II upgrades live as
+/// <see cref="TechnologyDto"/> unit-colour techs. <paramref name="ProducedCount"/> is how many units one
+/// build yields (2 for fighters/infantry, else 1); <paramref name="Cost"/> is the printed card cost for
+/// that build (null for structures placed via Construction). <paramref name="Combat"/>/<paramref name="CombatDice"/>
+/// split a "5(x2)" combat value; <paramref name="UnitAbilities"/> is the period-separated keyword list
+/// (e.g. "SUSTAIN DAMAGE. BOMBARDMENT 5."). Null Move/Capacity = not applicable (ground forces, structures).</summary>
+public record UnitDto(
+    string Id, string Name, string NameDe, UnitType UnitType, string? FactionId,
+    int? Cost, int ProducedCount, int? Combat, int CombatDice, int? Move, int? Capacity,
+    string Text, string TextDe, string UnitAbilities, Expansion Expansion);
+
 public record ContentBundleDto(
     IReadOnlyList<FactionDto> Factions,
     IReadOnlyList<StrategyCardDto> StrategyCards,
     IReadOnlyList<ObjectiveDto> Objectives,
     IReadOnlyList<TechnologyDto> Technologies,
     IReadOnlyList<AgendaDto> Agendas,
-    IReadOnlyList<PlanetDto> Planets);
+    IReadOnlyList<PlanetDto> Planets,
+    IReadOnlyList<UnitDto> Units);
 
 // ---------------------------------------------------------------------------
 // Session / runtime state DTOs.

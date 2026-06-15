@@ -94,6 +94,15 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         Content ??= await api.GetContentAsync();
     }
 
+    /// <summary>Load the reference content bundle if it isn't already, for views that show content
+    /// outside a session (e.g. the production planner).</summary>
+    public async Task EnsureContentAsync()
+    {
+        if (Content is not null) return;
+        Content = await api.GetContentAsync();
+        OnChange?.Invoke();
+    }
+
     public Task<string?> GetLastCodeAsync() => storage.GetAsync(KeyCode).AsTask();
 
     public async Task<SessionStateDto?> CreateAsync(CreateSessionRequest req)
@@ -234,6 +243,13 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public TechnologyDto? Tech(string id) => Content?.Technologies.FirstOrDefault(t => t.Id == id);
     public AgendaDto? Agenda(string? id) => id is null ? null : Content?.Agendas.FirstOrDefault(a => a.Id == id);
     public PlanetDto? Planet(string? id) => id is null ? null : Content?.Planets.FirstOrDefault(p => p.Id == id);
+    public UnitDto? Unit(string? id) => id is null ? null : Content?.Units.FirstOrDefault(u => u.Id == id);
+
+    public IReadOnlyList<UnitDto> Units =>
+        Content?.Units ?? (IReadOnlyList<UnitDto>)Array.Empty<UnitDto>();
+    /// <summary>Buildable units (standard + faction Stufe I), filtered by the session's active expansions.</summary>
+    public IEnumerable<UnitDto> ActiveUnits() =>
+        (Content?.Units ?? Enumerable.Empty<UnitDto>()).Where(u => (Active & u.Expansion) != 0);
 
     public IReadOnlyList<PlanetDto> Planets =>
         Content?.Planets ?? (IReadOnlyList<PlanetDto>)Array.Empty<PlanetDto>();

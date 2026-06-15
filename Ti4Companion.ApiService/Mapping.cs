@@ -17,13 +17,17 @@ public static class Mapping
         => new(o.Id, o.Name, o.NameDe, o.Requirement, o.RequirementDe, o.Points, o.Stage, o.Expansion, o.IsSecret);
 
     public static TechnologyDto ToDto(this TechnologyDef t)
-        => new(t.Id, t.Name, t.NameDe, t.Color, t.Prerequisites, t.Text, t.TextDe, t.Expansion, t.FactionId);
+        => new(t.Id, t.Name, t.NameDe, t.Color, t.Prerequisites, t.Text, t.TextDe, t.Expansion, t.FactionId, t.UnitType);
 
     public static AgendaDto ToDto(this AgendaDef a)
         => new(a.Id, a.Name, a.NameDe, a.Type, a.Elect, a.Text, a.TextDe, a.Expansion, a.RemovedInPok);
 
     public static PlanetDto ToDto(this Planet p)
         => new(p.Id, p.Name, p.NameDe, p.Trait, p.Resources, p.Influence, p.HomeFactionId, p.Legendary, p.Expansion);
+
+    public static UnitDto ToDto(this UnitDef u)
+        => new(u.Id, u.Name, u.NameDe, u.UnitType, u.FactionId, u.Cost, u.ProducedCount,
+               u.Combat, u.CombatDice, u.Move, u.Capacity, u.Text, u.TextDe, u.UnitAbilities, u.Expansion);
 
     public static SessionStateDto ToDto(this GameSession s, IReadOnlyDictionary<string, int?> factionOverrides)
     {
