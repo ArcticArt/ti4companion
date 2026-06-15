@@ -99,6 +99,10 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/agenda/lock", new LockVoteRequest(playerId, outcome, votes, choice));
     public Task<SessionStateDto?> ResetVotesAsync(Guid id)
         => PostFor<SessionStateDto>($"api/sessions/{id}/agenda/reset", null);
+    public Task<SessionStateDto?> SetInfluenceAsync(Guid id, Guid playerId, int influence)
+        => PatchFor($"api/sessions/{id}/players/{playerId}", new UpdatePlayerRequest(null, null, null, null, null, null, influence));
+    public Task<SessionStateDto?> SetVotingOrderReversedAsync(Guid id, bool reversed)
+        => PatchFor($"api/sessions/{id}", new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, reversed));
 
     // ---- helpers ----
     // A 400 (rule violation) or 403 (not allowed — host only) returns null/default so the store

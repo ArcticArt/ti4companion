@@ -18,7 +18,7 @@
                 @foreach (var o in Matches(available))
                 {
                     <button class="btn btn-ghost agenda-pick" @onclick="() => Reveal(o.Id)">
-                        <span class="chip @(o.Stage == ObjectiveStage.StageII ? "chip-active" : "")">@(o.Stage == ObjectiveStage.StageII ? "II" : "I")</span>
+                        <span class="stage-badge @(o.Stage == ObjectiveStage.StageII ? "s2" : "s1")">@(o.Stage == ObjectiveStage.StageII ? "II" : "I")</span>
                         <strong>@Loc.Pick(o.Name, o.NameDe)</strong>
                         <span class="faint">· @o.Points @Loc["obj.vp"]</span>
                     </button>

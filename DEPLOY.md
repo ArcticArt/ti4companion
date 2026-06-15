@@ -75,3 +75,42 @@ cat backup.sql | docker compose exec -T postgres psql -U ti4admin -d ti4db
   startup (session data is untouched).
 - **Faction icons:** drop `*.png` files into `Ti4Companion.Web/wwwroot/factions/` — see the README
   there. Until then a generated colour-and-initials badge is shown.
+
+## Security review & public-hosting hardening
+
+A review of the v9 codebase (June 2026). **Bottom line:** safe for friends-only / unlisted hosting
+as-is; for a fully public, advertised URL, add the rate-limiting + input caps below first. The risk is
+griefing and DoS, **not** data compromise.
+
+**What's already solid**
+- **No SQL injection.** Every query is EF Core LINQ (parameterised); there is no `FromSqlRaw` /
+  `ExecuteSqlRaw` anywhere (the one `migrationBuilder.Sql` is a static, controlled migration).
+- **No secret leakage.** `PlayerDto` deliberately omits `DeviceToken`; tokens never go over the wire in
+  responses. Device tokens are 128-bit GUIDs (unguessable) sent in the `X-Device-Token` header.
+- **No CSRF.** Auth is a custom header (not a cookie) and the client is same-origin (hosted model, no
+  CORS opened), so cross-site requests can't ride along.
+- **TLS** is correctly delegated to Caddy in production (the API serves plain HTTP behind the proxy);
+  HTTPS redirection is dev-only. Make sure Postgres' port is **not** published to the host publicly.
+
+**Auth model (by design).** Device-token only — no accounts. The host is the device that created the
+session; host / self / active-player / current-picker rules are enforced server-side from the token.
+A device with no token is a read-only spectator. Scoring objectives, casting votes and switching the
+wall display are intentionally open to **any joined device**.
+
+**Risks for a fully public URL (prioritised)**
+1. **Open join + short codes (MEDIUM).** `GET /api/sessions/{code}` is unauthenticated (the wall display
+   needs it) and join codes are 5 chars from a 30-symbol alphabet (~24M combinations) — enumerable. A
+   determined griefer could scan for live sessions and, after joining, disrupt votes/scores/the display.
+   *Mitigate:* keep the URL unlisted; and/or rate-limit `GET /{code}`; and/or lengthen codes; and/or put
+   the whole site behind Caddy basic-auth; and/or make display/score/vote host-or-self-only.
+2. **No rate limiting / DoS (MEDIUM).** `POST /api/sessions` is uncapped, so sessions (and their players
+   /votes) can be spam-created until auto-wipe reclaims them (default 7 days). *Mitigate:* add ASP.NET
+   rate-limiting (per-IP token bucket) on create + mutations; cap sessions per IP; shorten the public
+   default `Ti4:DefaultRetentionHours`.
+3. **No input length caps (LOW).** Session/player names are trimmed but unbounded (Postgres `text`).
+   *Mitigate:* clamp lengths (~60 chars) in the create/join/update endpoints.
+
+**Code-quality notes (non-blocking).** `CastVote` and `LockVote` are ~90% duplicate (extractable into a
+shared apply-vote helper); the two `IsDevelopment()` blocks in `Program.cs` could merge; the cleanup
+worker loads all sessions into memory per tick (fine at this scale). No correctness bugs were found in
+the reviewed paths.

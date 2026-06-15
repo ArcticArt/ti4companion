@@ -138,29 +138,28 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .player-card .pfac { font-size: .78rem; color: var(--text-dim); }
 
 /* ---- Strategy card (equal size; names only by default; ★ bullet abilities) ---- */
-.strat { --c: #888; position: relative; min-height: 3.4rem; display: flex; flex-direction: column;
+.strat { --c: #888; --corner: var(--panel-border); position: relative; min-height: 3.4rem; display: flex; flex-direction: column;
     border: 1px solid var(--panel-border); border-top: 4px solid var(--c); border-radius: 10px;
     background: linear-gradient(180deg, color-mix(in srgb, var(--c) 14%, var(--panel)), var(--panel)); padding: .6rem .7rem;
     /* cut the bottom-right corner for a hint of the printed card shape */
     clip-path: polygon(0 0, 100% 0, 100% calc(100% - 1rem), calc(100% - 1rem) 100%, 0 100%); }
-/* Draw the border along the cut corner (clip-path removes the real border there). */
+/* Draw the border along the cut corner (clip-path removes the real border there). --corner tracks the
+   card state so the cut corner matches the border: grey → hover gold-dim → highlight gold. */
 .strat::after { content: ""; position: absolute; right: 0; bottom: 0; width: 1rem; height: 1rem; pointer-events: none;
-    background: linear-gradient(to bottom right, transparent calc(50% - 0.7px), var(--panel-border) calc(50% - 0.7px), var(--panel-border) calc(50% + 0.7px), transparent calc(50% + 0.7px)); }
+    background: linear-gradient(to bottom right, transparent calc(50% - 0.8px), var(--corner) calc(50% - 0.8px), var(--corner) calc(50% + 0.8px), transparent calc(50% + 0.8px)); }
 /* Highlighted card: gold border all around, including the cut corner. */
-.strat.highlight { border-color: var(--gold); border-top-color: var(--gold); }
-.strat.highlight::after {
-    background: linear-gradient(to bottom right, transparent calc(50% - 0.9px), var(--gold) calc(50% - 0.9px), var(--gold) calc(50% + 0.9px), transparent calc(50% + 0.9px)); }
+.strat.highlight { border-color: var(--gold); border-top-color: var(--gold); --corner: var(--gold); }
 .strat .num { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--c); font-size: 1.1rem; }
 .strat .sname { font-family: 'Orbitron', sans-serif; font-weight: 700; }
 .strat.used { opacity: .55; }
 .strat.clickable { cursor: pointer; transition: .12s ease; }
-.strat.clickable:hover { border-color: var(--gold-dim); transform: translateY(-1px); box-shadow: var(--shadow); }
+.strat.clickable:hover { border-color: var(--gold-dim); transform: translateY(-1px); box-shadow: var(--shadow); --corner: var(--gold-dim); }
 .strat-head { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
 .strat .tg { font-size: .7rem; color: var(--gold); border: 1px solid var(--gold-dim); border-radius: 999px; padding: 0 .4rem; }
 .strat .ability-label { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--c); margin-top: .4rem; }
 .strat .ability-label.sec { margin-top: .3rem; }
 .ability-bullets { list-style: none; margin: .15rem 0 0; padding: 0; }
-.ability-bullets li { position: relative; padding-left: 1.1em; font-size: .82rem; color: var(--text-dim); margin-bottom: .15rem; line-height: 1.25; }
+.ability-bullets li { position: relative; padding-left: 1.1em; font-size: .82rem; color: var(--text); margin-bottom: .15rem; line-height: 1.25; }
 .ability-bullets li::before { content: "✦"; position: absolute; left: 0; color: var(--text); font-size: .85em; top: .05em; }
 
 /* Strategy-phase pick grid: cards equal height (stretch), controls below. */
@@ -206,9 +205,15 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 
 /* objective cards */
 .obj-card { border: 1px solid var(--panel-border); border-radius: 10px; background: var(--panel); overflow: hidden; }
-.obj-card.stage1 { border-top: 4px solid #d98a2b; }
-.obj-card.stage2 { border-top: 4px solid #3a6fd0; }
-.obj-card.secret { border-top: 4px solid #b01030; }
+.obj-card.stage1 { border-top: 4px solid #d98a2b; --ovp: #d98a2b; }
+.obj-card.stage2 { border-top: 4px solid #3a6fd0; --ovp: #3a6fd0; }
+.obj-card.secret { border-top: 4px solid #b01030; --ovp: #b01030; }
+/* Reveal-list stage badge: centred circle. Stage I gold, Stage II blue. */
+.stage-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+    width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 1px solid; font-size: .68rem; font-weight: 700;
+    font-family: 'Orbitron', sans-serif; line-height: 1; }
+.stage-badge.s1 { background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
+.stage-badge.s2 { background: rgba(58,111,208,.2); color: #6ea0ff; border-color: #3a6fd0; }
 .obj-head { display: flex; align-items: center; gap: .5rem; padding: .5rem .7rem; }
 .obj-stage { font-family: 'Orbitron', sans-serif; font-weight: 700; }
 .obj-card.stage1 .obj-stage { color: #e0a64b; }
@@ -216,14 +221,15 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .obj-name { font-weight: 700; flex: 1; }
 .obj-pts { font-family: 'Orbitron', sans-serif; color: var(--gold); }
 /* Circled victory-point badge (closer to the printed card look) */
-.obj-vp { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); flex: 0 0 auto;
+/* white number, with a glow in the objective's stage colour */
+.obj-vp { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--text); flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center; width: 1.7em; height: 1.7em;
-    border: 2px solid var(--gold); border-radius: 50%; font-size: .95rem; }
-.obj-card.stage2 .obj-vp { color: #6ea0ff; border-color: #6ea0ff; }
-.obj-card.secret .obj-vp { color: #ff7a90; border-color: #ff7a90; }
+    border: 2px solid var(--ovp, var(--gold)); border-radius: 50%; font-size: .95rem;
+    box-shadow: 0 0 7px color-mix(in srgb, var(--ovp, var(--gold)) 70%, transparent),
+        inset 0 0 5px color-mix(in srgb, var(--ovp, var(--gold)) 28%, transparent); }
 /* Searchable reveal results */
 .reveal-list { display: flex; flex-direction: column; gap: .25rem; margin-top: .5rem; max-height: 40vh; overflow: auto; }
-.obj-req { padding: 0 .7rem .4rem; font-size: .82rem; color: var(--text-dim); }
+.obj-req { padding: 0 .7rem .4rem; font-size: .82rem; color: var(--text); }
 .obj-markers { display: flex; gap: .35rem; flex-wrap: wrap; padding: .3rem .7rem .6rem; }
 .marker { background: none; border: none; padding: 0; cursor: pointer; opacity: .3; filter: grayscale(.6); transition: .12s; }
 .marker.on { opacity: 1; filter: none; box-shadow: 0 0 0 2px var(--gold); border-radius: 8px; }
@@ -279,6 +285,29 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .techcard .tc-desc { font-size: .8rem; color: var(--text); line-height: 1.25; }
 /* Research point sits at the bottom-right, like the card. */
 .techcard .tc-point { display: flex; align-items: flex-end; justify-content: center; }
+/* Non-unit techs (magazine layout): the name spans the full width on top; the prerequisite pips sit in the
+   BOTTOM-left corner and the tech-point symbol in the BOTTOM-right corner, with the description wrapping
+   around them so nothing is ever covered. Each corner is reached by a w0, full-height-minus-symbol float
+   spacer (declared first, so it anchors at the card top): the symbol — same side, cleared — drops just past
+   the spacer into the bottom symbol-height strip. Needs a definite card height; the .tech-cat grid rows and
+   the beamer tech cards both provide one. --pre-n (prereq count) is set inline on the card. */
+.techcard.nonunit { display: block; --pre-icon: 18px; --pre-gap: .2rem; --pt-h: 36px;
+    /* Never shorter than the tech-point: two opposite bottom-corner floats couple (a float may not sit
+       higher than an earlier one in source), so a single-pip stack — shorter than the point — would drag
+       the point down below the card. Reserving at least --pt-h keeps both symbols pinned to the bottom. */
+    --pre-h: max(calc(var(--pre-n, 0) * var(--pre-icon) + max(var(--pre-n, 1) - 1, 0) * var(--pre-gap)), var(--pt-h)); }
+.techcard.nonunit.compact { --pre-icon: 14px; --pt-h: 24px; }
+.techcard.nonunit .tc-name { width: 100%; }
+.techcard.nonunit.faction .tc-name { padding-left: 2rem; }   /* clear the circular faction marker top-left */
+.techcard.nonunit .fl-spacer { width: 0; }
+.techcard.nonunit .fl-l { float: left; height: calc(100% - var(--pre-h)); }
+.techcard.nonunit .fl-r { float: right; height: calc(100% - var(--pt-h)); }
+.techcard.nonunit .tc-pre { float: left; clear: left; flex-direction: column; align-items: center;
+    justify-content: flex-end; gap: var(--pre-gap); height: var(--pre-h); min-width: 0; margin: 0 .45rem 0 0; }
+.techcard.nonunit .tc-pre:empty { display: none; }
+.techcard.nonunit .tc-point { float: right; clear: right; align-items: flex-end; height: var(--pt-h); margin: 0 0 0 .45rem; }
+.techcard.nonunit .tc-point:empty { display: none; }
+.techcard.nonunit .tc-desc { color: var(--text); }
 /* ---- Unit cards (shared by unit-upgrade techs and base UnitCard): name on top, abilities + stats
    pinned at the very bottom, silhouette placed by type (side / centred / backdrop). ---- */
 .techcard.unitcard { display: flex; }                              /* override the 3-col tech grid */
@@ -353,6 +382,19 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .vote-card.speaker-row { box-shadow: 0 0 0 2px var(--gold); }
 .beamer .vote-card .spk { color: var(--gold); }
 
+/* agenda influence + one-by-one voting (control view) */
+.inf-edit .inf-val { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); min-width: 2.4em; text-align: center; }
+.vote-turn { display: flex; align-items: center; gap: .5rem; padding: .4rem .7rem; margin: .2rem 0 .6rem; border-radius: 10px;
+    background: color-mix(in srgb, var(--gold) 14%, var(--panel)); border: 1px solid var(--gold-dim); font-size: .95rem; }
+.vote-turn.done { background: var(--panel-2); border-color: var(--panel-border); color: var(--text-dim); }
+.vote-turn .dot-now { width: .7rem; height: .7rem; border-radius: 50%; background: var(--gold); flex: 0 0 auto;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent); }
+.player-card.voting-now { box-shadow: inset 0 0 0 2px var(--gold); }
+
+/* agenda influence on the wall display */
+.beamer .vote-inf { font-family: 'Orbitron', sans-serif; font-size: clamp(.85rem, 1.2vw, 1.55rem); color: var(--accent); white-space: nowrap; }
+.beamer .vote-card.voting-now { box-shadow: 0 0 0 3px var(--gold), 0 0 2.5vh rgba(217,176,74,.4); }
+
 /* "logged in as" tag in the session header */
 .you-tag { display: flex; align-items: center; gap: .5rem; padding: .25rem .6rem; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--gold-dim); }
 .you-tag .lbl { font-size: .62rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text-faint); }
@@ -402,10 +444,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 
 /* The two-column body fills the remaining height and clips (never scrolls). */
 .beamer-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1.15fr .85fr; gap: 1.2vw; }
-.beamer-grid.two-col { grid-template-columns: 1.15fr .85fr; }
+.beamer-grid.two-col { grid-template-columns: .9fr 1.25fr; }
+/* Until a Stage II objective is revealed there's only one column → the objectives panel needn't be full width. */
+.beamer-grid.obj-single { grid-template-columns: 1.35fr .65fr; }
 .beamer-grid.one-col { grid-template-columns: 1fr; }
 .beamer .panel-body.obj-list { overflow: hidden; }
-.beamer .panel { min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding: .8vh 1vw; }
+.beamer .panel { min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding: .8vh 1vw; margin: 0; }
 .beamer .panel > h3 { font-size: clamp(1rem, 1.5vw, 1.9rem); margin: 0 0 .6vh; flex: 0 0 auto; }
 .beamer .panel-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: .5vh; overflow: hidden; }
 
@@ -418,6 +462,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 }
 /* Wide blocks (secondary/tech mode): grow to content, share leftover space. */
 .beamer .p-block.wide { flex: 1 1 auto; }
+/* Tech mode: share the height equally and clip, so per-colour columns never overlap the next player. */
+.beamer .p-block.tech { flex: 1 1 0; overflow: hidden; }
 .beamer .p-row { display: flex; align-items: center; gap: .8vw; min-height: 0; }
 .beamer .p-block.wide .p-row { align-items: flex-start; }
 /* Active player: bold tinted background so it's obvious from across the room. */
@@ -437,7 +483,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .p-fac { color: var(--text-dim); font-size: clamp(.7rem, 1vw, 1.3rem); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Per-player content (cards / secondary boxes / techs) — right-aligned beside the name. */
 .beamer .p-content { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; gap: .5vh .6vw; justify-content: flex-end; align-items: flex-start; align-content: flex-start; }
-.beamer .p-flags { flex: 0 0 auto; display: flex; flex-direction: column; gap: .3vh; align-items: flex-end; }
+/* Objectives mode: stack the strategy-card pills vertically so the row stays narrow (esp. 2 cards each). */
+.beamer .p-content.obj { flex-direction: column; flex-wrap: nowrap; align-items: flex-end; gap: .5vh; }
+.beamer .p-flags { display: flex; flex-flow: row wrap; gap: .3vh .4vw; align-items: flex-start; margin-top: .3vh; }
+.beamer .p-flags:empty { display: none; }
 
 /* Secondary-ability boxes: equal width AND height, right-aligned. */
 .beamer .p-content.sec { align-items: stretch; }
@@ -448,15 +497,36 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .sec-card .ability-bullets li { font-size: clamp(.7rem, .98vw, 1.3rem); line-height: 1.18; }
 .beamer .sec-card .ability-bullets li::before { color: var(--text); }
 /* Tech cards in the enlarged player area (with description). */
-.beamer .p-content.tech .techcard { flex: 0 0 15vw; width: 15vw; }
 .beamer .p-content .my-tech { font-size: clamp(.7rem, 1vw, 1.3rem); }
+/* Tech view: one right-aligned column per colour (a colour with many techs spills into extra columns).
+   Columns shrink to fit ONE row (capped at 14vw) so a tech-rich player never wraps/clips horizontally;
+   the per-card font auto-shrink keeps the narrowed cards legible. */
+.beamer .p-content.tech { justify-content: flex-end; align-items: flex-start; gap: .7vw; flex-wrap: nowrap; }
+.beamer .tech-col { display: flex; flex-direction: column; gap: .5vh; flex: 1 1 0; min-width: 0; max-width: 14vw; min-height: 0; }
+/* Names fill the whole column width; the label is kept to ONE line (ellipsised) so a names column's height
+   stays predictable (NamesPerCol fits the row) instead of blowing up when narrow columns wrap a long name. */
+.beamer .tech-col.names { align-items: stretch; }
+.beamer .p-content.tech .my-tech { width: 100%; justify-content: flex-start; padding: .15rem .5rem; line-height: 1.15; }
+.beamer .p-content.tech .my-tech .tech-icon { flex: 0 0 auto; }
+.beamer .p-content.tech .my-tech .mt-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Cards: as small as still legible; a definite height so the bottom-corner symbol spacers resolve, and the
+   foot symbols stay pinned at the bottom. The description font is auto-shrunk to fit by ti4.fitTechCards(). */
+.beamer .tech-col.cards .techcard { width: 100%; flex: 0 0 auto; height: 9.8vh; overflow: hidden; }
+.beamer .tech-col.cards .techcard.nonunit { --pre-icon: .8vw; --pre-gap: .1vh; --pt-h: 1.5vw; }
+.beamer .tech-col.cards .tc-name { font-size: clamp(.58rem, .82vw, 1.05rem); }
+.beamer .tech-col.cards .tc-desc { font-size: clamp(.5rem, .66vw, .88rem); line-height: 1.12; }
+.beamer .tech-col.cards .tc-pre .tech-icon { width: .8vw !important; height: .8vw !important; }
+.beamer .tech-col.cards .tc-point .tech-icon { width: 1.5vw !important; height: 1.5vw !important; }
+/* Tech view: the player's strategy cards (title + exhausted), stacked compactly beside the name. */
+.beamer .p-strats { display: flex; flex-direction: column; gap: .5vh; flex: 0 0 auto; align-self: flex-start; }
+.beamer .p-strats .s-pill { min-width: 7.5em; font-size: clamp(.7rem, .92vw, 1.25rem); padding: .3em .55em; }
 
 /* Strategy-card pill (names only on the wall display). */
 .s-pill {
-    --c: #888; display: inline-flex; align-items: center; gap: .4em;
-    font-family: 'Orbitron', sans-serif; font-weight: 700;
-    font-size: clamp(.75rem, 1.05vw, 1.45rem); line-height: 1;
-    padding: .35em .6em; border-radius: 8px; white-space: nowrap;
+    --c: #888; display: inline-flex; align-items: center; gap: .4em; justify-content: flex-start;
+    font-family: 'Orbitron', sans-serif; font-weight: 700; min-width: 10.5em;
+    font-size: clamp(.85rem, 1.2vw, 1.65rem); line-height: 1;
+    padding: .4em .7em; border-radius: 8px; white-space: nowrap;
     background: color-mix(in srgb, var(--c) 22%, var(--panel)); border: 1px solid var(--c);
     border-left: .35em solid var(--c); color: var(--text);
 }
@@ -466,17 +536,22 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .s-pill .tg { color: var(--gold); font-size: .85em; }
 
 /* Big status flags on the row (PASSED / READY). */
-.beamer .p-flag { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: clamp(.7rem, 1vw, 1.3rem); padding: .25em .7em; border-radius: 8px; white-space: nowrap; }
+.beamer .p-flag { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: clamp(.62rem, .82vw, 1.05rem); padding: .15em .55em; border-radius: 7px; white-space: nowrap; }
 .beamer .p-flag.passed { background: rgba(224,85,106,.22); color: #f1a3ae; border: 1px solid #6b2a35; }
 .beamer .p-flag.ready { background: rgba(70,192,138,.2); color: #8fe0bd; border: 1px solid #2c5e49; }
 .beamer .p-flag.waiting { background: rgba(120,130,160,.16); color: var(--text-faint); border: 1px solid var(--panel-border); }
 
-/* ---- Objectives on the display: compact, near-card look (not stretched) ---- */
-.beamer .obj-card { flex: 0 0 auto; display: flex; flex-direction: column; padding: .35vh .8vw; }
+/* ---- Objectives on the display: two columns (Stage I | Stage II), room for 12, near-card look ---- */
+.beamer .obj-list.two, .beamer .obj-list.one { flex-direction: row; gap: .9vw; align-items: stretch; }
+.beamer .obj-col { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: .5vh; overflow: hidden; }
+/* Uniform card height across BOTH columns = (column height / max card count), capped so few cards don't
+   blow up — driven by --obj-rows set on the list. */
+.beamer .obj-card { flex: 0 0 min(18vh, calc((100% - (var(--obj-rows, 6) - 1) * .5vh) / var(--obj-rows, 6)));
+    min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; padding: .4vh .9vw; }
 .beamer .obj-head { padding: 0; gap: .6vw; }
-.beamer .obj-name { font-size: clamp(.85rem, 1.25vw, 1.6rem); }
-.beamer .obj-vp { font-size: clamp(.9rem, 1.3vw, 1.7rem); width: 1.8em; height: 1.8em; }
-.beamer .obj-req { padding: .15vh 0 0; font-size: clamp(.7rem, 1vw, 1.25rem); color: var(--text-dim); line-height: 1.12; }
+.beamer .obj-name { font-size: clamp(.95rem, 1.45vw, 1.9rem); font-weight: 700; }
+.beamer .obj-vp { font-size: clamp(1rem, 1.5vw, 2rem); width: 1.8em; height: 1.8em; }
+.beamer .obj-req { padding: .15vh 0 0; font-size: clamp(.82rem, 1.18vw, 1.5rem); color: var(--text); line-height: 1.16; }
 .beamer .obj-markers { padding: .25vh 0 0; gap: .4vw; }
 
 /* Tech overview (compact) */

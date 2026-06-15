@@ -1,0 +1,29 @@
+@* One objective card for the wall display (used in both Stage I / Stage II columns). *@
+@inherits Ti4ComponentBase
+
+<div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1")">
+    <div class="obj-head">
+        <span class="obj-name">@Name</span>
+        <span class="obj-vp">@Pts</span>
+    </div>
+    @if (Def is not null)
+    {
+        <div class="obj-req">@Loc.Pick(Def.Requirement, Def.RequirementDe)</div>
+    }
+    <div class="obj-markers">
+        @foreach (var pid in So.ScoredByPlayerIds)
+        {
+            var pl = Store.Session?.Players.FirstOrDefault(x => x.Id == pid);
+            if (pl is not null) { <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.4rem,3vh,3rem)" Ring="@pl.ColorHex" /> }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SessionObjectiveDto So { get; set; } = default!;
+
+    private ObjectiveDto? Def => So.CustomName is null ? Store.Objective(So.ObjectiveId) : null;
+    private bool Stage2 => Def?.Stage == ObjectiveStage.StageII;
+    private string Name => So.CustomName ?? (Def is { } d ? Loc.Pick(d.Name, d.NameDe) : So.ObjectiveId);
+    private int? Pts => So.CustomPoints ?? Def?.Points;
+}

@@ -38,6 +38,31 @@
         <a href="." class="reload">Reload</a>
         <span class="dismiss">🗙</span>
     </div>
+    <script>
+        // Wall-display helper: shrink each tech card's description until it fits the fixed-height card
+        // (down to minPx). Returns the data-tech ids of cards whose description STILL overflows at the min,
+        // so Display.razor can re-render those as compact names. Cards have overflow:hidden + a fixed height,
+        // so font-shrinking only affects whether the text clips — never the card size.
+        window.ti4 = window.ti4 || {};
+        window.ti4.fitTechCards = function (minPx) {
+            var overflow = [], seen = {};
+            document.querySelectorAll('.beamer .tech-col.cards .techcard.nonunit').forEach(function (card) {
+                var desc = card.querySelector('.tc-desc');
+                if (!desc) return;
+                desc.style.fontSize = '';                                   // reset to the CSS clamp base
+                var size = parseFloat(getComputedStyle(desc).fontSize) || 12, guard = 0;
+                while (card.scrollHeight > card.clientHeight + 1 && size > minPx && guard++ < 60) {
+                    size = Math.max(minPx, size - 0.5);
+                    desc.style.fontSize = size + 'px';
+                }
+                if (card.scrollHeight > card.clientHeight + 1) {
+                    var key = card.getAttribute('data-tech');
+                    if (key && !seen[key]) { seen[key] = 1; overflow.push(key); }
+                }
+            });
+            return overflow;
+        };
+    </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
 </body>
