@@ -1,0 +1,62 @@
+// The 8 strategy cards, transcribed verbatim from the physical cards (References/*.png — the
+// group's Thunder's Edge / current set). Ability text is bullet-structured: each "*" point is a
+// separate line (\n); StrategyCardView renders one ★ bullet per line. German mirrors the layout.
+// colorHex uses the printed strategy-card colours (1 red … 8 magenta).
+[
+  {
+    "id": 1, "name": "Leadership", "nameDe": "Führung", "initiative": 1, "colorHex": "#e8403a", "version": "Base",
+    "primaryText": "Gain 3 command tokens.\nSpend any amount of influence to gain 1 command token for every 3 influence spent.",
+    "primaryTextDe": "Erhalte 3 Kommandomarker.\nGib beliebig viel Einfluss aus, um für je 3 ausgegebenen Einfluss 1 Kommandomarker zu erhalten.",
+    "secondaryText": "Spend any amount of influence to gain 1 command token for every 3 influence spent.",
+    "secondaryTextDe": "Gib beliebig viel Einfluss aus, um für je 3 ausgegebenen Einfluss 1 Kommandomarker zu erhalten."
+  },
+  {
+    "id": 2, "name": "Diplomacy", "nameDe": "Diplomatie", "initiative": 2, "colorHex": "#f08a24", "version": "Codex Ω",
+    "primaryText": "Choose 1 system other than the Mecatol Rex system that contains a planet you control; each other player places a command token from their reinforcements in that system. Then, ready up to 2 exhausted planets you control.",
+    "primaryTextDe": "Wähle 1 System außer dem Mecatol-Rex-System, das einen von dir kontrollierten Planeten enthält; jeder andere Spieler legt einen Kommandomarker aus seinen Verstärkungen in dieses System. Bereite dann bis zu 2 erschöpfte Planeten, die du kontrollierst, wieder vor.",
+    "secondaryText": "Spend 1 token from your strategy pool to ready up to 2 exhausted planets you control.",
+    "secondaryTextDe": "Gib 1 Marker aus deinem Strategiepool aus, um bis zu 2 erschöpfte Planeten, die du kontrollierst, wieder vorzubereiten."
+  },
+  {
+    "id": 3, "name": "Politics", "nameDe": "Politik", "initiative": 3, "colorHex": "#f4d03f", "version": "Base",
+    "primaryText": "Choose a player other than the speaker. That player gains the speaker token.\nDraw 2 action cards.\nLook at the top 2 cards of the agenda deck. Place each card on the top or bottom of the deck in any order.",
+    "primaryTextDe": "Wähle einen Spieler außer dem Sprecher. Dieser Spieler erhält die Sprechermarke.\nZiehe 2 Aktionskarten.\nSieh dir die obersten 2 Karten des Agenda-Stapels an. Lege jede Karte in beliebiger Reihenfolge oben oder unten auf den Stapel.",
+    "secondaryText": "Spend 1 token from your strategy pool to draw 2 action cards.",
+    "secondaryTextDe": "Gib 1 Marker aus deinem Strategiepool aus, um 2 Aktionskarten zu ziehen."
+  },
+  {
+    "id": 4, "name": "Construction", "nameDe": "Konstruktion", "initiative": 4, "colorHex": "#4aa84a", "version": "Thunder's Edge ΩΩ",
+    "primaryText": "Either place 1 structure on a planet you control or use the PRODUCTION ability of 1 of your space docks.\nPlace 1 structure on a planet you control.",
+    "primaryTextDe": "Platziere entweder 1 Struktur auf einem von dir kontrollierten Planeten oder nutze die PRODUKTIONS-Fähigkeit eines deiner Raumdocks.\nPlatziere 1 Struktur auf einem von dir kontrollierten Planeten.",
+    "secondaryText": "Spend 1 token from your strategy pool to place 1 structure on a planet you control.",
+    "secondaryTextDe": "Gib 1 Marker aus deinem Strategiepool aus, um 1 Struktur auf einem von dir kontrollierten Planeten zu platzieren."
+  },
+  {
+    "id": 5, "name": "Trade", "nameDe": "Handel", "initiative": 5, "colorHex": "#2bb5a0", "version": "Thunder's Edge",
+    "primaryText": "Gain 3 trade goods.\nReplenish commodities.\nChoose any number of other players. Those players use the secondary ability of this strategy card without spending a command token.",
+    "primaryTextDe": "Erhalte 3 Handelsgüter.\nFülle deine Waren wieder auf.\nWähle beliebig viele andere Spieler. Diese Spieler nutzen die Sekundärfähigkeit dieser Strategiekarte, ohne einen Kommandomarker auszugeben.",
+    "secondaryText": "Spend 1 token from your strategy pool to replenish commodities.",
+    "secondaryTextDe": "Gib 1 Marker aus deinem Strategiepool aus, um deine Waren wieder aufzufüllen."
+  },
+  {
+    "id": 6, "name": "Warfare", "nameDe": "Kriegsführung", "initiative": 6, "colorHex": "#3a6fd0", "version": "Thunder's Edge Ω",
+    "primaryText": "Perform a tactical action in any system without placing a command token, even if the system already has your command token in it; that system still counts as being activated. You may redistribute your command tokens before and after this action.",
+    "primaryTextDe": "Führe eine taktische Aktion in einem beliebigen System aus, ohne einen Kommandomarker zu platzieren, selbst wenn in dem System bereits dein Kommandomarker liegt; das System gilt trotzdem als aktiviert. Du darfst deine Kommandomarker vor und nach dieser Aktion neu verteilen.",
+    "secondaryText": "Spend 1 token from your strategy pool to use the PRODUCTION abilities of the units in your home system.",
+    "secondaryTextDe": "Gib 1 Marker aus deinem Strategiepool aus, um die PRODUKTIONS-Fähigkeiten der Einheiten in deinem Heimatsystem zu nutzen."
+  },
+  {
+    "id": 7, "name": "Technology", "nameDe": "Technologie", "initiative": 7, "colorHex": "#8a4fd0", "version": "Base",
+    "primaryText": "Research 1 technology.\nSpend 6 resources to research 1 technology.",
+    "primaryTextDe": "Erforsche 1 Technologie.\nGib 6 Ressourcen aus, um 1 Technologie zu erforschen.",
+    "secondaryText": "Spend 1 token from your strategy pool and 4 resources to research 1 technology.",
+    "secondaryTextDe": "Gib 1 Marker aus deinem Strategiepool und 4 Ressourcen aus, um 1 Technologie zu erforschen."
+  },
+  {
+    "id": 8, "name": "Imperial", "nameDe": "Imperium", "initiative": 8, "colorHex": "#d04a9c", "version": "Base",
+    "primaryText": "Immediately score 1 public objective if you fulfill its requirements.\nGain 1 victory point if you control Mecatol Rex; otherwise, draw 1 secret objective.",
+    "primaryTextDe": "Werte sofort 1 öffentlichen Auftrag, wenn du seine Anforderungen erfüllst.\nErhalte 1 Siegpunkt, wenn du Mecatol Rex kontrollierst; andernfalls ziehe 1 geheimen Auftrag.",
+    "secondaryText": "Spend 1 token from your strategy pool to draw 1 secret objective.",
+    "secondaryTextDe": "Gib 1 Marker aus deinem Strategiepool aus, um 1 geheimen Auftrag zu ziehen."
+  }
+]

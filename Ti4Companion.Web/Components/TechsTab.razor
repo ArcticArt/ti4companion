@@ -1,0 +1,134 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+    var host = Store.IsHost;
+    if (host && (addFor == Guid.Empty || s.Players.All(p => p.Id != addFor)))
+        addFor = Store.MyPlayerId ?? s.Players.OrderBy(p => p.SeatOrder).FirstOrDefault()?.Id ?? Guid.Empty;
+    var targetId = host ? addFor : (Store.MyPlayerId ?? Guid.Empty);
+    var targetPlayer = s.Players.FirstOrDefault(p => p.Id == targetId);
+}
+
+<div class="panel" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+    <h3 style="margin:0;flex:1 1 140px;">@Loc["tech.title"]</h3>
+    @if (host)
+    {
+        <span class="faint">@Loc["tech.addFor"]:</span>
+        <select @bind="addFor">
+            @foreach (var p in s.Players.OrderBy(p => p.SeatOrder)) { <option value="@p.Id">@p.Name</option> }
+        </select>
+    }
+    <input type="text" @bind="search" @bind:event="oninput" placeholder="@Loc["tech.search"]" style="flex:1 1 180px;max-width:300px;" />
+</div>
+
+@* Card-based picker: pick a colour (or Unit), then the tech. *@
+<div class="panel" style="margin-top:1rem;">
+    <div class="color-picker">
+        @foreach (var c in Colors)
+        {
+            <button class="color-btn @(selColor == c ? "sel" : "")" style="--cc:@TechHex(c)" @onclick="() => Toggle(c)">
+                <TechIcon Color="c" Size="22" /> @Loc[$"color.{c}"]
+            </button>
+        }
+        <div class="spacer" style="flex:1"></div>
+        <label class="badge" style="cursor:pointer;"><input type="checkbox" @bind="allFactions" /> &nbsp;@Loc["tech.allFactions"]</label>
+    </div>
+
+    @if (targetId == Guid.Empty)
+    {
+        <p class="faint" style="font-size:.82rem;margin:.6rem 0 0;">@Loc["tech.joinToAdd"]</p>
+    }
+    else if (selColor is null && string.IsNullOrWhiteSpace(search))
+    {
+        <p class="faint" style="font-size:.82rem;margin:.6rem 0 0;">@Loc["tech.pickColor"]</p>
+    }
+    else
+    {
+        <div class="tech-cat" style="margin-top:.6rem;">
+            @foreach (var t in Catalog(targetPlayer))
+            {
+                <TechCard Tech="t" OnClick="() => AddTechTo(targetId, t.Id)" />
+            }
+        </div>
+    }
+</div>
+
+@* Owned technologies — your own, or (when the host picks another player) that player's. *@
+<div class="panel" style="margin-top:1rem;">
+    @if (targetPlayer is null)
+    {
+        <p class="faint" style="margin:0;">@Loc["tech.joinToAdd"]</p>
+    }
+    else
+    {
+        var owned = targetPlayer.TechnologyIds.Select(id => Store.Tech(id)).Where(t => t is not null).Select(t => t!).ToList();
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+            <FactionBadge Faction="Store.Faction(targetPlayer.FactionId)" Size="2.0" Ring="@targetPlayer.ColorHex" />
+            <strong>@targetPlayer.Name</strong> @if (targetPlayer.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
+        </div>
+        @if (owned.Count == 0)
+        {
+            <p class="faint" style="font-size:.82rem;margin:0;">@Loc["tech.none"]</p>
+        }
+        else
+        {
+            <div class="my-techs">
+                @foreach (var t in owned.OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length))
+                {
+                    <span class="my-tech" style="border-color:@TechHex(t.Color)">
+                        <TechIcon Color="t.Color" Size="16" />
+                        @Loc.Pick(t.Name, t.NameDe)
+                        @if (t.FactionId is not null) { <span class="faint" title="@Loc["tech.faction"]">★</span> }
+                        <span class="x" @onclick="() => RemoveTech(targetPlayer.Id, t.Id)">✕</span>
+                    </span>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private static readonly TechColor[] Colors = { TechColor.Biotic, TechColor.Cybernetic, TechColor.Propulsion, TechColor.Warfare, TechColor.Unit };
+
+    private Guid Sid => Store.Session!.Id;
+    private string search = "";
+    private Guid addFor = Guid.Empty;
+    private TechColor? selColor;
+    private bool allFactions;
+
+    private void Toggle(TechColor c) => selColor = selColor == c ? null : c;
+
+    private List<TechnologyDto> Catalog(PlayerDto? target)
+    {
+        var q = search.Trim();
+        var searching = q.Length > 0;
+        return Store.ActiveTechnologies()
+            // Only the target's own faction techs, unless "all faction techs" is on (e.g. for Nekro).
+            .Where(t => t.FactionId is null || allFactions || t.FactionId == target?.FactionId)
+            .Where(t => target is null || !target.TechnologyIds.Contains(t.Id))
+            .Where(t => searching
+                ? (Loc.Pick(t.Name, t.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase)
+                   || Loc.Pick(t.Text, t.TextDe).Contains(q, StringComparison.OrdinalIgnoreCase))
+                : (selColor is not null && t.Color == selColor))
+            .OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ThenBy(t => Loc.Pick(t.Name, t.NameDe))
+            .Take(60).ToList();
+    }
+
+    private Task AddTechTo(Guid playerId, string techId)
+        => Store.Mutate(Store.Api.AddTechnologyAsync(Sid, playerId, techId));
+
+    private async Task RemoveTech(Guid playerId, string techId)
+    {
+        await Store.Api.RemoveTechnologyAsync(Sid, playerId, techId);
+        await Store.RefreshAsync();
+    }
+
+    private static string TechHex(TechColor c) => c switch
+    {
+        TechColor.Biotic => "#4caf50",
+        TechColor.Propulsion => "#4a78d6",
+        TechColor.Cybernetic => "#e0c341",
+        TechColor.Warfare => "#d6534a",
+        _ => "#9aa7c0",
+    };
+}

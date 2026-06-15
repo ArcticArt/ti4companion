@@ -1,0 +1,97 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+}
+
+<div class="panel">
+    <h3>@Loc["players.title"]</h3>
+    <div class="grid" style="gap:.6rem;">
+        @foreach (var p in s.Players.OrderBy(p => p.SeatOrder))
+        {
+            var fac = Store.Faction(p.FactionId);
+            var isSpeaker = s.SpeakerPlayerId == p.Id;
+            var editable = Store.CanEdit(p.Id);
+            <div class="player-card" style="--player-color:@p.ColorHex;flex-wrap:wrap;gap:.6rem;flex-direction:column;align-items:stretch;">
+                <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+                    <FactionBadge Faction="fac" Ring="@p.ColorHex" />
+                    <div style="flex:1 1 140px;">
+                        @if (editable)
+                        {
+                            <input type="text" value="@p.Name" @onchange="e => SetName(p.Id, e)" />
+                        }
+                        else
+                        {
+                            <strong>@p.Name</strong>
+                        }
+                    </div>
+                    @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
+                    @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
+                    @if (isSpeaker) { <span class="chip chip-active">★ @Loc["players.speaker"]</span> }
+                    else if (Store.IsHost) { <button class="btn btn-sm" @onclick="() => MakeSpeaker(p.Id)">@Loc["players.makeSpeaker"]</button> }
+                    @if (editable)
+                    {
+                        <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@RemoveTitle">✕</button>
+                    }
+                </div>
+                @if (editable)
+                {
+                    <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start;">
+                        <div style="flex:1 1 220px;">
+                            <label>@Loc["players.faction"]</label>
+                            <FactionPicker Factions="Store.ActiveFactions()" Current="@p.FactionId" OnPick="id => SetFactionId(p.Id, id)" />
+                        </div>
+                        <div>
+                            <label>@Loc["players.color"]</label>
+                            <PlayerColorPicker Current="@p.ColorHex" OnPick="hex => SetColor(p.Id, hex)" TakenByResolver="hex => TakenBy(hex, p.Id)" />
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="faint" style="font-size:.8rem;">@(fac is null ? "—" : Loc.Pick(fac.Name, fac.NameDe)) · @Loc["players.editLocked"]</div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (Store.IsHost || s.AllowEditAllPlayers)
+    {
+        <div style="display:flex;gap:.5rem;margin-top:1rem;">
+            <input type="text" @bind="newName" placeholder="@AddPlaceholder" style="max-width:240px;" />
+            <button class="btn btn-primary" @onclick="Add">+ @Loc["players.add"]</button>
+        </div>
+    }
+</div>
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+    private string newName = "";
+    private string AddPlaceholder => Loc["players.add"];
+    private string RemoveTitle => Loc["players.remove"];
+
+    private string? TakenBy(string hex, Guid exceptId)
+        => Store.Session!.Players.FirstOrDefault(p => p.Id != exceptId && string.Equals(p.ColorHex, hex, StringComparison.OrdinalIgnoreCase))?.Name;
+
+    private Task SetName(Guid id, ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(e.Value?.ToString(), null, null, null, null, null)));
+    private Task SetFactionId(Guid id, string factionId)
+        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(null, factionId, null, null, null, null)));
+    private Task SetColor(Guid id, string hex)
+        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(null, null, hex, null, null, null)));
+    private Task MakeSpeaker(Guid id)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, id)));
+
+    private async Task Remove(Guid id)
+    {
+        await Store.Api.RemovePlayerAsync(Sid, id);
+        await Store.RefreshAsync();
+    }
+
+    private async Task Add()
+    {
+        if (string.IsNullOrWhiteSpace(newName)) return;
+        await Store.AddLocalPlayerAsync(newName.Trim());
+        newName = "";
+    }
+}

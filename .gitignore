@@ -1,0 +1,35 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+artifacts/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# .NET
+project.lock.json
+*.nupkg
+
+# Environment / secrets (keep .env.example)
+.env
+.env.local
+*.env.local
+
+# Claude local settings + throwaway preview config
+.claude/settings.local.json
+.claude/launch.json
+
+# OS / editor cruft
+Thumbs.db
+.DS_Store
+*.swp
+
+# Logs / temp
+*.log
+_secrets.txt
+_tmp*

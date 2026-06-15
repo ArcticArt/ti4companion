@@ -1,0 +1,26 @@
+@* In-game color swatches (plastics / command-sheet colors). Colors already taken by others are dimmed. *@
+
+<div class="swatches">
+    @foreach (var c in Ti4Colors.All)
+    {
+        var taken = TakenBy(c.Hex);
+        var mine = string.Equals(Current, c.Hex, StringComparison.OrdinalIgnoreCase);
+        <button class="swatch @(mine ? "sel" : "")" style="background:@c.Hex" title="@SwatchTitle(c.Name, taken)"
+                disabled="@Disabled" @onclick="() => OnPick.InvokeAsync(c.Hex)">
+            @if (mine) { <span>✓</span> }
+            else if (taken is not null) { <span class="taken">•</span> }
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Current { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<string> OnPick { get; set; }
+    /// <summary>Optional: which player name currently holds each color, to hint at clashes.</summary>
+    [Parameter] public Func<string, string?>? TakenByResolver { get; set; }
+
+    private string? TakenBy(string hex) => TakenByResolver?.Invoke(hex);
+
+    private static string SwatchTitle(string name, string? taken) => taken is null ? name : $"{name} ({taken})";
+}

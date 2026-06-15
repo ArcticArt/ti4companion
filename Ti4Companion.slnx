@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Ti4Companion.ApiService/Ti4Companion.ApiService.csproj" />
+  <Project Path="Ti4Companion.AppHost/Ti4Companion.AppHost.csproj" />
+  <Project Path="Ti4Companion.ServiceDefaults/Ti4Companion.ServiceDefaults.csproj" />
+  <Project Path="Ti4Companion.Shared/Ti4Companion.Shared.csproj" />
+  <Project Path="Ti4Companion.Web/Ti4Companion.Web.csproj" />
+</Solution>

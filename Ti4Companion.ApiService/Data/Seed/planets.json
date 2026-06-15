@@ -1,0 +1,77 @@
+// TI4 planets — used to populate the pickers for "Elect …Planet" agendas (Cultural / Hazardous /
+// Industrial / Planet / Non-Home Planet Other Than Mecatol Rex). Only the neutral, on-the-board
+// planets are listed (home-system planets are never electable and have no trait); the agenda picker
+// also allows free text, so anything missing here can still be recorded.
+// Source: standard base game + Prophecy of Kings. trait = Cultural | Hazardous | Industrial | None.
+// VERIFY/EXTEND against the TI4 wiki if your group plays homebrew sets (e.g. Thunder's Edge planets).
+[
+  { "id": "mecatol-rex", "name": "Mecatol Rex", "nameDe": "Mecatol Rex", "trait": "None", "resources": 1, "influence": 6, "legendary": false, "expansion": "Base" },
+
+  // ---- Base game neutral planets ----
+  { "id": "abyz",        "name": "Abyz",        "nameDe": "Abyz",        "trait": "Hazardous",  "resources": 3, "influence": 0, "legendary": false, "expansion": "Base" },
+  { "id": "fria",        "name": "Fria",        "nameDe": "Fria",        "trait": "Hazardous",  "resources": 2, "influence": 0, "legendary": false, "expansion": "Base" },
+  { "id": "arinam",      "name": "Arinam",      "nameDe": "Arinam",      "trait": "Industrial", "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "meer",        "name": "Meer",        "nameDe": "Meer",        "trait": "Hazardous",  "resources": 0, "influence": 4, "legendary": false, "expansion": "Base" },
+  { "id": "arnor",       "name": "Arnor",       "nameDe": "Arnor",       "trait": "Industrial", "resources": 2, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "lor",         "name": "Lor",         "nameDe": "Lor",         "trait": "Industrial", "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "bereg",       "name": "Bereg",       "nameDe": "Bereg",       "trait": "Hazardous",  "resources": 3, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "lirta-iv",    "name": "Lirta IV",    "nameDe": "Lirta IV",    "trait": "Hazardous",  "resources": 2, "influence": 3, "legendary": false, "expansion": "Base" },
+  { "id": "centauri",    "name": "Centauri",    "nameDe": "Centauri",    "trait": "Cultural",   "resources": 1, "influence": 3, "legendary": false, "expansion": "Base" },
+  { "id": "gral",        "name": "Gral",        "nameDe": "Gral",        "trait": "Industrial", "resources": 1, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "corneeq",     "name": "Corneeq",     "nameDe": "Corneeq",     "trait": "Cultural",   "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "resculon",    "name": "Resculon",    "nameDe": "Resculon",    "trait": "Cultural",   "resources": 2, "influence": 0, "legendary": false, "expansion": "Base" },
+  { "id": "dal-bootha",  "name": "Dal Bootha",  "nameDe": "Dal Bootha",  "trait": "Cultural",   "resources": 0, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "xxehan",      "name": "Xxehan",      "nameDe": "Xxehan",      "trait": "Cultural",   "resources": 1, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "lazar",       "name": "Lazar",       "nameDe": "Lazar",       "trait": "Industrial", "resources": 1, "influence": 0, "legendary": false, "expansion": "Base" },
+  { "id": "sakulag",     "name": "Sakulag",     "nameDe": "Sakulag",     "trait": "Hazardous",  "resources": 2, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "lodor",       "name": "Lodor",       "nameDe": "Lodor",       "trait": "Cultural",   "resources": 3, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "mehar-xull",  "name": "Mehar Xull",  "nameDe": "Mehar Xull",  "trait": "Hazardous",  "resources": 1, "influence": 3, "legendary": false, "expansion": "Base" },
+  { "id": "mellon",      "name": "Mellon",      "nameDe": "Mellon",      "trait": "Cultural",   "resources": 0, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "zohbat",      "name": "Zohbat",      "nameDe": "Zohbat",      "trait": "Hazardous",  "resources": 3, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "quann",       "name": "Quann",       "nameDe": "Quann",       "trait": "Cultural",   "resources": 2, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "qucenn",      "name": "Qucen'n",     "nameDe": "Qucen'n",     "trait": "Industrial", "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "rarron",      "name": "Rarron",      "nameDe": "Rarron",      "trait": "Cultural",   "resources": 0, "influence": 3, "legendary": false, "expansion": "Base" },
+  { "id": "saudor",      "name": "Saudor",      "nameDe": "Saudor",      "trait": "Industrial", "resources": 2, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "tarmann",     "name": "Tar'mann",    "nameDe": "Tar'mann",    "trait": "Industrial", "resources": 1, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "torkan",      "name": "Torkan",      "nameDe": "Torkan",      "trait": "Cultural",   "resources": 0, "influence": 3, "legendary": false, "expansion": "Base" },
+  { "id": "thibah",      "name": "Thibah",      "nameDe": "Thibah",      "trait": "Industrial", "resources": 1, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "vefut-ii",    "name": "Vefut II",    "nameDe": "Vefut II",    "trait": "Hazardous",  "resources": 2, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "wellon",      "name": "Wellon",      "nameDe": "Wellon",      "trait": "Industrial", "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "vega-major",  "name": "Vega Major",  "nameDe": "Vega Major",  "trait": "Cultural",   "resources": 2, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "vega-minor",  "name": "Vega Minor",  "nameDe": "Vega Minor",  "trait": "Cultural",   "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "abaddon",     "name": "Abaddon",     "nameDe": "Abaddon",     "trait": "Cultural",   "resources": 1, "influence": 0, "legendary": false, "expansion": "Base" },
+  { "id": "ashtroth",    "name": "Ashtroth",    "nameDe": "Ashtroth",    "trait": "Hazardous",  "resources": 2, "influence": 0, "legendary": false, "expansion": "Base" },
+  { "id": "loki",        "name": "Loki",        "nameDe": "Loki",        "trait": "Cultural",   "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "rigel-i",     "name": "Rigel I",     "nameDe": "Rigel I",     "trait": "Hazardous",  "resources": 0, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "rigel-ii",    "name": "Rigel II",    "nameDe": "Rigel II",    "trait": "Industrial", "resources": 1, "influence": 2, "legendary": false, "expansion": "Base" },
+  { "id": "rigel-iii",   "name": "Rigel III",   "nameDe": "Rigel III",   "trait": "Industrial", "resources": 1, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "new-albion",  "name": "New Albion",  "nameDe": "New Albion",  "trait": "Industrial", "resources": 1, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "starpoint",   "name": "Starpoint",   "nameDe": "Starpoint",   "trait": "Hazardous",  "resources": 3, "influence": 1, "legendary": false, "expansion": "Base" },
+  { "id": "tequran",     "name": "Tequ'ran",    "nameDe": "Tequ'ran",    "trait": "Hazardous",  "resources": 2, "influence": 0, "legendary": false, "expansion": "Base" },
+
+  // ---- Prophecy of Kings neutral planets ----
+  { "id": "archon-vail", "name": "Archon Vail", "nameDe": "Archon Vail", "trait": "Hazardous",  "resources": 1, "influence": 3, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "perimeter",   "name": "Perimeter",   "nameDe": "Perimeter",   "trait": "Industrial", "resources": 2, "influence": 1, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "ang",         "name": "Ang",         "nameDe": "Ang",         "trait": "Industrial", "resources": 2, "influence": 0, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "sem-lore",    "name": "Sem-Lore",    "nameDe": "Sem-Lore",    "trait": "Cultural",   "resources": 3, "influence": 2, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "vorhal",      "name": "Vorhal",      "nameDe": "Vorhal",      "trait": "Cultural",   "resources": 0, "influence": 2, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "atlas",       "name": "Atlas",       "nameDe": "Atlas",       "trait": "Hazardous",  "resources": 3, "influence": 1, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "cormund",     "name": "Cormund",     "nameDe": "Cormund",     "trait": "Hazardous",  "resources": 2, "influence": 0, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "everra",      "name": "Everra",      "nameDe": "Everra",      "trait": "Cultural",   "resources": 3, "influence": 1, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "accoen",      "name": "Accoen",      "nameDe": "Accoen",      "trait": "Industrial", "resources": 2, "influence": 3, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "jeol-ir",     "name": "Jeol Ir",     "nameDe": "Jeol Ir",     "trait": "Industrial", "resources": 2, "influence": 3, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "kraag",       "name": "Kraag",       "nameDe": "Kraag",       "trait": "Hazardous",  "resources": 2, "influence": 1, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "siig",        "name": "Siig",        "nameDe": "Siig",        "trait": "Hazardous",  "resources": 0, "influence": 2, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "alio-prima",  "name": "Alio Prima",  "nameDe": "Alio Prima",  "trait": "Cultural",   "resources": 1, "influence": 1, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "bakal",       "name": "Bakal",       "nameDe": "Bakal",       "trait": "Industrial", "resources": 3, "influence": 2, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "lisis",       "name": "Lisis",       "nameDe": "Lisis",       "trait": "Industrial", "resources": 2, "influence": 2, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "velnor",      "name": "Velnor",      "nameDe": "Velnor",      "trait": "Industrial", "resources": 2, "influence": 1, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "retillion",   "name": "Retillion",   "nameDe": "Retillion",   "trait": "Cultural",   "resources": 2, "influence": 3, "legendary": false, "expansion": "ProphecyOfKings" },
+  { "id": "shalloq",     "name": "Shalloq",     "nameDe": "Shalloq",     "trait": "Industrial", "resources": 1, "influence": 2, "legendary": false, "expansion": "ProphecyOfKings" },
+
+  // ---- Legendary planets (count as their trait for elects) ----
+  { "id": "primor",      "name": "Primor",      "nameDe": "Primor",      "trait": "Cultural",   "resources": 2, "influence": 1, "legendary": true,  "expansion": "ProphecyOfKings" },
+  { "id": "hopes-end",   "name": "Hope's End",  "nameDe": "Hope's End",  "trait": "Hazardous",  "resources": 3, "influence": 0, "legendary": true,  "expansion": "ProphecyOfKings" },
+  { "id": "mirage",      "name": "Mirage",      "nameDe": "Mirage",      "trait": "Cultural",   "resources": 1, "influence": 2, "legendary": true,  "expansion": "ProphecyOfKings" },
+  { "id": "mallice",     "name": "Mallice",     "nameDe": "Mallice",     "trait": "Cultural",   "resources": 0, "influence": 3, "legendary": true,  "expansion": "ProphecyOfKings" }
+]

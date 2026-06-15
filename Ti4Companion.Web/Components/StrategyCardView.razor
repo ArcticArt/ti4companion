@@ -1,0 +1,63 @@
+@* A strategy card, colour-coded. Names only by default; ability text renders as ★ bullet points
+   (one per line, like the physical cards). Pass OnClick to make the whole card clickable. *@
+
+<div class="strat @(Used ? "used" : "") @(Highlight ? "highlight" : "") @(Big ? "big-strat" : "") @(Clickable ? "clickable" : "")"
+     style="--c:@Card.ColorHex" @onclick="HandleClick">
+    <div class="strat-head">
+        <span class="num">@Card.Initiative</span>
+        <span class="sname">@Loc.Pick(Card.Name, Card.NameDe)</span>
+        @if (TradeGoods > 0)
+        {
+            <span class="tg" title="@TgTitle"><img src="symbols/trade-good-1.png" class="tg-icon" alt="" /> @TradeGoods</span>
+        }
+        @if (Used)
+        {
+            <span class="chip chip-done">@Loc["turn.actionDone"]</span>
+        }
+    </div>
+    @if (ShowText)
+    {
+        <div class="ability-label"><b>@Loc["turn.primary"]</b></div>
+        @Bullets(Loc.Pick(Card.PrimaryText, Card.PrimaryTextDe))
+        <div class="ability-label"><b>@Loc["turn.secondary"]</b></div>
+        @Bullets(Loc.Pick(Card.SecondaryText, Card.SecondaryTextDe))
+    }
+    else if (ShowSecondary)
+    {
+        <div class="ability-label sec"><b>@Loc["turn.secondary"]</b></div>
+        @Bullets(Loc.Pick(Card.SecondaryText, Card.SecondaryTextDe))
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StrategyCardDto Card { get; set; } = default!;
+    [Parameter] public bool ShowText { get; set; }
+    [Parameter] public bool ShowSecondary { get; set; }
+    [Parameter] public bool Used { get; set; }
+    [Parameter] public bool Highlight { get; set; }
+    [Parameter] public bool Big { get; set; }
+    [Parameter] public int TradeGoods { get; set; }
+    [Parameter] public bool Clickable { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Inject] private Loc Loc { get; set; } = default!;
+
+    private string TgTitle => $"{TradeGoods} {Loc["strategy.tradeGoods"]}";
+
+    private Task HandleClick() => Clickable && OnClick.HasDelegate ? OnClick.InvokeAsync() : Task.CompletedTask;
+
+    // Render each non-empty line of an ability as a ★ bullet, like the printed cards.
+    private RenderFragment Bullets(string text) => builder =>
+    {
+        var lines = (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        builder.OpenElement(0, "ul");
+        builder.AddAttribute(1, "class", "ability-bullets");
+        var seq = 2;
+        foreach (var line in lines)
+        {
+            builder.OpenElement(seq++, "li");
+            builder.AddContent(seq++, line);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+}
