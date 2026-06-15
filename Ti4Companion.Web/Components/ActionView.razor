@@ -1,0 +1,150 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+    var ordered = s.Players.OrderBy(p => p.Initiative ?? int.MaxValue).ThenBy(p => p.SeatOrder).ToList();
+    var active = s.Players.FirstOrDefault(p => p.Id == s.ActivePlayerId);
+    var activeCard = s.ActiveStrategyCardId is int id ? Store.Card(id) : null;
+    var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
+    var host = Store.IsHost;
+    var mine = active is not null && active.Id == Store.MyPlayerId;
+    // Players control only their own turn; the host controls only after pressing "Take over".
+    var canControl = active is not null && (mine || (host && takeover));
+}
+
+@if (allPassed)
+{
+    <div class="panel"><strong>@Loc["turn.allPassed"]</strong>@(host ? " — " + Loc["turn.endAction"] + "." : "")</div>
+}
+
+@* Big turn status, outside the player card. *@
+@if (active is not null)
+{
+    <div class="turn-banner @(mine ? "you" : "")" style="--player-color:@active.ColorHex">
+        <FactionBadge Faction="Store.Faction(active.FactionId)" Size="2.6" Ring="@active.ColorHex" />
+        <div class="tb-text">
+            @if (mine) { <span class="tb-big">@Loc["turn.youAreUp"]</span> }
+            else { <span class="tb-big">@active.Name <span class="faint">@Loc["turn.isUp"]</span></span> }
+        </div>
+        <div class="spacer" style="flex:1"></div>
+        @if (host && !takeover) { <button class="btn btn-gold" @onclick="() => takeover = true">@Loc["turn.takeOver"]</button> }
+        else if (host && takeover) { <button class="btn btn-ghost" @onclick="() => takeover = false">@Loc["turn.takeOverEnd"]</button> }
+    </div>
+}
+
+@if (activeCard is not null && canControl)
+{
+    <div class="panel" style="margin-top:.6rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+            <h3 style="margin:0;">@Loc.Pick(activeCard.Name, activeCard.NameDe)</h3>
+            <button class="btn btn-sm" @onclick="EndHighlight">✕ @Loc["turn.endHighlight"]</button>
+        </div>
+        <StrategyCardView Card="activeCard" ShowText="true" />
+    </div>
+}
+
+@* Host takeover: tap any player to steer their turn. *@
+@if (host && takeover)
+{
+    <div class="panel turn-strip" style="margin-top:.6rem;">
+        <span class="faint" style="margin-right:.2rem;">@Loc["turn.takeOver"]:</span>
+        @foreach (var p in ordered)
+        {
+            <button class="turn-chip @(p.Id == s.ActivePlayerId ? "active" : "") @(p.HasPassed ? "passed" : "")" @onclick="() => SetActive(p.Id)">
+                <span class="ti">@(p.Initiative?.ToString() ?? "—")</span>
+                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.5" Ring="@p.ColorHex" />
+                <span>@p.Name</span>
+                @if (p.HasPassed) { <span class="chip chip-passed">@Loc["turn.passed"]</span> }
+            </button>
+        }
+    </div>
+}
+
+@if (active is null)
+{
+    <div class="panel" style="margin-top:1rem;"><p class="muted" style="margin:0;">@Loc["turn.noActive"]</p></div>
+}
+else
+{
+    var fac = Store.Faction(active.FactionId);
+    var canPass = active.StrategyCards.Count > 0 && active.StrategyCards.All(c => c.IsExhausted);
+    <div class="player-card active active-player-card" style="--player-color:@active.ColorHex;flex-direction:column;align-items:stretch;margin-top:1rem;">
+        <div style="display:flex;align-items:center;gap:.7rem;">
+            <FactionBadge Faction="fac" Size="2.6" Ring="@active.ColorHex" />
+            <div style="flex:1;">
+                <div class="pname" style="font-size:1.2rem;">@active.Name</div>
+                <div class="pfac">@(fac is null ? "—" : Loc.Pick(fac.Name, fac.NameDe))</div>
+            </div>
+            @if (active.HasPassed) { <span class="chip chip-passed">@Loc["turn.passed"]</span> }
+        </div>
+
+        <div class="grid" style="margin-top:.6rem;gap:.5rem;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));">
+            @foreach (var pc in active.StrategyCards.OrderBy(c => c.StrategyCardId))
+            {
+                var card = Store.Card(pc.StrategyCardId);
+                if (card is not null)
+                {
+                    <div style="display:flex;flex-direction:column;gap:.35rem;">
+                        <StrategyCardView Card="card" Used="pc.IsExhausted" Highlight="@(s.ActiveStrategyCardId == card.Id)" />
+                        @if (canControl)
+                        {
+                            <div>
+                                @if (!pc.IsExhausted)
+                                {
+                                    <button class="btn btn-sm btn-gold btn-block" @onclick="() => PlayAction(active.Id, card.Id)">@Loc["turn.strategyAction"]</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-ghost btn-block" @onclick="() => Unplay(active.Id, card.Id)">↺ @Loc["turn.notDone"]</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        @if (canControl)
+        {
+            <div style="margin-top:.7rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+                @if (active.HasPassed)
+                {
+                    <button class="btn btn-sm" @onclick="() => Pass(active.Id, false)">@Loc["turn.unpass"]</button>
+                }
+                else
+                {
+                    <button class="btn btn-danger" disabled="@(!canPass)" @onclick="() => Pass(active.Id, true)">@Loc["turn.pass"]</button>
+                }
+                <div class="spacer" style="flex:1"></div>
+                <button class="btn btn-sm" @onclick="Prev">◂ @Loc["turn.previous"]</button>
+                <button class="btn btn-sm btn-primary" @onclick="Next">@Loc["turn.advance"] ▸</button>
+            </div>
+            @if (!active.HasPassed && !canPass) { <div class="faint" style="font-size:.72rem;margin-top:.3rem;">@Loc["turn.passHint"]</div> }
+        }
+    </div>
+}
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+    private bool takeover;
+
+    private Task EndHighlight() => Store.Mutate(Store.Api.SetActiveStrategyAsync(Sid, null));
+    private Task SetActive(Guid playerId) => Store.Mutate(Store.Api.SetActivePlayerAsync(Sid, playerId));
+    private Task Next() => Store.Mutate(Store.Api.AdvanceTurnAsync(Sid));
+    private Task Prev() => Store.Mutate(Store.Api.PreviousTurnAsync(Sid));
+
+    private async Task PlayAction(Guid playerId, int cardId)
+    {
+        await Store.Mutate(Store.Api.SetStrategyCardUsedAsync(Sid, playerId, cardId, true));
+        await Store.Mutate(Store.Api.SetActiveStrategyAsync(Sid, cardId));
+    }
+
+    private async Task Unplay(Guid playerId, int cardId)
+    {
+        await Store.Mutate(Store.Api.SetStrategyCardUsedAsync(Sid, playerId, cardId, false));
+        await Store.Mutate(Store.Api.SetActiveStrategyAsync(Sid, null));
+    }
+
+    private Task Pass(Guid playerId, bool passed)
+        => Store.Mutate(Store.Api.SetPassedAsync(Sid, playerId, passed));
+}

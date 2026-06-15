@@ -1,0 +1,98 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+    var host = Store.IsHost;
+    var pickerId = Store.CurrentPickerId;
+    var picker = pickerId is null ? null : s.Players.FirstOrDefault(p => p.Id == pickerId);
+    var myTurn = pickerId == Store.MyPlayerId;
+    // The current picker takes their own card; the host may take it on their behalf.
+    var canPick = picker is not null && (host || myTurn);
+}
+
+<div class="panel" style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:center;">
+    <h3 style="margin:0;">@Loc["strategy.title"]</h3>
+    <div class="spacer" style="flex:1"></div>
+    <div class="row-wrap" style="gap:.25rem;">
+        <button class="btn btn-sm @(detailed ? "btn-gold" : "")" @onclick="() => detailed = true">@Loc["strategy.detailed"]</button>
+        <button class="btn btn-sm @(!detailed ? "btn-gold" : "")" @onclick="() => detailed = false">@Loc["strategy.namesOnly"]</button>
+    </div>
+</div>
+
+@if (picker is not null)
+{
+    <div class="picker-banner @(myTurn ? "you" : "")" style="--player-color:@picker.ColorHex">
+        <FactionBadge Faction="Store.Faction(picker.FactionId)" Size="2.6" Ring="@picker.ColorHex" />
+        <div>
+            <div class="pb-lbl">@Loc["strategy.picking"]</div>
+            <div class="pb-name">@picker.Name @if (myTurn) { <span class="chip chip-active">@Loc["players.you"]</span> } @if (host && !myTurn) { <span class="chip">@Loc["host.pickFor"]</span> }</div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="panel" style="margin-top:.6rem;"><span class="chip chip-done">@Loc["strategy.allPicked"]</span></div>
+}
+
+@if (!canPick && picker is not null)
+{
+    <div class="panel" style="margin-top:.6rem;"><p class="muted" style="margin:0;">@Loc["strategy.waitYourTurn"] (@picker.Name)</p></div>
+}
+
+<div class="strat-grid">
+    @foreach (var card in Store.StrategyCards.OrderBy(c => c.Initiative))
+    {
+        var ownerId = Store.CardOwner(card.Id);
+        var owner = ownerId is null ? null : s.Players.FirstOrDefault(p => p.Id == ownerId);
+        var takeable = owner is null && canPick;
+        var tg = Store.TradeGoodsOn(card.Id);
+        <div class="strat-cell">
+            <StrategyCardView Card="card" ShowText="detailed" TradeGoods="@tg" Clickable="takeable" OnClick="() => Take(card.Id)" />
+            @if (owner is not null)
+            {
+                <div class="strat-ctl">
+                    <FactionBadge Faction="Store.Faction(owner.FactionId)" Size="1.7" Ring="@owner.ColorHex" />
+                    <span>@owner.Name</span>
+                    @if (host || Store.CanEdit(owner.Id))
+                    {
+                        <button class="btn btn-sm btn-ghost" @onclick="() => Return(owner.Id, card.Id)">↩ @Loc["strategy.unpick"]</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<div class="panel" style="margin-top:1rem;">
+    @foreach (var p in s.Players.OrderBy(p => p.Initiative ?? int.MaxValue).ThenBy(p => p.SeatOrder))
+    {
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;">
+            <span style="font-family:'Orbitron';color:var(--gold);min-width:1.5em;">@(p.Initiative?.ToString() ?? "—")</span>
+            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+            <strong>@p.Name</strong>
+            @if (s.SpeakerPlayerId == p.Id) { <span class="chip chip-active">★ @Loc["players.speaker"]</span> }
+            @foreach (var pc in p.StrategyCards.OrderBy(c => c.StrategyCardId))
+            {
+                var c = Store.Card(pc.StrategyCardId);
+                if (c is not null) { <span class="badge" style="border-color:@c.ColorHex"><span style="color:@c.ColorHex">@c.Initiative</span> @Loc.Pick(c.Name, c.NameDe)</span> }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+    private bool detailed = false;
+
+    private Task Take(int cardId)
+    {
+        var target = Store.CurrentPickerId;
+        return target is null ? Task.CompletedTask : Store.Mutate(Store.Api.AssignStrategyCardAsync(Sid, target.Value, cardId));
+    }
+
+    private async Task Return(Guid playerId, int cardId)
+    {
+        await Store.Api.UnassignStrategyCardAsync(Sid, playerId, cardId);
+        await Store.RefreshAsync();
+    }
+}

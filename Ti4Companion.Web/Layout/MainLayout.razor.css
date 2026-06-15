@@ -1,0 +1,2 @@
+/* Layout chrome is themed globally in css/app.css (.appbar, .content). */
+.lang { display: flex; gap: .3rem; }

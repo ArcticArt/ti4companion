@@ -1,0 +1,146 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+    var ordered = s.Players.OrderBy(p => p.SeatOrder).ToList();
+    var host = Store.IsHost;
+}
+
+<div class="panel">
+    <h3>@Loc["setup.title"]</h3>
+    <p class="faint">@(host ? Loc["setup.startHint"] : Loc["setup.waiting"])</p>
+
+    <div class="grid" style="gap:.7rem;">
+        @for (var i = 0; i < ordered.Count; i++)
+        {
+            var p = ordered[i];
+            var idx = i;
+            var fac = Store.Faction(p.FactionId);
+            var editable = Store.CanEdit(p.Id);
+            var isSpeaker = s.SpeakerPlayerId == p.Id;
+            <div class="player-card" style="--player-color:@p.ColorHex;flex-direction:column;align-items:stretch;gap:.5rem;">
+                <div style="display:flex;align-items:center;gap:.6rem;">
+                    @if (host)
+                    {
+                        <span style="font-family:'Orbitron';color:var(--gold);min-width:1.4em;text-align:center;">@(idx + 1)</span>
+                        <span class="seat-btns">
+                            <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveUp"]" disabled="@(idx == 0)" @onclick="() => MoveSeat(idx, -1)">▲</button>
+                            <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveDown"]" disabled="@(idx == ordered.Count - 1)" @onclick="() => MoveSeat(idx, 1)">▼</button>
+                        </span>
+                    }
+                    <FactionBadge Faction="fac" Ring="@p.ColorHex" />
+                    <div style="flex:1;">
+                        @if (editable)
+                        {
+                            <input type="text" value="@p.Name" @onchange="e => SetName(p.Id, e)" />
+                        }
+                        else
+                        {
+                            <strong>@p.Name</strong>
+                        }
+                    </div>
+                    @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
+                    @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
+                    <button class="btn btn-sm @(isSpeaker ? "btn-gold" : "")" disabled="@(!host)" @onclick="() => SetSpeaker(p.Id)">
+                        ★ @(isSpeaker ? Loc["setup.speaker"] : Loc["setup.makeSpeaker"])
+                    </button>
+                    <span class="chip @(p.IsReady ? "chip-done" : "")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
+                    @if (host && p.Id != Store.MyPlayerId)
+                    {
+                        <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@Loc["players.remove"]">✕</button>
+                    }
+                </div>
+
+                @if (editable)
+                {
+                    <div>
+                        <label>@Loc["setup.chooseFaction"]</label>
+                        <FactionPicker Factions="Store.ActiveFactions()" Current="@p.FactionId" OnPick="id => SetFactionId(p.Id, id)" />
+                    </div>
+                    <div>
+                        <label>@Loc["setup.chooseColor"]</label>
+                        <PlayerColorPicker Current="@p.ColorHex" OnPick="hex => SetColor(p.Id, hex)" TakenByResolver="hex => TakenBy(hex, p.Id)" />
+                    </div>
+                    var canReady = !string.IsNullOrEmpty(p.FactionId) && Ti4Colors.IsChosen(p.ColorHex);
+                    <div>
+                        <button class="btn btn-sm @(p.IsReady ? "" : "btn-gold")" disabled="@(!canReady)"
+                                @onclick="() => SetReady(p.Id, !p.IsReady)">
+                            @(p.IsReady ? Loc["setup.notReady"] : Loc["setup.imReady"])
+                        </button>
+                        @if (!canReady && !p.IsReady)
+                        {
+                            <div class="faint" style="font-size:.72rem;margin-top:.2rem;">@Loc["setup.needFactionColor"]</div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="faint" style="font-size:.8rem;">@(fac is null ? "—" : Loc.Pick(fac.Name, fac.NameDe)) · @Loc["players.editLocked"]</div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (host)
+    {
+        <div style="display:flex;gap:.5rem;margin-top:1rem;">
+            <input type="text" @bind="newName" placeholder="@AddPlaceholder" style="max-width:240px;" />
+            <button class="btn btn-primary" @onclick="Add">+ @Loc["players.add"]</button>
+        </div>
+    }
+</div>
+
+@if (host)
+{
+    <div class="panel">
+        <h3 style="margin:0 0 .2rem;">@Loc["setup.objectives"]</h3>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.objectivesHint"]</p>
+        <ObjectivesTab RevealOnTop="true" Scoreable="false" AllowCustom="false" />
+    </div>
+}
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+    private string newName = "";
+    private string AddPlaceholder => Loc["players.add"];
+
+    private string? TakenBy(string hex, Guid exceptId)
+        => Store.Session!.Players.FirstOrDefault(p => p.Id != exceptId && string.Equals(p.ColorHex, hex, StringComparison.OrdinalIgnoreCase))?.Name;
+
+    private Task SetName(Guid id, ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(e.Value?.ToString(), null, null, null, null, null)));
+    private Task SetFactionId(Guid id, string factionId)
+        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(null, factionId, null, null, null, null)));
+    private Task SetColor(Guid id, string hex)
+        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(null, null, hex, null, null, null)));
+    private Task SetReady(Guid id, bool ready)
+        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(null, null, null, null, ready, null)));
+    private Task SetSpeaker(Guid id)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, id)));
+
+    // Swap seat order with the neighbour in the given direction (host only).
+    private async Task MoveSeat(int index, int dir)
+    {
+        var ordered = Store.Session!.Players.OrderBy(p => p.SeatOrder).ToList();
+        var j = index + dir;
+        if (j < 0 || j >= ordered.Count) return;
+        var a = ordered[index];
+        var b = ordered[j];
+        await Store.Api.UpdatePlayerAsync(Sid, a.Id, new UpdatePlayerRequest(null, null, null, null, null, b.SeatOrder));
+        await Store.Api.UpdatePlayerAsync(Sid, b.Id, new UpdatePlayerRequest(null, null, null, null, null, a.SeatOrder));
+        await Store.RefreshAsync();
+    }
+
+    private async Task Remove(Guid id)
+    {
+        await Store.Api.RemovePlayerAsync(Sid, id);
+        await Store.RefreshAsync();
+    }
+
+    private async Task Add()
+    {
+        if (string.IsNullOrWhiteSpace(newName)) return;
+        await Store.AddLocalPlayerAsync(newName.Trim());
+        newName = "";
+    }
+}

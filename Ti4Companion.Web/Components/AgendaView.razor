@@ -1,0 +1,268 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+    var current = Store.Agenda(s.CurrentAgendaId);
+    var kind = current is null ? ElectType.ForAgainst : AgendaDisplay.ElectKind(current);
+    var host = Store.IsHost;
+    var hidden = s.AgendaVotesHidden;
+    // Votes may only be revealed once every player's vote is locked (so nobody can peek early).
+    var allLocked = s.Players.Count > 0 && s.Players.All(p => s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
+}
+
+<div class="panel">
+    <h3 style="margin:0 0 .5rem;">@Loc["agenda.title"]</h3>
+    @if (current is null)
+    {
+        <input type="text" @bind="search" @bind:event="oninput" placeholder="@SearchPlaceholder" />
+        <div class="grid" style="gap:.3rem;margin-top:.6rem;max-height:50vh;overflow:auto;">
+            @foreach (var a in Matches())
+            {
+                <button class="btn btn-ghost agenda-pick" @onclick="() => Reveal(a.Id)">
+                    <span class="chip @(a.Type == AgendaType.Law ? "chip-active" : "")">@Loc[a.Type == AgendaType.Law ? "agenda.law" : "agenda.directive"]</span>
+                    <strong>@Loc.Pick(a.Name, a.NameDe)</strong>
+                    @if (!string.IsNullOrEmpty(a.Elect)) { <span class="faint">· @a.Elect</span> }
+                </button>
+            }
+        </div>
+        @if (Matches().Count == 0) { <p class="faint">@Loc["agenda.none"]</p> }
+    }
+    else
+    {
+        <div class="agenda-card">
+            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                <span class="chip @(current.Type == AgendaType.Law ? "chip-active" : "")">@Loc[current.Type == AgendaType.Law ? "agenda.law" : "agenda.directive"]</span>
+                <h3 style="margin:0;color:var(--gold);">@Loc.Pick(current.Name, current.NameDe)</h3>
+            </div>
+            @if (!string.IsNullOrEmpty(current.Elect)) { <div class="faint" style="margin:.2rem 0;">@Loc["agenda.elect"]: @current.Elect</div> }
+            <p style="margin:.4rem 0;">@Loc.Pick(current.Text, current.TextDe)</p>
+            @if (host)
+            {
+                <div class="row-wrap" style="gap:.4rem;align-items:center;">
+                    <button class="btn btn-sm @(hidden ? "btn-gold" : "")" disabled="@(hidden && !allLocked)" @onclick="ToggleHidden">@(hidden ? Loc["agenda.reveal"] : Loc["agenda.secret"])</button>
+                    @if (hidden) { <button class="btn btn-sm btn-danger" @onclick="ResetAll">↺ @Loc["agenda.reset"]</button> }
+                    @if (hidden && !allLocked) { <span class="faint">@Loc["agenda.lockAllFirst"]</span> }
+                </div>
+                @if (hidden) { <p class="faint" style="font-size:.78rem;margin:.4rem 0 0;">@Loc["agenda.hostHint"]</p> }
+            }
+        </div>
+
+        <div style="margin-top:.8rem;">
+            @if (hidden)
+            {
+                <p class="faint" style="margin:.2rem 0 .5rem;">@Loc["agenda.hidden"]</p>
+            }
+            else if (kind == ElectType.ForAgainst)
+            {
+                var forVotes = s.AgendaVotes.Where(v => v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
+                var againstVotes = s.AgendaVotes.Where(v => v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+                <div class="row-wrap" style="gap:1rem;margin-bottom:.5rem;">
+                    <span class="chip chip-done">@Loc["agenda.for"]: @forVotes</span>
+                    <span class="chip chip-passed">@Loc["agenda.against"]: @againstVotes</span>
+                </div>
+            }
+            else
+            {
+                var tally = Tally();
+                var lead = tally.Count == 0 ? 0 : tally[0].Votes;
+                <div class="row-wrap" style="gap:.5rem;margin-bottom:.5rem;">
+                    @if (tally.Count == 0) { <span class="faint">@Loc["agenda.noVotes"]</span> }
+                    @foreach (var t in tally)
+                    {
+                        <span class="chip @(t.Votes == lead ? "chip-active" : "")">
+                            @AgendaDisplay.ChoiceLabel(Store, Loc, current, t.Choice): @t.Votes
+                            @if (t.Votes == lead) { <text> · @Loc["agenda.leading"]</text> }
+                        </span>
+                    }
+                </div>
+            }
+
+            @foreach (var p in Store.AgendaOrder())
+            {
+                var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
+                var outcome = vote?.Outcome ?? VoteOutcome.Abstain;
+                var votes = vote?.Votes ?? 0;
+                var locked = vote?.Locked == true;
+                var mineRow = p.Id == Store.MyPlayerId;
+                var isSpeaker = s.SpeakerPlayerId == p.Id;
+                var cands = AgendaDisplay.Candidates(Store, Loc, current);
+                // Hidden: enter on your own device, or for the player the host has opened — committed only on lock.
+                var hiddenOpen = hidden && !locked && ((!host && mineRow) || (host && openFor == p.Id));
+                var visibleOpen = !hidden && (host || mineRow);
+                <div class="player-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;gap:.5rem;flex-wrap:wrap;">
+                    <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+                    <strong style="flex:1 1 120px;">@p.Name @if (isSpeaker) { <span class="chip chip-active">★ @Loc["players.speaker"]</span> }</strong>
+
+                    @if (hiddenOpen)
+                    {
+                        @* Draft held locally; nothing is sent until "Lock". *@
+                        @if (kind == ElectType.ForAgainst)
+                        {
+                            <div class="row-wrap" style="gap:.25rem;">
+                                <button class="btn btn-sm @(dOutcome == VoteOutcome.For ? "btn-gold" : "")" @onclick="() => SetDraft(VoteOutcome.For)">@Loc["agenda.for"]</button>
+                                <button class="btn btn-sm @(dOutcome == VoteOutcome.Against ? "btn-danger" : "")" @onclick="() => SetDraft(VoteOutcome.Against)">@Loc["agenda.against"]</button>
+                                <button class="btn btn-sm @(dOutcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => SetDraft(VoteOutcome.Abstain)">@Loc["agenda.abstain"]</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row-wrap" style="gap:.25rem;align-items:center;flex:1 1 240px;">
+                                @if (cands.Count > 0)
+                                {
+                                    <select value="@dChoice" @onchange="e => SetDraftChoice(e.Value?.ToString())" style="flex:1;min-width:140px;">
+                                        <option value="">@Loc["agenda.choose"]</option>
+                                        @foreach (var c in cands) { <option value="@c.Key" selected="@(c.Key == dChoice)">@c.Label</option> }
+                                    </select>
+                                }
+                                @if (AgendaDisplay.AllowsFreeText(kind))
+                                {
+                                    <input type="text" value="@(cands.Any(c => c.Key == dChoice) ? "" : dChoice)" placeholder="@Loc["agenda.freeText"]" @onchange="e => SetDraftChoice(e.Value?.ToString())" style="flex:1;min-width:120px;" />
+                                }
+                                <button class="btn btn-sm @(dOutcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => SetDraft(VoteOutcome.Abstain)">@Loc["agenda.abstain"]</button>
+                            </div>
+                        }
+                        @if (dOutcome != VoteOutcome.Abstain)
+                        {
+                            <span class="row-wrap" style="gap:.2rem;align-items:center;">
+                                <button class="btn btn-sm" @onclick="() => dVotes = Math.Max(0, dVotes - 1)">−</button>
+                                <span style="min-width:1.5em;text-align:center;">@dVotes</span>
+                                <button class="btn btn-sm" @onclick="() => dVotes++">+</button>
+                                <span class="faint">@Loc["agenda.votes"]</span>
+                            </span>
+                        }
+                        <button class="btn btn-sm btn-gold" @onclick="() => Commit(p.Id)">@Loc["agenda.lock"]</button>
+                    }
+                    else if (visibleOpen)
+                    {
+                        @if (kind == ElectType.ForAgainst)
+                        {
+                            <div class="row-wrap" style="gap:.25rem;">
+                                <button class="btn btn-sm @(outcome == VoteOutcome.For ? "btn-gold" : "")" @onclick="() => Vote(p.Id, VoteOutcome.For, Math.Max(votes,1))">@Loc["agenda.for"]</button>
+                                <button class="btn btn-sm @(outcome == VoteOutcome.Against ? "btn-danger" : "")" @onclick="() => Vote(p.Id, VoteOutcome.Against, Math.Max(votes,1))">@Loc["agenda.against"]</button>
+                                <button class="btn btn-sm @(outcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => Vote(p.Id, VoteOutcome.Abstain, 0)">@Loc["agenda.abstain"]</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row-wrap" style="gap:.25rem;align-items:center;flex:1 1 240px;">
+                                @if (cands.Count > 0)
+                                {
+                                    <select value="@vote?.Choice" @onchange="e => Elect(p.Id, e.Value?.ToString(), votes)" style="flex:1;min-width:140px;">
+                                        <option value="">@Loc["agenda.choose"]</option>
+                                        @foreach (var c in cands) { <option value="@c.Key" selected="@(c.Key == vote?.Choice)">@c.Label</option> }
+                                    </select>
+                                }
+                                @if (AgendaDisplay.AllowsFreeText(kind))
+                                {
+                                    <input type="text" value="@(cands.Any(c => c.Key == vote?.Choice) ? "" : vote?.Choice)" placeholder="@Loc["agenda.freeText"]" @onchange="e => Elect(p.Id, e.Value?.ToString(), votes)" style="flex:1;min-width:120px;" />
+                                }
+                                <button class="btn btn-sm @(outcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => Vote(p.Id, VoteOutcome.Abstain, 0)">@Loc["agenda.abstain"]</button>
+                            </div>
+                        }
+                        @if (outcome != VoteOutcome.Abstain)
+                        {
+                            <span class="row-wrap" style="gap:.2rem;align-items:center;">
+                                <button class="btn btn-sm" @onclick="() => Reweight(p.Id, outcome, Math.Max(0, votes - 1), vote?.Choice)">−</button>
+                                <span style="min-width:1.5em;text-align:center;">@votes</span>
+                                <button class="btn btn-sm" @onclick="() => Reweight(p.Id, outcome, votes + 1, vote?.Choice)">+</button>
+                                <span class="faint">@Loc["agenda.votes"]</span>
+                            </span>
+                        }
+                    }
+                    else if (hidden)
+                    {
+                        @* Secret mode, not open here → status only, never the choice. *@
+                        <span class="chip @(locked ? "chip-done" : "")">@(locked ? Loc["agenda.locked"] : Loc["agenda.waiting"])</span>
+                        @if (host && !locked) { <button class="btn btn-sm" @onclick="() => OpenFor(p.Id)">@Loc["agenda.voteFor"]</button> }
+                    }
+                    else
+                    {
+                        @* Visible mode, another player's vote → read-only. *@
+                        @if (outcome == VoteOutcome.Abstain) { <span class="faint">@Loc["agenda.abstain"]</span> }
+                        else
+                        {
+                            <span>@(kind == ElectType.ForAgainst ? Loc[outcome == VoteOutcome.For ? "agenda.for" : "agenda.against"] : AgendaDisplay.ChoiceLabel(Store, Loc, current, vote?.Choice))</span>
+                            <span class="chip">@votes @Loc["agenda.votes"]</span>
+                        }
+                    }
+                </div>
+            }
+        </div>
+
+        <div style="margin-top:.8rem;">
+            <button class="btn" @onclick="() => Reveal(null)">↻ @Loc["agenda.revealNew"]</button>
+        </div>
+    }
+</div>
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+    private string search = "";
+    private Guid openFor = Guid.Empty; // host: which player's secret vote is currently open for entry
+    private string SearchPlaceholder => Loc["agenda.search"];
+
+    private List<AgendaDto> Matches()
+    {
+        var q = search?.Trim() ?? "";
+        return Store.ActiveAgendas()
+            .Where(a => q.Length == 0 || Loc.Pick(a.Name, a.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(a => Loc.Pick(a.Name, a.NameDe))
+            .Take(40).ToList();
+    }
+
+    private List<(string Choice, int Votes)> Tally()
+        => Store.Session!.AgendaVotes
+            .Where(v => !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
+            .GroupBy(v => v.Choice!)
+            .Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
+            .OrderByDescending(t => t.Votes)
+            .ToList();
+
+    private Task Reveal(string? agendaId) { openFor = Guid.Empty; return Store.Mutate(Store.Api.SetAgendaAsync(Sid, agendaId)); }
+
+    private Task ToggleHidden()
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, !Store.Session!.AgendaVotesHidden)));
+
+    private Task Vote(Guid playerId, VoteOutcome outcome, int votes)
+        => Store.Mutate(Store.Api.CastVoteAsync(Sid, playerId, outcome, votes, null));
+
+    private Task Elect(Guid playerId, string? choice, int votes)
+        => string.IsNullOrWhiteSpace(choice)
+            ? Store.Mutate(Store.Api.CastVoteAsync(Sid, playerId, VoteOutcome.Abstain, 0, null))
+            : Store.Mutate(Store.Api.CastVoteAsync(Sid, playerId, VoteOutcome.For, Math.Max(1, votes), choice));
+
+    private Task Reweight(Guid playerId, VoteOutcome outcome, int votes, string? choice)
+        => Store.Mutate(Store.Api.CastVoteAsync(Sid, playerId, outcome, votes, choice));
+
+    // ---- Secret voting: a local draft, committed only on lock ----
+    private VoteOutcome dOutcome = VoteOutcome.Abstain;
+    private int dVotes;
+    private string? dChoice;
+
+    private void ResetDraft() { dOutcome = VoteOutcome.Abstain; dVotes = 0; dChoice = null; }
+
+    private void SetDraft(VoteOutcome o)
+    {
+        dOutcome = o;
+        if (o == VoteOutcome.Abstain) { dVotes = 0; dChoice = null; }
+        else if (dVotes < 1) dVotes = 1;
+    }
+
+    private void SetDraftChoice(string? c)
+    {
+        if (string.IsNullOrWhiteSpace(c)) { dChoice = null; dOutcome = VoteOutcome.Abstain; dVotes = 0; }
+        else { dChoice = c.Trim(); dOutcome = VoteOutcome.For; if (dVotes < 1) dVotes = 1; }
+    }
+
+    private void OpenFor(Guid playerId) { openFor = playerId; ResetDraft(); }
+
+    // Commit the draft: the choice reaches the server only now, and the vote is locked in one step.
+    private async Task Commit(Guid playerId)
+    {
+        await Store.Mutate(Store.Api.LockVoteAsync(Sid, playerId, dOutcome, dVotes, dChoice));
+        openFor = Guid.Empty;
+        ResetDraft();
+    }
+
+    private async Task ResetAll() { openFor = Guid.Empty; ResetDraft(); await Store.Mutate(Store.Api.ResetVotesAsync(Sid)); }
+}

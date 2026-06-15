@@ -1,0 +1,41 @@
+@* Faction picker that shows the faction symbols (reuses FactionBadge) instead of a plain <select>.
+   Optional search filters the grid; the selected faction is ringed in gold. *@
+
+<div class="faction-picker">
+    @if (Factions.Count() > 12)
+    {
+        <input type="text" class="fp-search" @bind="search" @bind:event="oninput" placeholder="@SearchPlaceholder" />
+    }
+    <div class="fp-grid">
+        @foreach (var f in Filtered())
+        {
+            var sel = f.Id == Current;
+            <button type="button" class="fp-item @(sel ? "sel" : "")" title="@Loc.Pick(f.Name, f.NameDe)"
+                    @onclick="() => Pick(f.Id)">
+                <FactionBadge Faction="f" Size="2.8" Ring="@(sel ? "#d9b04a" : f.ColorHex)" />
+                <span class="fp-name">@Loc.Pick(f.Name, f.NameDe)</span>
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public IEnumerable<FactionDto> Factions { get; set; } = Enumerable.Empty<FactionDto>();
+    [Parameter] public string? Current { get; set; }
+    [Parameter] public EventCallback<string> OnPick { get; set; }
+    [Inject] private Loc Loc { get; set; } = default!;
+
+    private string search = "";
+    private string SearchPlaceholder => Loc["setup.searchFaction"];
+
+    private IEnumerable<FactionDto> Filtered()
+    {
+        var q = search?.Trim() ?? "";
+        return Factions
+            .Where(f => q.Length == 0 || Loc.Pick(f.Name, f.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => Loc.Pick(f.Name, f.NameDe));
+    }
+
+    // Clicking the selected faction again clears it.
+    private Task Pick(string id) => OnPick.InvokeAsync(id == Current ? "" : id);
+}

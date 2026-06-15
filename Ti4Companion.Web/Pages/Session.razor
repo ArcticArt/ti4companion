@@ -1,0 +1,132 @@
+@page "/s/{Code}"
+@inherits Ti4ComponentBase
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (notFound)
+{
+    <div class="container"><div class="panel"><h2>@Loc["home.notfound"]</h2>
+        <button class="btn" @onclick="GoHome">@Loc["nav.leave"]</button></div></div>
+}
+else if (Store.Session is null || Store.Content is null)
+{
+    <div class="container"><div class="panel">@Loc["common.loading"]</div></div>
+}
+else
+{
+    var s = Store.Session;
+    <div class="container">
+        <div class="panel" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <div>
+                <h2 style="margin:0;">@s.Name</h2>
+                <div class="faint">@Loc["turn.round"] @s.CurrentRound · @Loc[$"phase.{s.Phase}"]</div>
+            </div>
+            <div class="spacer" style="flex:1"></div>
+            @if (Store.Me is { } me)
+            {
+                <div class="you-tag" title="@Loc["turn.loggedInAs"]">
+                    <FactionBadge Faction="Store.Faction(me.FactionId)" Size="2.2" Ring="@me.ColorHex" />
+                    <div>
+                        <div class="lbl">@Loc["turn.loggedInAs"]</div>
+                        <div class="nm">@me.Name</div>
+                    </div>
+                </div>
+            }
+            <div style="text-align:right;">
+                <div class="faint" style="font-size:.7rem;">@Loc["common.code"]</div>
+                <span class="codechip" @onclick="CopyCode" title='@Loc["common.copy"]' style="cursor:pointer;">@s.JoinCode</span>
+                @if (copied) { <span class="chip chip-done">@Loc["common.copied"]</span> }
+            </div>
+            <button class="btn btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(invited ? Loc["common.copied"] : Loc["nav.invite"])</button>
+            <a class="btn btn-gold" href="@($"/display/{s.JoinCode}")" target="_blank">▣ @Loc["nav.beamer"]</a>
+            <button class="btn btn-ghost" @onclick="Leave">@Loc["nav.leave"]</button>
+        </div>
+
+        <div class="panel" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:1rem;">
+            <span class="faint">@Loc["display.shows"]:</span>
+            <button class="btn btn-sm @(s.DisplayMode == DisplayMode.Objectives ? "btn-gold" : "")" @onclick="() => SetDisplay(DisplayMode.Objectives)">@Loc["display.objectives"]</button>
+            <button class="btn btn-sm @(s.DisplayMode == DisplayMode.Secondary ? "btn-gold" : "")" @onclick="() => SetDisplay(DisplayMode.Secondary)">@Loc["display.secondary"]</button>
+            <button class="btn btn-sm @(s.DisplayMode == DisplayMode.Tech ? "btn-gold" : "")" @onclick="() => SetDisplay(DisplayMode.Tech)">@Loc["display.tech"]</button>
+        </div>
+
+        <div class="tabs" style="margin-top:1rem;">
+            @foreach (var t in Tabs)
+            {
+                <div class="tab @(tab == t ? "active" : "")" @onclick="() => tab = t">@Loc[TabKey(t)]</div>
+            }
+        </div>
+
+        @switch (tab)
+        {
+            case TabId.Phase:
+                <PhaseView />
+                break;
+            case TabId.Players:
+                <PlayersTab />
+                break;
+            case TabId.Objectives:
+                <ObjectivesTab />
+                break;
+            case TabId.Techs:
+                <TechsTab />
+                break;
+            case TabId.Settings:
+                <SettingsTab />
+                break;
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+
+    private enum TabId { Phase, Players, Objectives, Techs, Settings }
+    private static readonly TabId[] Tabs = Enum.GetValues<TabId>();
+    private TabId tab = TabId.Phase;
+    private bool notFound;
+    private bool copied;
+    private bool invited;
+
+    private static string TabKey(TabId t) => t switch
+    {
+        TabId.Phase => "nav.phase",
+        TabId.Players => "nav.players",
+        TabId.Objectives => "nav.objectives",
+        TabId.Techs => "nav.techs",
+        TabId.Settings => "nav.settings",
+        _ => "",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Store.Session?.JoinCode == Code.ToUpperInvariant()) return;
+        await Store.InitAsync();
+        var ok = await Store.ConnectAsync(Code.ToUpperInvariant());
+        notFound = !ok;
+    }
+
+    private async Task CopyCode()
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", Store.Session!.JoinCode); copied = true; }
+        catch { }
+    }
+
+    private async Task CopyInvite()
+    {
+        var url = $"{Nav.BaseUri}join/{Store.Session!.JoinCode}";
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", url); invited = true; }
+        catch { }
+    }
+
+    private async Task Leave()
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", Loc["nav.leaveConfirm"]);
+        if (!ok) return;
+        await Store.LeaveAsync();
+        Nav.NavigateTo("/");
+    }
+
+    private void GoHome() => Nav.NavigateTo("/");
+
+    private Task SetDisplay(DisplayMode mode) => Store.Mutate(Store.Api.SetDisplayModeAsync(Store.Session!.Id, mode));
+}

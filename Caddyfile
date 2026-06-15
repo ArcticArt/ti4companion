@@ -1,0 +1,8 @@
+# SITE_ADDRESS is set from .env. Use a domain (e.g. ti4.example.com) for automatic HTTPS,
+# or ":80" to serve over plain HTTP (e.g. when testing against the server's IP).
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Proxy everything (REST API, the Blazor client's static files, and the SignalR WebSocket).
+	reverse_proxy api:8080
+}

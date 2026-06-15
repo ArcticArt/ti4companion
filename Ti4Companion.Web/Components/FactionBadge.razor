@@ -1,0 +1,50 @@
+@* Faction token: the faction's symbol (wwwroot/factions/<slug>.png) shown whole on a dark badge
+   with a coloured ring (the player's colour when given, else the faction colour).
+   The initials only appear as a fallback when the image is missing/fails to load. *@
+
+@if (Faction is null)
+{
+    <div class="faction-badge" style="@SizeStyle border-color:@(Ring ?? "#33405e");color:#9fb0d0;">?</div>
+}
+else
+{
+    <div class="faction-badge" style="@SizeStyle border-color:@(Ring ?? Faction.ColorHex);color:@Faction.ColorHex;"
+         title="@(Loc.Pick(Faction.Name, Faction.NameDe))">
+        @if (!string.IsNullOrEmpty(Faction.IconPath))
+        {
+            <span class="fb-initials" style="display:none;">@Initials(Faction)</span>
+            <img src="@Faction.IconPath" alt="" class="fb-img"
+                 onerror="this.style.display='none';this.previousElementSibling.style.display=''" />
+        }
+        else
+        {
+            <span class="fb-initials">@Initials(Faction)</span>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public FactionDto? Faction { get; set; }
+    [Parameter] public double Size { get; set; } = 2.2;
+    /// <summary>Optional raw CSS length (e.g. "clamp(2rem,4vh,4rem)") that overrides <see cref="Size"/>;
+    /// lets the wall display scale faction badges with the viewport.</summary>
+    [Parameter] public string? SizeCss { get; set; }
+    /// <summary>Ring (border) colour — pass the player's colour; defaults to the faction colour.</summary>
+    [Parameter] public string? Ring { get; set; }
+    [Inject] private Loc Loc { get; set; } = default!;
+
+    private string SizeStyle => SizeCss is not null
+        ? $"width:{SizeCss};height:{SizeCss};font-size:calc({SizeCss} * 0.4);"
+        : $"width:{Size}rem;height:{Size}rem;font-size:{Size * 0.4}rem;";
+
+    private static string Initials(FactionDto f)
+    {
+        var skip = new[] { "the", "of", "die", "das", "der", "von" };
+        var words = f.Name.Split(new[] { ' ', '-', '\'', '/' }, StringSplitOptions.RemoveEmptyEntries)
+                          .Where(w => !skip.Contains(w.ToLowerInvariant()))
+                          .ToArray();
+        if (words.Length == 0) words = f.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var letters = words.Take(2).Select(w => char.ToUpperInvariant(w[0]));
+        return new string(letters.ToArray());
+    }
+}

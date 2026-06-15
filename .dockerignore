@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/out/
+.vs/
+.git/
+.gitignore
+**/*.user
+**/appsettings.*.Development.json
+docker-compose*.yml
+Caddyfile
+.env
+.env.*
+**/Properties/launchSettings.json

@@ -1,0 +1,132 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+    var players = s.Players.OrderBy(p => p.SeatOrder).ToList();
+    var revealedIds = s.Objectives.Select(o => o.ObjectiveId).Where(x => !string.IsNullOrEmpty(x)).ToHashSet();
+    var available = Store.ActiveObjectives().Where(o => !o.IsSecret && !revealedIds.Contains(o.Id)).ToList();
+    var host = Store.IsHost;
+}
+
+<div style="display:flex;flex-direction:column;gap:1rem;">
+    @* Reveal controls (host) — order flips so they sit above in setup, below in status. *@
+    @if (host)
+    {
+        <div class="panel" style="order:@(RevealOnTop ? 0 : 2);">
+            <input type="text" @bind="revealSearch" @bind:event="oninput" placeholder="@Loc["obj.search"]" />
+            <div class="reveal-list">
+                @foreach (var o in Matches(available))
+                {
+                    <button class="btn btn-ghost agenda-pick" @onclick="() => Reveal(o.Id)">
+                        <span class="chip @(o.Stage == ObjectiveStage.StageII ? "chip-active" : "")">@(o.Stage == ObjectiveStage.StageII ? "II" : "I")</span>
+                        <strong>@Loc.Pick(o.Name, o.NameDe)</strong>
+                        <span class="faint">· @o.Points @Loc["obj.vp"]</span>
+                    </button>
+                }
+                @if (Matches(available).Count == 0) { <p class="faint" style="margin:.3rem;">—</p> }
+            </div>
+            @if (AllowCustom)
+            {
+                <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-top:.6rem;">
+                    <span class="faint">@Loc["obj.custom"]:</span>
+                    <input type="text" @bind="customName" placeholder="@Loc["obj.customName"]" style="flex:1 1 180px;" />
+                    <input type="number" @bind="customPoints" min="0" max="10" style="width:4.5rem;" title="@Loc["obj.vp"]" />
+                    <button class="btn btn-sm btn-gold" disabled="@string.IsNullOrWhiteSpace(customName)" @onclick="AddCustom">+ @Loc["obj.add"]</button>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr));order:1;">
+        @if (s.Objectives.Count == 0)
+        {
+            <p class="muted">@Loc["obj.none"]</p>
+        }
+        @foreach (var so in s.Objectives)
+        {
+            var def = so.CustomName is null ? Store.Objective(so.ObjectiveId) : null;
+            var custom = so.CustomName is not null;
+            var stage2 = def?.Stage == ObjectiveStage.StageII;
+            var name = so.CustomName ?? (def is null ? so.ObjectiveId : Loc.Pick(def.Name, def.NameDe));
+            var pts = so.CustomPoints ?? def?.Points;
+            <div class="obj-card @(custom ? "secret" : stage2 ? "stage2" : "stage1")">
+                <div class="obj-head">
+                    <span class="obj-name">@name</span>
+                    @if (custom) { <span class="chip chip-passed">@Loc["obj.secret"]</span> }
+                    <span class="obj-vp">@pts</span>
+                    @if (host)
+                    {
+                        <button class="btn btn-sm btn-ghost" @onclick="() => Remove(so.Id)" title="@RemoveTitle">✕</button>
+                    }
+                </div>
+                @if (def is not null)
+                {
+                    <div class="obj-req">@Loc.Pick(def.Requirement, def.RequirementDe)</div>
+                }
+                @if (Scoreable)
+                {
+                    <div class="obj-markers">
+                        @foreach (var p in players)
+                        {
+                            var scored = so.ScoredByPlayerIds.Contains(p.Id);
+                            <button class="marker @(scored ? "on" : "")" @onclick="() => ToggleScore(so.Id, p.Id, scored)" title="@p.Name">
+                                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="2.4" Ring="@p.ColorHex" />
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool RevealOnTop { get; set; }
+    [Parameter] public bool Scoreable { get; set; } = true;
+    /// <summary>Whether the hand-add (secret/custom) row is shown — off during setup.</summary>
+    [Parameter] public bool AllowCustom { get; set; } = true;
+
+    private Guid Sid => Store.Session!.Id;
+    private string revealSearch = "";
+    private string customName = "";
+    private int customPoints = 1;
+    private string RemoveTitle => Loc["obj.remove"];
+
+    private List<ObjectiveDto> Matches(List<ObjectiveDto> available)
+    {
+        var q = revealSearch.Trim();
+        return available
+            .Where(o => Loc.Pick(o.Name, o.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(o => o.Stage).ThenBy(o => Loc.Pick(o.Name, o.NameDe))
+            .Take(30).ToList();
+    }
+
+    private async Task Reveal(string objId)
+    {
+        revealSearch = ""; // reset the picker back to its default state
+        await Store.Mutate(Store.Api.RevealObjectiveAsync(Sid, objId));
+    }
+
+    private async Task AddCustom()
+    {
+        if (string.IsNullOrWhiteSpace(customName)) return;
+        await Store.Mutate(Store.Api.RevealCustomObjectiveAsync(Sid, customName.Trim(), customPoints));
+        customName = "";
+        customPoints = 1;
+    }
+
+    private Task ToggleScore(Guid soId, Guid playerId, bool scored)
+        => scored ? ScoreOff(soId, playerId) : Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, soId, playerId));
+
+    private async Task ScoreOff(Guid soId, Guid playerId)
+    {
+        await Store.Api.UnscoreObjectiveAsync(Sid, soId, playerId);
+        await Store.RefreshAsync();
+    }
+
+    private async Task Remove(Guid soId)
+    {
+        await Store.Api.RemoveObjectiveAsync(Sid, soId);
+        await Store.RefreshAsync();
+    }
+}

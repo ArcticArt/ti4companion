@@ -1,0 +1,77 @@
+@inherits Ti4ComponentBase
+
+@{
+    var s = Store.Session!;
+    var allReady = s.Players.Count > 0 && s.Players.All(p => p.IsReady);
+    var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
+    var speakerSet = s.SpeakerPlayerId is not null;
+    var host = Store.IsHost;
+}
+
+<div class="panel phase-bar">
+    <div class="phase-steps">
+        @foreach (var ph in new[] { GamePhase.Setup, GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda })
+        {
+            <span class="pstep @(s.Phase == ph ? "on" : "")">@Loc[$"phase.{ph}"]</span>
+        }
+    </div>
+    <div class="spacer" style="flex:1"></div>
+    <div class="row-wrap" style="gap:.4rem;align-items:center;">
+        @* Phase transitions are reserved for the host. *@
+        @if (!host)
+        {
+            <span class="faint">@Loc["host.onlyHint"]</span>
+        }
+        else
+        {
+            switch (s.Phase)
+            {
+                case GamePhase.Setup:
+                    @if (!speakerSet) { <span class="faint">@Loc["setup.needSpeaker"]</span> }
+                    <button class="btn btn-gold" disabled="@(!allReady || !speakerSet)" @onclick="StartGame">@Loc["turn.startGame"] ▸</button>
+                    break;
+                case GamePhase.Strategy:
+                    <button class="btn btn-primary" @onclick="ToAction">@Loc["turn.toAction"] ▸</button>
+                    break;
+                case GamePhase.Action:
+                    <button class="btn btn-gold" disabled="@(!allPassed)" @onclick="EndAction">@Loc["turn.endAction"]</button>
+                    break;
+                case GamePhase.Status:
+                    <button class="btn" @onclick="ToAgenda">@Loc["turn.toAgenda"]</button>
+                    <button class="btn btn-gold" @onclick="NextRound">⟳ @Loc["turn.nextRound"]</button>
+                    break;
+                case GamePhase.Agenda:
+                    <button class="btn btn-gold" @onclick="NextRound">@Loc["agenda.end"] ▸</button>
+                    break;
+            }
+        }
+    </div>
+</div>
+
+@switch (s.Phase)
+{
+    case GamePhase.Setup:
+        <SetupView />
+        break;
+    case GamePhase.Strategy:
+        <StrategyView />
+        break;
+    case GamePhase.Action:
+        <ActionView />
+        break;
+    case GamePhase.Status:
+        <StatusView />
+        break;
+    case GamePhase.Agenda:
+        <AgendaView />
+        break;
+}
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+    private Task StartGame() => Store.Mutate(Store.Api.StartGameAsync(Sid));
+    private Task ToAction() => Store.Mutate(Store.Api.StartActionPhaseAsync(Sid));
+    private Task EndAction() => Store.Mutate(Store.Api.EndActionPhaseAsync(Sid));
+    private Task ToAgenda() => Store.Mutate(Store.Api.StartAgendaPhaseAsync(Sid));
+    private Task NextRound() => Store.Mutate(Store.Api.NextRoundAsync(Sid));
+}

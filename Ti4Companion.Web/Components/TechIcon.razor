@@ -1,0 +1,33 @@
+@* Technology colour symbol — uses the PNG symbols in wwwroot/tech. Accepts either a TechColor or a
+   prerequisite letter (B/P/C/W). Unit upgrades have no colour symbol (they show a unit image instead). *@
+
+@if (Src is not null)
+{
+    <img src="@Src" class="tech-icon" style="width:@(Size)px;height:@(Size)px;" alt="@(Eff?.ToString())" />
+}
+
+@code {
+    [Parameter] public TechColor? Color { get; set; }
+    [Parameter] public char? Letter { get; set; }
+    [Parameter] public int Size { get; set; } = 18;
+
+    private TechColor? Eff => Letter is char c
+        ? char.ToUpperInvariant(c) switch
+        {
+            'B' => TechColor.Biotic,
+            'P' => TechColor.Propulsion,
+            'C' => TechColor.Cybernetic,
+            'W' => TechColor.Warfare,
+            _ => (TechColor?)null,
+        }
+        : Color;
+
+    private string? Src => Eff switch
+    {
+        TechColor.Biotic => "tech/biotic.png",
+        TechColor.Propulsion => "tech/propulsion.png",
+        TechColor.Cybernetic => "tech/cybernetic.png",
+        TechColor.Warfare => "tech/warfare.png",
+        _ => null,
+    };
+}

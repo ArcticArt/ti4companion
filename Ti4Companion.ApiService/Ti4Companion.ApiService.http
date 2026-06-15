@@ -1,0 +1,6 @@
+@Ti4Companion.ApiService_HostAddress = http://localhost:5116
+
+GET {{Ti4Companion.ApiService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

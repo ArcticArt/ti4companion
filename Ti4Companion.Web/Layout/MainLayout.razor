@@ -1,0 +1,40 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject Loc Loc
+@inject SessionStore Store
+
+<div class="appbar">
+    <a class="brand" href="/">@Loc["app.title"]<small>@Loc["app.subtitle"]</small></a>
+    <div class="spacer"></div>
+    @if (Store.Session is not null)
+    {
+        <div class="conn">
+            <span class="dot @(Store.Connected ? "on" : "off")"></span>
+            @(Store.Connected ? "live" : Loc["common.connecting"])
+        </div>
+    }
+    <div class="lang">
+        <button class="btn btn-sm @(Loc.Lang == Language.En ? "btn-gold" : "")" @onclick="() => Loc.SetLanguage(Language.En)">EN</button>
+        <button class="btn btn-sm @(Loc.Lang == Language.De ? "btn-gold" : "")" @onclick="() => Loc.SetLanguage(Language.De)">DE</button>
+    </div>
+</div>
+
+<div class="content">
+    @Body
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Loc.OnChange += Changed;
+        Store.OnChange += Changed;
+    }
+
+    private void Changed() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnChange -= Changed;
+        Store.OnChange -= Changed;
+    }
+}

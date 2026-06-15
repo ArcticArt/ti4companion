@@ -1,0 +1,24 @@
+{
+  "name": "Twilight Imperium Companion",
+  "short_name": "TI4 Companion",
+  "id": "./",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070b16",
+  "theme_color": "#070b16",
+  "description": "Match companion for Twilight Imperium 4 — turn tracker, strategy cards, objectives and tech.",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ]
+}
