@@ -40,6 +40,27 @@ public enum TechColor
     Unit = 4
 }
 
+/// <summary>
+/// Which physical unit a unit-upgrade technology represents — drives the card art and lets a faction
+/// variant (e.g. "Crimson Legionnaire II") reuse the base unit's silhouette. <see cref="None"/> is for
+/// "Unit"-coloured techs that aren't actually unit upgrades (the Nekro Valefar Assimilators).
+/// </summary>
+public enum UnitType
+{
+    None = 0,
+    Carrier = 1,
+    Cruiser = 2,
+    Destroyer = 3,
+    Fighter = 4,
+    Infantry = 5,
+    Pds = 6,
+    SpaceDock = 7,
+    Dreadnought = 8,
+    WarSun = 9,
+    Flagship = 10,
+    Mech = 11
+}
+
 public enum AgendaType
 {
     Law = 0,

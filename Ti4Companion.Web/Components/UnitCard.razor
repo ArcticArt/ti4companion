@@ -1,0 +1,41 @@
+@* A buildable unit (standard or faction "Stufe I") rendered as a card — reference content prepared
+   for the production planner. Delegates to the shared UnitCardView; faction units take their faction
+   colour as the accent (like the printed faction unit cards), standard units a neutral steel. *@
+@inherits Ti4ComponentBase
+
+<UnitCardView Vm="BuildVm()" Compact="Compact" OnClick="OnClick" />
+
+@code {
+    [Parameter, EditorRequired] public UnitDto Unit { get; set; } = default!;
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private UnitCardVM BuildVm()
+    {
+        var stats = UnitText.StructuredStats(
+            Unit.UnitType, Unit.Cost, Unit.ProducedCount, Unit.Combat, Unit.CombatDice, Unit.Move, Unit.Capacity, StatLabel);
+        var desc = Loc.Pick(Unit.Text, Unit.TextDe);
+        return new UnitCardVM(
+            Loc.Pick(Unit.Name, Unit.NameDe),
+            Accent,
+            Unit.UnitType,
+            Unit.FactionId,
+            "",   // base units have no research prerequisites
+            string.IsNullOrWhiteSpace(desc) ? null : desc,
+            UnitText.SplitAbilities(Unit.UnitAbilities),
+            stats);
+    }
+
+    private string Accent =>
+        Unit.FactionId is { } fid && Store.Faction(fid) is { ColorHex: { } hex } && !string.IsNullOrEmpty(hex)
+            ? hex : "#9aa7c0";
+
+    private string StatLabel(string key) => key.ToLowerInvariant() switch
+    {
+        "cost" => Loc["unit.cost"],
+        "combat" => Loc["unit.combat"],
+        "move" => Loc["unit.move"],
+        "capacity" => Loc["unit.capacity"],
+        _ => key,
+    };
+}

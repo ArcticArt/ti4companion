@@ -18,6 +18,7 @@ public static class ContentEndpoints
             var techs = await db.Technologies.AsNoTracking().OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ThenBy(t => t.Name).ToListAsync(ct);
             var agendas = await db.Agendas.AsNoTracking().OrderBy(a => a.Type).ThenBy(a => a.Name).ToListAsync(ct);
             var planets = await db.Planets.AsNoTracking().OrderBy(p => p.Name).ToListAsync(ct);
+            var units = await db.Units.AsNoTracking().OrderBy(u => u.UnitType).ThenBy(u => u.FactionId).ThenBy(u => u.Name).ToListAsync(ct);
 
             return Results.Ok(new ContentBundleDto(
                 factions.Select(Mapping.ToDto).ToList(),
@@ -25,7 +26,8 @@ public static class ContentEndpoints
                 objectives.Select(Mapping.ToDto).ToList(),
                 techs.Select(Mapping.ToDto).ToList(),
                 agendas.Select(Mapping.ToDto).ToList(),
-                planets.Select(Mapping.ToDto).ToList()));
+                planets.Select(Mapping.ToDto).ToList(),
+                units.Select(Mapping.ToDto).ToList()));
         });
 
         return app;

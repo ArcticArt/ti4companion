@@ -1,0 +1,119 @@
+@* Presentational unit card, laid out like the printed cards: name on top, ★ keyword abilities and the
+   stat boxes pinned at the very bottom, and the unit silhouette placed by type:
+     • side    — silhouette right, vertically centred, prose to its left (infantry, PDS, dock, mech…);
+     • centred — silhouette as the focus (carrier, cruiser, destroyer, dreadnought I — no prose);
+     • backdrop— faint glowing silhouette behind the text (flagships, and big ships with prose like
+                 Dreadnought II "…cannot be destroyed by Direct Hit…").
+   COST shows the fighter/infantry cost symbols and COMBAT shows dice (×N) instead of "(xN)" text.
+   Shared by TechCard (unit upgrades) and UnitCard (base units). *@
+@inherits Ti4ComponentBase
+
+<div class="techcard unitcard @(Compact ? "compact" : "") @(HasGutter ? "has-gutter" : "") @Mode @(Vm.Abilities.Count > 0 ? "hasabils" : "") @(OnClick.HasDelegate ? "clickable" : "")"
+     style="--tc:@Vm.AccentHex" @onclick="HandleClick">
+
+    @if (Vm.FactionId is not null)
+    {
+        var f = Store.Faction(Vm.FactionId);
+        <span class="tc-fac" title="@FactionName(f)">
+            @if (f is { IconPath: { } ip } && !string.IsNullOrEmpty(ip)) { <img src="@ip" alt="" /> }
+            else { <span class="tc-facfb">★</span> }
+        </span>
+    }
+
+    @if (HasGutter)
+    {
+        <div class="tc-pre">
+            @foreach (var ch in Vm.Prerequisites) { <TechIcon Letter="ch" Size="@(Compact ? 14 : 18)" /> }
+        </div>
+    }
+
+    @if (!Compact && UnitImg is not null)
+    {
+        <img class="tc-unitart" src="@UnitImg" alt="" />
+    }
+
+    <div class="tc-body">
+        <div class="tc-name">@Vm.Name</div>
+
+        @if (!Compact && !string.IsNullOrWhiteSpace(Vm.Description))
+        {
+            <div class="tc-desc">@Vm.Description</div>
+        }
+
+        <div class="tc-foot">
+            @if (!Compact && Vm.Abilities.Count > 0)
+            {
+                <div class="tc-abils">
+                    @foreach (var a in Vm.Abilities)
+                    {
+                        <span class="tc-abil"><span class="star">✦</span><b>@a.Keyword</b>@if (a.Value is not null) { <span class="av">@a.Value</span> }</span>
+                    }
+                </div>
+            }
+
+            @if (Vm.Stats.Count > 0)
+            {
+                <div class="tc-stats">
+                    @foreach (var st in Vm.Stats)
+                    {
+                        <div class="tc-stat">
+                            <span class="v">
+                                <span>@st.Value</span>
+                                @if (st.MultCount > 1 && st.MultIcon is not null)
+                                {
+                                    <span class="statmult @(st.MultIcon == UnitText.DiceIcon ? "dice" : "cost") n@(st.MultCount)">
+                                        @for (var i = 0; i < st.MultCount; i++) { <img src="@st.MultIcon" alt="" /> }
+                                    </span>
+                                }
+                            </span>
+                            <span class="l">@st.Label</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public UnitCardVM Vm { get; set; } = default!;
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private Task HandleClick() => OnClick.HasDelegate ? OnClick.InvokeAsync() : Task.CompletedTask;
+
+    private string FactionName(FactionDto? f) => f is null ? Loc["tech.faction"] : Loc.Pick(f.Name, f.NameDe);
+
+    // Reserve the left column for the prereq pips and/or the circular faction marker.
+    private bool HasGutter => Vm.Prerequisites.Length > 0 || Vm.FactionId is not null;
+
+    // The wide-hulled ships read best centred or as a backdrop rather than as a small side icon.
+    private bool IsBigShip => Vm.UnitType is UnitType.Carrier or UnitType.Cruiser or UnitType.Destroyer
+        or UnitType.Dreadnought or UnitType.WarSun;
+
+    private bool HasProse => !string.IsNullOrWhiteSpace(Vm.Description);
+
+    // Flagships, and big ships that carry prose (e.g. Dreadnought II), put the silhouette behind the
+    // text; big ships without prose centre it; everything else keeps it to the side.
+    private string Mode =>
+        Vm.UnitType == UnitType.Flagship || (IsBigShip && HasProse) ? "backdrop"
+        : IsBigShip ? "centered"
+        : "side";
+
+    // Unit silhouette by type (file names match wwwroot/units). None (non-unit techs) → no image.
+    private string? UnitImg => Vm.UnitType switch
+    {
+        UnitType.Carrier => "units/Carrier.png",
+        UnitType.Cruiser => "units/Cruiser.png",
+        UnitType.Destroyer => "units/Destroyer.png",
+        UnitType.Fighter => "units/Fighter.png",
+        UnitType.Infantry => "units/Infantry.png",
+        UnitType.Pds => "units/PDS.png",
+        UnitType.SpaceDock => "units/Spacedock.png",
+        UnitType.Dreadnought => "units/Dreadnought.png",
+        UnitType.WarSun => "units/Warsun.png",
+        UnitType.Flagship => "units/Flagship.png",
+        UnitType.Mech => "units/Mech.png",
+        _ => null,
+    };
+}

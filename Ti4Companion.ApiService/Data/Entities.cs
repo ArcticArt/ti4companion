@@ -63,6 +63,9 @@ public class TechnologyDef
     public Expansion Expansion { get; set; }
     /// <summary>Faction slug for faction-specific technologies; null for the common tree.</summary>
     public string? FactionId { get; set; }
+    /// <summary>For unit-upgrade techs (<see cref="TechColor.Unit"/>), which unit it represents — drives
+    /// the card silhouette. <see cref="UnitType.None"/> for non-unit "Unit"-coloured techs.</summary>
+    public UnitType UnitType { get; set; }
 }
 
 public class AgendaDef
@@ -96,6 +99,38 @@ public class Planet
     /// <summary>Faction slug whose home system this planet belongs to; null for neutral planets.</summary>
     public string? HomeFactionId { get; set; }
     public bool Legendary { get; set; }
+    public Expansion Expansion { get; set; }
+}
+
+/// <summary>
+/// A buildable unit at its base level: the standard units and the faction "Stufe I" units (plus
+/// flagships and mechs). Reference content for a future production planner; level-II upgrades are
+/// modelled as <see cref="TechnologyDef"/> unit-colour techs instead. Sourced from ti4lookup
+/// <c>units.csv</c> (Twilight's Fall alternate-mode variants excluded).
+/// </summary>
+public class UnitDef
+{
+    public string Id { get; set; } = "";          // slug, e.g. "carrier-i", "letani-warrior-i"
+    public string Name { get; set; } = "";
+    public string NameDe { get; set; } = "";
+    public UnitType UnitType { get; set; }
+    /// <summary>Faction slug for faction-specific units; null for the standard units.</summary>
+    public string? FactionId { get; set; }
+    /// <summary>Printed build cost; null for structures placed via Construction (PDS, space dock).</summary>
+    public int? Cost { get; set; }
+    /// <summary>Units produced per build: 2 for fighters/infantry, otherwise 1.</summary>
+    public int ProducedCount { get; set; } = 1;
+    /// <summary>Combat hit value; null for units that don't fight (structures).</summary>
+    public int? Combat { get; set; }
+    /// <summary>Number of combat dice (the "(xN)" on a combat value); 1 by default.</summary>
+    public int CombatDice { get; set; } = 1;
+    public int? Move { get; set; }
+    public int? Capacity { get; set; }
+    /// <summary>Prose abilities ("text abilities" on the card).</summary>
+    public string Text { get; set; } = "";
+    public string TextDe { get; set; } = "";
+    /// <summary>Period-separated keyword abilities, e.g. "SUSTAIN DAMAGE. BOMBARDMENT 5.".</summary>
+    public string UnitAbilities { get; set; } = "";
     public Expansion Expansion { get; set; }
 }
 

@@ -11,6 +11,7 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
     public DbSet<TechnologyDef> Technologies => Set<TechnologyDef>();
     public DbSet<AgendaDef> Agendas => Set<AgendaDef>();
     public DbSet<Planet> Planets => Set<Planet>();
+    public DbSet<UnitDef> Units => Set<UnitDef>();
 
     // Session state
     public DbSet<GameSession> Sessions => Set<GameSession>();
@@ -44,6 +45,9 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
 
         b.Entity<Planet>().HasKey(x => x.Id);
         b.Entity<Planet>().Property(x => x.Id).ValueGeneratedNever();
+
+        b.Entity<UnitDef>().HasKey(x => x.Id);
+        b.Entity<UnitDef>().Property(x => x.Id).ValueGeneratedNever();
 
         // ---- Sessions ----
         // Guid keys are assigned in the entity initializers, so treat them as app-generated.

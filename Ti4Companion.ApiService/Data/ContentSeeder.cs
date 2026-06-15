@@ -33,6 +33,7 @@ public static class ContentSeeder
         await UpsertAsync<TechnologyDef>(db, Path.Combine(contentRoot, "technologies.json"), t => t.Id, logger, ct);
         await UpsertAsync<AgendaDef>(db, Path.Combine(contentRoot, "agendas.json"), a => a.Id, logger, ct);
         await UpsertAsync<Planet>(db, Path.Combine(contentRoot, "planets.json"), p => p.Id, logger, ct);
+        await UpsertAsync<UnitDef>(db, Path.Combine(contentRoot, "units.json"), u => u.Id, logger, ct);
 
         await db.SaveChangesAsync(ct);
     }
