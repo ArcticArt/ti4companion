@@ -60,16 +60,41 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     public int MaxStrategyCards => (Session?.Players.Count ?? 0) <= 4 ? 2 : 1;
 
-    /// <summary>Agenda voting order: seat order, but the speaker votes last.</summary>
+    /// <summary>Argent Flight's faction slug — it always votes first in the agenda phase.</summary>
+    public const string ArgentFactionId = "argent";
+
+    /// <summary>Agenda voting order: seat order with the speaker last, but Argent Flight always first;
+    /// reversed when the session's voting-order override is on (an action card can flip it).</summary>
     public IReadOnlyList<PlayerDto> AgendaOrder()
     {
         var s = Session;
         if (s is null || s.Players.Count == 0) return Array.Empty<PlayerDto>();
         var seated = s.Players.OrderBy(p => p.SeatOrder).ToList();
         var spIdx = s.SpeakerPlayerId is Guid sp ? seated.FindIndex(p => p.Id == sp) : -1;
-        if (spIdx < 0) return seated; // no speaker chosen → plain seat order
-        // Start just after the speaker and wrap around so the speaker ends up last.
-        return Enumerable.Range(1, seated.Count).Select(i => seated[(spIdx + i) % seated.Count]).ToList();
+        // Base: seat order, but start just after the speaker so the speaker ends up last (if one is set).
+        var order = spIdx < 0
+            ? seated
+            : Enumerable.Range(1, seated.Count).Select(i => seated[(spIdx + i) % seated.Count]).ToList();
+        // An action card can reverse the order; Argent Flight still votes first (Zeal is unconditional),
+        // so pull it to the front after any reversal.
+        if (s.VotingOrderReversed) order = Enumerable.Reverse(order).ToList();
+        var argent = order.FirstOrDefault(p => p.FactionId == ArgentFactionId);
+        if (argent is not null) order = order.Where(p => p.Id != argent.Id).Prepend(argent).ToList();
+        return order;
+    }
+
+    /// <summary>One-by-one voting: whose turn it is to vote — the first player in the agenda order who
+    /// hasn't yet committed (locked) a vote. Null when an agenda isn't up or everyone has voted.</summary>
+    public Guid? CurrentVoterId
+    {
+        get
+        {
+            var s = Session;
+            if (s is null || s.CurrentAgendaId is null) return null;
+            foreach (var p in AgendaOrder())
+                if (!s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked)) return p.Id;
+            return null;
+        }
     }
 
     public async Task InitAsync()

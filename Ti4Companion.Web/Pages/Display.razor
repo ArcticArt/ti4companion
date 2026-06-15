@@ -76,9 +76,14 @@ else
                         {
                             var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
                             var isSpeaker = s.SpeakerPlayerId == p.Id;
-                            <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex">
+                            var isVoting = !s.AgendaVotesHidden && Store.CurrentVoterId == p.Id;
+                            // Show remaining (influence − votes) when votes are open; in secret mode show just the
+                            // recorded influence so the hidden vote weight isn't leaked.
+                            var infShown = p.Influence > 0 ? (s.AgendaVotesHidden ? p.Influence : p.Influence - (vote?.Votes ?? 0)) : (int?)null;
+                            <div class="vote-card @(isSpeaker ? "speaker-row" : "") @(isVoting ? "voting-now" : "")" style="--player-color:@p.ColorHex">
                                 <FactionBadge Faction="Store.Faction(p.FactionId)" SizeCss="@badge" Ring="@p.ColorHex" />
                                 <span class="vote-name">@p.Name @if (isSpeaker) { <span class="spk">★</span> }</span>
+                                @if (infShown is int rem) { <span class="vote-inf" title="@Loc["agenda.influence"]">⬡ @rem</span> }
                                 @if (s.AgendaVotesHidden)
                                 {
                                     var voted = vote is not null && vote.Outcome != VoteOutcome.Abstain;
@@ -102,9 +107,16 @@ else
         else
         {
             var mode = s.DisplayMode;
-            // Tech mode: full cards when there's room, else fall back to compact names.
-            var maxTechs = ordered.Count == 0 ? 0 : ordered.Max(p => p.TechnologyIds.Count);
-            var techCompact = ordered.Count > 6 || maxTechs > 8;
+            // Tech mode: one column per tech colour (right-aligned). Within a colour, show full cards while
+            // few enough to fit the column height, otherwise just names. Threshold is per colour and drops
+            // as more players share the screen height.
+            var techThreshold = ordered.Count <= 4 ? 2 : ordered.Count <= 6 ? 1 : 0;
+            // Objectives layout: split by stage; collapse to one (half-width) column until a Stage II is revealed.
+            // All cards share ONE height = max card count across both columns (so left/right cards match), capped.
+            var objStage2 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageII).ToList() : new();
+            var objStage1 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage != ObjectiveStage.StageII).ToList() : new();
+            var objSingle = mode == DisplayMode.Objectives && objStage2.Count == 0;
+            var objRows = Math.Max(Math.Max(objStage1.Count, objStage2.Count), 1);
 
             @if (activeCard is not null)
             {
@@ -129,7 +141,7 @@ else
                 </div>
             }
 
-            <div class="beamer-grid @(mode == DisplayMode.Objectives ? "two-col" : "one-col")">
+            <div class="beamer-grid @(mode == DisplayMode.Objectives ? (objSingle ? "obj-single" : "two-col") : "one-col")">
                 <div class="panel">
                     <h3 style="color:var(--gold);">@Loc["nav.players"]@(mode == DisplayMode.Secondary ? " · " + Loc["turn.secondary"] : mode == DisplayMode.Tech ? " · " + Loc["tech.title"] : "")</h3>
                     <div class="panel-body">
@@ -139,16 +151,42 @@ else
                             var isActive = s.ActivePlayerId == p.Id;
                             var nonExhausted = p.StrategyCards.Where(c => !c.IsExhausted).Select(c => Store.Card(c.StrategyCardId)).Where(c => c is not null).Select(c => c!).OrderBy(c => c.Initiative).ToList();
                             var techs = p.TechnologyIds.Select(t => Store.Tech(t)).Where(t => t is not null).Select(t => t!).OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ToList();
-                            <div class="p-block @(mode == DisplayMode.Objectives ? "" : "wide") @(isActive ? "active" : "") @(p.HasPassed ? "passed" : "")" style="--player-color:@p.ColorHex">
+                            <div class="p-block @(mode == DisplayMode.Objectives ? "" : mode == DisplayMode.Tech ? "wide tech" : "wide") @(isActive ? "active" : "") @(p.HasPassed ? "passed" : "")" style="--player-color:@p.ColorHex">
                                 <div class="p-row">
                                     <span class="p-init">@(p.Initiative?.ToString() ?? "—")</span>
                                     <FactionBadge Faction="fac" SizeCss="@badge" Ring="@p.ColorHex" />
                                     <div class="p-id">
                                         <div class="p-name">@p.Name</div>
                                         <div class="p-fac">@(fac is null ? "—" : Loc.Pick(fac.Name, fac.NameDe))</div>
+                                        @* Status sits under the name (always vertical room) rather than stealing row width. *@
+                                        <div class="p-flags">
+                                            @if (s.Phase == GamePhase.Setup)
+                                            {
+                                                <span class="p-flag @(p.IsReady ? "ready" : "waiting")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
+                                            }
+                                            else if (p.HasPassed)
+                                            {
+                                                <span class="p-flag passed">@Loc["turn.passed"]</span>
+                                            }
+                                        </div>
                                     </div>
 
-                                    <div class="p-content @(mode == DisplayMode.Secondary ? "sec" : mode == DisplayMode.Tech ? "tech" : "")">
+                                    @* Tech view also shows the player's strategy cards (title + exhausted state). *@
+                                    @if (mode == DisplayMode.Tech)
+                                    {
+                                        <div class="p-strats">
+                                            @foreach (var pc in p.StrategyCards.OrderBy(c => c.StrategyCardId))
+                                            {
+                                                var card = Store.Card(pc.StrategyCardId);
+                                                if (card is not null)
+                                                {
+                                                    <span class="s-pill @(pc.IsExhausted ? "used" : "")" style="--c:@card.ColorHex"><span class="pn">@card.Initiative</span> @Loc.Pick(card.Name, card.NameDe)</span>
+                                                }
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="p-content @(mode == DisplayMode.Secondary ? "sec" : mode == DisplayMode.Tech ? "tech" : "obj")">
                                         @if (mode == DisplayMode.Objectives)
                                         {
                                             @foreach (var pc in p.StrategyCards.OrderBy(c => c.StrategyCardId))
@@ -173,25 +211,41 @@ else
                                         else if (mode == DisplayMode.Tech)
                                         {
                                             @if (techs.Count == 0) { <span class="faint">—</span> }
-                                            else if (techCompact)
-                                            {
-                                                @foreach (var t in techs) { <span class="my-tech" style="border-color:@TechHex(t.Color)"><TechIcon Color="t.Color" Size="14" /> @Loc.Pick(t.Name, t.NameDe)</span> }
-                                            }
                                             else
                                             {
-                                                @foreach (var t in techs) { <TechCard Tech="t" /> }
+                                                @* One column per colour. A colour with many techs renders as names and spills into
+                                                   extra columns (NamesPerCol); a colour with few renders as cards, where a single tech
+                                                   whose description can't fit even at the min font (ti4.fitTechCards) falls back to a name. *@
+                                                @foreach (var grp in techs.GroupBy(t => t.Color))
+                                                {
+                                                    var list = grp.ToList();
+                                                    @if (list.Count > techThreshold)
+                                                    {
+                                                        @foreach (var chunk in list.Chunk(Math.Max(1, NamesPerCol)))
+                                                        {
+                                                            <div class="tech-col names">
+                                                                @foreach (var t in chunk) { <span class="my-tech" style="border-color:@TechHex(t.Color)"><TechIcon Color="t.Color" Size="14" /> <span class="mt-label">@Loc.Pick(t.Name, t.NameDe)</span></span> }
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="tech-col cards">
+                                                            @foreach (var t in list)
+                                                            {
+                                                                @if (_tooLong.Contains(t.Id))
+                                                                {
+                                                                    <span class="my-tech" style="border-color:@TechHex(t.Color)"><TechIcon Color="t.Color" Size="14" /> <span class="mt-label">@Loc.Pick(t.Name, t.NameDe)</span></span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <TechCard Tech="t" />
+                                                                }
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
                                             }
-                                        }
-                                    </div>
-
-                                    <div class="p-flags">
-                                        @if (s.Phase == GamePhase.Setup)
-                                        {
-                                            <span class="p-flag @(p.IsReady ? "ready" : "waiting")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
-                                        }
-                                        else if (p.HasPassed)
-                                        {
-                                            <span class="p-flag passed">@Loc["turn.passed"]</span>
                                         }
                                     </div>
                                 </div>
@@ -204,34 +258,25 @@ else
                 {
                     <div class="panel">
                         <h3 style="color:var(--gold);">@Loc["obj.title"]</h3>
-                        <div class="panel-body obj-list">
-                            @if (s.Objectives.Count == 0)
-                            {
-                                <p class="muted">@Loc["obj.none"]</p>
-                            }
-                            @foreach (var so in s.Objectives)
-                            {
-                                var def = so.CustomName is null ? Store.Objective(so.ObjectiveId) : null;
-                                var custom = so.CustomName is not null;
-                                var stage2 = def?.Stage == ObjectiveStage.StageII;
-                                var name = so.CustomName ?? (def is null ? so.ObjectiveId : Loc.Pick(def.Name, def.NameDe));
-                                var pts = so.CustomPoints ?? def?.Points;
-                                <div class="obj-card @(custom ? "secret" : stage2 ? "stage2" : "stage1")">
-                                    <div class="obj-head">
-                                        <span class="obj-name">@name</span>
-                                        <span class="obj-vp">@pts</span>
-                                    </div>
-                                    @if (def is not null) { <div class="obj-req">@Loc.Pick(def.Requirement, def.RequirementDe)</div> }
-                                    <div class="obj-markers">
-                                        @foreach (var pid in so.ScoredByPlayerIds)
-                                        {
-                                            var pl = s.Players.FirstOrDefault(x => x.Id == pid);
-                                            if (pl is not null) { <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.4rem,3vh,3rem)" Ring="@pl.ColorHex" /> }
-                                        }
-                                    </div>
+                        @if (s.Objectives.Count == 0)
+                        {
+                            <div class="panel-body"><p class="muted">@Loc["obj.none"]</p></div>
+                        }
+                        else
+                        {
+                            @* Stage I (+ custom) left, Stage II right; --obj-rows drives a uniform card height. *@
+                            <div class="panel-body obj-list @(objSingle ? "one" : "two")" style="--obj-rows:@objRows">
+                                <div class="obj-col">
+                                    @foreach (var so in objStage1) { <ObjectiveDisplayCard So="so" /> }
                                 </div>
-                            }
-                        </div>
+                                @if (!objSingle)
+                                {
+                                    <div class="obj-col">
+                                        @foreach (var so in objStage2) { <ObjectiveDisplayCard So="so" /> }
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -241,12 +286,37 @@ else
 
 @code {
     [Parameter] public string Code { get; set; } = "";
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    // Tech ids whose card description can't fit even at the min font → render them as compact names instead.
+    // Sticky (only ever added to) so the card↔name decision converges instead of oscillating between renders.
+    private readonly HashSet<string> _tooLong = new();
+
+    // How many tech names fit one column before spilling into the next. Players share ~82vh of panel height;
+    // each name pill is ~3.5vh — so (82 / players / 3.5) names fit a player's row (min 2). Kept conservative
+    // so a names column never overflows into the player below.
+    private int NamesPerCol { get { var n = Store.Session?.Players.Count ?? 1; return Math.Max(2, (int)(82.0 / n / 3.5)); } }
 
     protected override async Task OnParametersSetAsync()
     {
         if (Store.Session?.JoinCode == Code.ToUpperInvariant()) return;
+        _tooLong.Clear();
         await Store.InitAsync();
         await Store.ConnectAsync(Code.ToUpperInvariant());
+    }
+
+    // After each render of the tech wall, shrink each card's description to fit; any that still overflow at
+    // the min font are remembered and re-rendered as names on the next pass (one extra render, then stable).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var s = Store.Session;
+        if (s is null || s.DisplayMode != DisplayMode.Tech || s.Phase == GamePhase.Agenda) return;
+        try
+        {
+            var overflow = await JS.InvokeAsync<string[]>("ti4.fitTechCards", 7);
+            if (overflow.Where(id => _tooLong.Add(id)).ToList().Count > 0) StateHasChanged();
+        }
+        catch { /* JS not available yet (e.g. prerender) */ }
     }
 
     private static string[] Lines(string text) => (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

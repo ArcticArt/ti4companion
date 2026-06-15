@@ -61,7 +61,8 @@ public record PlayerDto(
     Guid Id, string Name, string? FactionId, string ColorHex, int SeatOrder,
     bool HasPassed, bool IsReady, bool IsHost, int? Initiative,
     IReadOnlyList<PlayerStrategyCardDto> StrategyCards,
-    IReadOnlyList<string> TechnologyIds);
+    IReadOnlyList<string> TechnologyIds,
+    int Influence);
 
 /// <summary><paramref name="CustomName"/>/<paramref name="CustomPoints"/> are set for an objective added
 /// by hand (e.g. a secret made public via "Classified Document Leaks") rather than from the content set.</summary>
@@ -82,7 +83,7 @@ public record SessionStateDto(
     int CurrentRound, GamePhase Phase,
     Guid? SpeakerPlayerId, Guid? ActivePlayerId, int? ActiveStrategyCardId,
     string? CurrentAgendaId, bool AllowEditAllPlayers,
-    bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, int RetentionHours,
+    bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingOrderReversed, int RetentionHours,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
@@ -106,14 +107,15 @@ public record UpdateSessionRequest(
     string? Name, Language? Language, Expansion? ActiveExpansions,
     bool? ShowTechOverview, bool? AllowEditAllPlayers,
     GamePhase? Phase, int? CurrentRound, Guid? SpeakerPlayerId,
-    bool? AgendaVotesHidden = null);
+    bool? AgendaVotesHidden = null, bool? VotingOrderReversed = null);
 
 public record SetDisplayModeRequest(DisplayMode Mode);
 
 public record RevealCustomObjectiveRequest(string Name, int Points);
 
 public record UpdatePlayerRequest(
-    string? Name, string? FactionId, string? ColorHex, bool? HasPassed, bool? IsReady, int? SeatOrder);
+    string? Name, string? FactionId, string? ColorHex, bool? HasPassed, bool? IsReady, int? SeatOrder,
+    int? Influence = null);
 
 public record AssignStrategyCardRequest(int StrategyCardId);
 

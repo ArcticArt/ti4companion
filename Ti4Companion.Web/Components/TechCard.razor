@@ -3,13 +3,17 @@
    layout: faction marker top-left (circular), prerequisites bottom-left, the tech-point colour symbol
    bottom-right. Clickable to add. *@
 
-@if (Tech.Color == TechColor.Unit)
+@* Unit-colour techs render as unit cards — except the Nekro Valefar Assimilators (UnitType.None),
+   which are faction abilities, not unit upgrades. *@
+@if (Tech.Color == TechColor.Unit && Tech.UnitType != UnitType.None)
 {
     <UnitCardView Vm="BuildUnitVm()" Compact="Compact" OnClick="OnClick" />
 }
 else
 {
-    <div class="techcard @(Compact ? "compact" : "") @(OnClick.HasDelegate ? "clickable" : "")" style="--tc:@ColorHex(Tech.Color)" @onclick="HandleClick">
+    @* Name spans the full width on top (prereqs sit bottom-left, the tech point bottom-right, so the top
+       is free — except for a faction tech's circular marker, which the name leaves room for). *@
+    <div class="techcard nonunit @(Compact ? "compact" : "") @(Tech.FactionId is not null ? "faction" : "") @(OnClick.HasDelegate ? "clickable" : "")" style="--tc:@ColorHex(Tech.Color); --pre-n:@Tech.Prerequisites.Length" data-tech="@Tech.Id" @onclick="HandleClick">
         @if (Tech.FactionId is not null)
         {
             var f = Store.Faction(Tech.FactionId);
@@ -19,19 +23,19 @@ else
             </span>
         }
 
+        @* w0, full-height-minus-symbol float spacers (first, so they anchor at the card top): each lets its
+           symbol clear past it down into the bottom corner, while the description still wraps around them. *@
+        <span class="fl-spacer fl-l"></span>
+        <span class="fl-spacer fl-r"></span>
+        <div class="tc-name">@Loc.Pick(Tech.Name, Tech.NameDe)</div>
         <div class="tc-pre">
             @foreach (var ch in Tech.Prerequisites) { <TechIcon Letter="ch" Size="@(Compact ? 14 : 18)" /> }
         </div>
-
-        <div class="tc-body">
-            <div class="tc-name">@Loc.Pick(Tech.Name, Tech.NameDe)</div>
-            @if (!Compact)
-            {
-                <div class="tc-desc">@Loc.Pick(Tech.Text, Tech.TextDe)</div>
-            }
-        </div>
-
         <div class="tc-point"><TechIcon Color="Tech.Color" Size="@(Compact ? 24 : 36)" /></div>
+        @if (!Compact)
+        {
+            <div class="tc-desc">@Loc.Pick(Tech.Text, Tech.TextDe)</div>
+        }
     </div>
 }
 
