@@ -164,9 +164,6 @@ public class GameSession
     public DisplayMode DisplayMode { get; set; } = DisplayMode.Objectives;
     /// <summary>When true, agenda votes are cast face-down and only revealed when the host flips them.</summary>
     public bool AgendaVotesHidden { get; set; }
-    /// <summary>Agenda voting-order override (e.g. an action card that reverses the order). When true the
-    /// computed order (Argent Flight first, speaker last) is reversed.</summary>
-    public bool VotingOrderReversed { get; set; }
 
     public List<Player> Players { get; set; } = new();
     public List<SessionObjective> Objectives { get; set; } = new();
@@ -188,10 +185,6 @@ public class Player
     public bool IsReady { get; set; }
     /// <summary>The session creator. Stable regardless of seat order; grants host privileges.</summary>
     public bool IsHost { get; set; }
-    /// <summary>Influence available to spend on the current agenda's vote (recorded before voting; the
-    /// remaining shown is this minus the votes cast). Reset at the start of the agenda phase / next round,
-    /// and reduced by votes spent when the next agenda is revealed. 0 = not tracked.</summary>
-    public int Influence { get; set; }
     public string? DeviceToken { get; set; }
 
     public List<PlayerStrategyCard> StrategyCards { get; set; } = new();

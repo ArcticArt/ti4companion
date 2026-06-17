@@ -4,7 +4,7 @@
 
 @if (Store.Session is null || Store.Content is null)
 {
-    <div class="beamer"><div class="b-title">@Loc["common.loading"]</div></div>
+    <div class="beamer"><div class="b-title">@(_notFound ? Loc["home.notfound"] : Loc["common.loading"])</div></div>
 }
 else
 {
@@ -20,7 +20,12 @@ else
             <div class="b-title">@s.Name</div>
             <div class="b-meta">@Loc["turn.round"] @s.CurrentRound · <span class="b-phase">@Loc[$"phase.{s.Phase}"]</span></div>
             <div class="spacer" style="flex:1"></div>
-            <div class="b-meta"><span class="dot @(Store.Connected ? "on" : "off")"></span> @s.JoinCode</div>
+            @* Prominent join code so players can join straight off the wall. *@
+            <div class="b-join">
+                <span class="b-join-lbl">@Loc["common.code"]</span>
+                <span class="b-join-code">@s.JoinCode</span>
+                <span class="dot @(Store.Connected ? "on" : "off")"></span>
+            </div>
         </div>
 
         @if (isAgenda)
@@ -76,14 +81,9 @@ else
                         {
                             var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
                             var isSpeaker = s.SpeakerPlayerId == p.Id;
-                            var isVoting = !s.AgendaVotesHidden && Store.CurrentVoterId == p.Id;
-                            // Show remaining (influence − votes) when votes are open; in secret mode show just the
-                            // recorded influence so the hidden vote weight isn't leaked.
-                            var infShown = p.Influence > 0 ? (s.AgendaVotesHidden ? p.Influence : p.Influence - (vote?.Votes ?? 0)) : (int?)null;
-                            <div class="vote-card @(isSpeaker ? "speaker-row" : "") @(isVoting ? "voting-now" : "")" style="--player-color:@p.ColorHex">
+                            <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex">
                                 <FactionBadge Faction="Store.Faction(p.FactionId)" SizeCss="@badge" Ring="@p.ColorHex" />
-                                <span class="vote-name">@p.Name @if (isSpeaker) { <span class="spk">★</span> }</span>
-                                @if (infShown is int rem) { <span class="vote-inf" title="@Loc["agenda.influence"]">⬡ @rem</span> }
+                                <span class="vote-name">@p.Name @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> }</span>
                                 @if (s.AgendaVotesHidden)
                                 {
                                     var voted = vote is not null && vote.Outcome != VoteOutcome.Abstain;
@@ -149,6 +149,7 @@ else
                         {
                             var fac = Store.Faction(p.FactionId);
                             var isActive = s.ActivePlayerId == p.Id;
+                            var isSpeaker = s.SpeakerPlayerId == p.Id;
                             var nonExhausted = p.StrategyCards.Where(c => !c.IsExhausted).Select(c => Store.Card(c.StrategyCardId)).Where(c => c is not null).Select(c => c!).OrderBy(c => c.Initiative).ToList();
                             var techs = p.TechnologyIds.Select(t => Store.Tech(t)).Where(t => t is not null).Select(t => t!).OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ToList();
                             <div class="p-block @(mode == DisplayMode.Objectives ? "" : mode == DisplayMode.Tech ? "wide tech" : "wide") @(isActive ? "active" : "") @(p.HasPassed ? "passed" : "")" style="--player-color:@p.ColorHex">
@@ -160,6 +161,7 @@ else
                                         <div class="p-fac">@(fac is null ? "—" : Loc.Pick(fac.Name, fac.NameDe))</div>
                                         @* Status sits under the name (always vertical room) rather than stealing row width. *@
                                         <div class="p-flags">
+                                            @if (isSpeaker) { <span class="p-flag speaker" title='@Loc["players.speaker"]'><SpeakerIcon SizeCss="1.4em" /></span> }
                                             @if (s.Phase == GamePhase.Setup)
                                             {
                                                 <span class="p-flag @(p.IsReady ? "ready" : "waiting")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
@@ -291,6 +293,7 @@ else
     // Tech ids whose card description can't fit even at the min font → render them as compact names instead.
     // Sticky (only ever added to) so the card↔name decision converges instead of oscillating between renders.
     private readonly HashSet<string> _tooLong = new();
+    private bool _notFound;
 
     // How many tech names fit one column before spilling into the next. Players share ~82vh of panel height;
     // each name pill is ~3.5vh — so (82 / players / 3.5) names fit a player's row (min 2). Kept conservative
@@ -302,7 +305,7 @@ else
         if (Store.Session?.JoinCode == Code.ToUpperInvariant()) return;
         _tooLong.Clear();
         await Store.InitAsync();
-        await Store.ConnectAsync(Code.ToUpperInvariant());
+        _notFound = !await Store.ConnectAsync(Code.ToUpperInvariant());
     }
 
     // After each render of the tech wall, shrink each card's description to fit; any that still overflow at

@@ -127,7 +127,6 @@ public static class SessionEndpoints
         if (req.CurrentRound is > 0) session.CurrentRound = req.CurrentRound.Value;
         if (req.SpeakerPlayerId is not null) session.SpeakerPlayerId = req.SpeakerPlayerId;
         if (req.AgendaVotesHidden is not null) session.AgendaVotesHidden = req.AgendaVotesHidden.Value;
-        if (req.VotingOrderReversed is not null) session.VotingOrderReversed = req.VotingOrderReversed.Value;
 
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -178,6 +177,11 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
+
+        // Every player must have taken their full strategy-card allotment first (≤4 players → 2 each, else 1).
+        var perPlayer = session.Players.Count <= 4 ? 2 : 1;
+        if (session.Players.Count == 0 || session.Players.Any(p => p.StrategyCards.Count < perPlayer))
+            return Results.BadRequest(new { error = "All players must pick their strategy card(s) first." });
 
         // Trade goods are settled only now (start of the action phase): each player collects the
         // goods accumulated on the card they picked, and every card no one picked gains 1 more.
@@ -231,8 +235,6 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Agenda;
         session.CurrentAgendaId = null;
         session.AgendaVotes.Clear();
-        session.VotingOrderReversed = false;
-        foreach (var p in session.Players) p.Influence = 0; // players record their influence fresh each agenda phase
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -248,11 +250,9 @@ public static class SessionEndpoints
         session.ActiveStrategyCardId = null;
         session.CurrentAgendaId = null;
         session.AgendaVotes.Clear();
-        session.VotingOrderReversed = false;
         foreach (var p in session.Players)
         {
             p.HasPassed = false;
-            p.Influence = 0;
             p.StrategyCards.Clear();
         }
 
@@ -356,7 +356,6 @@ public static class SessionEndpoints
         if (req.HasPassed is not null) player.HasPassed = req.HasPassed.Value;
         if (req.IsReady is not null) player.IsReady = req.IsReady.Value;
         if (req.SeatOrder is not null) player.SeatOrder = req.SeatOrder.Value;
-        if (req.Influence is not null) player.Influence = Math.Max(0, req.Influence.Value);
         if (req.FactionId is not null)
         {
             var newFaction = string.IsNullOrWhiteSpace(req.FactionId) ? null : req.FactionId;
@@ -556,13 +555,6 @@ public static class SessionEndpoints
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
-        // Concluding the current agenda: the votes just cast spent influence, so deduct them before the
-        // next agenda's vote begins (planets stay exhausted across the two agendas of one phase).
-        foreach (var v in session.AgendaVotes)
-        {
-            var p = session.Players.FirstOrDefault(x => x.Id == v.PlayerId);
-            if (p is not null && p.Influence > 0) p.Influence = Math.Max(0, p.Influence - v.Votes);
-        }
         session.CurrentAgendaId = string.IsNullOrWhiteSpace(req.AgendaId) ? null : req.AgendaId;
         session.AgendaVotes.Clear(); // a freshly revealed agenda starts a new vote
         return await SaveAndReturn(db, hub, session, ct);
@@ -581,7 +573,7 @@ public static class SessionEndpoints
             session.AgendaVotes.Add(vote);
         }
         vote.Outcome = req.Outcome;
-        vote.Votes = ClampVotes(session, req.PlayerId, req.Votes);
+        vote.Votes = Math.Max(0, req.Votes);
         // For elect agendas the choice carries the candidate; an abstention clears both weight and choice.
         vote.Choice = req.Outcome == VoteOutcome.Abstain ? null : (string.IsNullOrWhiteSpace(req.Choice) ? null : req.Choice.Trim());
         return await SaveAndReturn(db, hub, session, ct);
@@ -602,7 +594,7 @@ public static class SessionEndpoints
             session.AgendaVotes.Add(vote);
         }
         vote.Outcome = req.Outcome;
-        vote.Votes = ClampVotes(session, req.PlayerId, req.Votes);
+        vote.Votes = Math.Max(0, req.Votes);
         vote.Choice = req.Outcome == VoteOutcome.Abstain ? null : (string.IsNullOrWhiteSpace(req.Choice) ? null : req.Choice.Trim());
         vote.Locked = true;
         return await SaveAndReturn(db, hub, session, ct);
@@ -616,14 +608,6 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
         session.AgendaVotes.Clear();
         return await SaveAndReturn(db, hub, session, ct);
-    }
-
-    // A player may never vote more influence than they recorded (0 = untracked → no cap).
-    private static int ClampVotes(GameSession s, Guid playerId, int votes)
-    {
-        var n = Math.Max(0, votes);
-        var influence = s.Players.FirstOrDefault(p => p.Id == playerId)?.Influence ?? 0;
-        return influence > 0 ? Math.Min(n, influence) : n;
     }
 
     // -----------------------------------------------------------------------

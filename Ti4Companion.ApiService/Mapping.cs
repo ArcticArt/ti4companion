@@ -40,8 +40,7 @@ public static class Mapping
                     .OrderBy(c => c.StrategyCardId)
                     .Select(c => new PlayerStrategyCardDto(c.StrategyCardId, c.IsExhausted))
                     .ToList(),
-                p.Technologies.Select(t => t.TechnologyId).ToList(),
-                p.Influence))
+                p.Technologies.Select(t => t.TechnologyId).ToList()))
             .ToList();
 
         var objectives = s.Objectives
@@ -63,7 +62,7 @@ public static class Mapping
         return new SessionStateDto(
             s.Id, s.JoinCode, s.Name, s.DefaultLanguage, s.ActiveExpansions,
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
-            s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingOrderReversed, s.RetentionHours,
+            s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.RetentionHours,
             s.CreatedAtUtc, s.LastActivityUtc,
             players, objectives, cardStates, votes);
     }

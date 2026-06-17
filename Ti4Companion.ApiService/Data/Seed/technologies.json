@@ -634,26 +634,6 @@
         "factionId":  "naalu"
     },
     {
-        "id":  "valefar-assimilator-x",
-        "name":  "Valefar Assimilator X",
-        "color":  "Unit",
-        "unitType":  "None",
-        "prerequisites":  "",
-        "text":  "When you would gain another player\u0027s technology using 1 of your faction abilities, you may place the \"X\" assimilator token on a faction technology owned by that player instead. While that token is on a technology, this card gains that technology\u0027s text. You cannot place an assimilator token on technology that already has an assimilator token.",
-        "expansion":  "Base",
-        "factionId":  "nekro"
-    },
-    {
-        "id":  "valefar-assimilator-y",
-        "name":  "Valefar Assimilator Y",
-        "color":  "Unit",
-        "unitType":  "None",
-        "prerequisites":  "",
-        "text":  "When you would gain another player\u0027s technology using 1 of your faction abilities, you may place the \"Y\" assimilator token on a faction technology owned by that player instead. While that token is on a technology, this card gains that technology\u0027s text. You cannot place an assimilator token on technology that already has an assimilator token.",
-        "expansion":  "Base",
-        "factionId":  "nekro"
-    },
-    {
         "id":  "temporal-command-suite",
         "name":  "Temporal Command Suite",
         "color":  "Cybernetic",

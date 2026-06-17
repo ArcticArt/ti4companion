@@ -3,9 +3,8 @@
    layout: faction marker top-left (circular), prerequisites bottom-left, the tech-point colour symbol
    bottom-right. Clickable to add. *@
 
-@* Unit-colour techs render as unit cards — except the Nekro Valefar Assimilators (UnitType.None),
-   which are faction abilities, not unit upgrades. *@
-@if (Tech.Color == TechColor.Unit && Tech.UnitType != UnitType.None)
+@* Unit-colour techs render as unit cards (unit upgrades). *@
+@if (Tech.Color == TechColor.Unit)
 {
     <UnitCardView Vm="BuildUnitVm()" Compact="Compact" OnClick="OnClick" />
 }
