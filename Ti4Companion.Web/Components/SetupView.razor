@@ -42,7 +42,7 @@
                     @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
                     @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
                     <button class="btn btn-sm @(isSpeaker ? "btn-gold" : "")" disabled="@(!host)" @onclick="() => SetSpeaker(p.Id)">
-                        ★ @(isSpeaker ? Loc["setup.speaker"] : Loc["setup.makeSpeaker"])
+                        <SpeakerIcon SizeCss="1.1em" /> @(isSpeaker ? Loc["setup.speaker"] : Loc["setup.makeSpeaker"])
                     </button>
                     <span class="chip @(p.IsReady ? "chip-done" : "")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
                     @if (host && p.Id != Store.MyPlayerId)

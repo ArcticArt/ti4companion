@@ -63,23 +63,6 @@ else
     }
 </div>
 
-<div class="panel" style="margin-top:1rem;">
-    @foreach (var p in s.Players.OrderBy(p => p.Initiative ?? int.MaxValue).ThenBy(p => p.SeatOrder))
-    {
-        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;">
-            <span style="font-family:'Orbitron';color:var(--gold);min-width:1.5em;">@(p.Initiative?.ToString() ?? "—")</span>
-            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
-            <strong>@p.Name</strong>
-            @if (s.SpeakerPlayerId == p.Id) { <span class="chip chip-active">★ @Loc["players.speaker"]</span> }
-            @foreach (var pc in p.StrategyCards.OrderBy(c => c.StrategyCardId))
-            {
-                var c = Store.Card(pc.StrategyCardId);
-                if (c is not null) { <span class="badge" style="border-color:@c.ColorHex"><span style="color:@c.ColorHex">@c.Initiative</span> @Loc.Pick(c.Name, c.NameDe)</span> }
-            }
-        </div>
-    }
-</div>
-
 @code {
     private Guid Sid => Store.Session!.Id;
     private bool detailed = false;

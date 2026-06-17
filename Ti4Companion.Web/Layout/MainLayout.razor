@@ -2,21 +2,41 @@
 @implements IDisposable
 @inject Loc Loc
 @inject SessionStore Store
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <div class="appbar">
-    <a class="brand" href="/">@Loc["app.title"]<small>@Loc["app.subtitle"]</small></a>
-    <div class="spacer"></div>
-    @if (Store.Session is not null)
+    @if (Store.Session is { } s)
     {
-        <div class="conn">
-            <span class="dot @(Store.Connected ? "on" : "off")"></span>
-            @(Store.Connected ? "live" : Loc["common.connecting"])
+        @* In a session the bar carries round + phase, the join code + invite link, who you are, and the
+           language toggle (the session-name / beamer button are no longer needed here). *@
+        <div class="ab-meta">
+            <span class="ab-round">@Loc["turn.round"] @s.CurrentRound</span>
+            <span class="ab-phase">@Loc[$"phase.{s.Phase}"]</span>
         </div>
+        @* Code + invite are the host's to share — players don't need them (joiners read the code off the wall). *@
+        @if (Store.IsHost)
+        {
+            <span class="codechip ab-code" @onclick="CopyCode" title='@Loc["common.copy"]'>@s.JoinCode</span>
+            <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(inviteCopied ? "✓" : "🔗")</button>
+            @if (codeCopied || inviteCopied) { <span class="chip chip-done">@Loc["common.copied"]</span> }
+        }
+        <div class="spacer"></div>
+        @if (Store.Me is { } me)
+        {
+            <FactionBadge Faction="Store.Faction(me.FactionId)" Size="2" Ring="@me.ColorHex" />
+            <span class="ab-name">@me.Name</span>
+        }
+        <span class="dot @(Store.Connected ? "on" : "off")" title="@(Store.Connected ? "live" : Loc["common.connecting"])"></span>
+        <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
+        <button class="btn btn-sm btn-ghost" @onclick="Leave" title='@Loc["nav.leave"]'>✕</button>
     }
-    <div class="lang">
-        <button class="btn btn-sm @(Loc.Lang == Language.En ? "btn-gold" : "")" @onclick="() => Loc.SetLanguage(Language.En)">EN</button>
-        <button class="btn btn-sm @(Loc.Lang == Language.De ? "btn-gold" : "")" @onclick="() => Loc.SetLanguage(Language.De)">DE</button>
-    </div>
+    else
+    {
+        <a class="brand" href="/">@Loc["app.title"]<small>@Loc["app.subtitle"]</small></a>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
+    }
 </div>
 
 <div class="content">
@@ -31,6 +51,31 @@
     }
 
     private void Changed() => InvokeAsync(StateHasChanged);
+
+    private void ToggleLang() => Loc.SetLanguage(Loc.Lang == Language.En ? Language.De : Language.En);
+
+    private bool codeCopied, inviteCopied;
+
+    private async Task CopyCode()
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", Store.Session!.JoinCode); codeCopied = true; inviteCopied = false; }
+        catch { }
+    }
+
+    private async Task CopyInvite()
+    {
+        var url = $"{Nav.BaseUri}join/{Store.Session!.JoinCode}";
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", url); inviteCopied = true; codeCopied = false; }
+        catch { }
+    }
+
+    private async Task Leave()
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", Loc["nav.leaveConfirm"]);
+        if (!ok) return;
+        await Store.LeaveAsync();
+        Nav.NavigateTo("/");
+    }
 
     public void Dispose()
     {

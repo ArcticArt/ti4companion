@@ -1,0 +1,26 @@
+<svg viewBox="0 0 100 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Speaker">
+  <defs>
+    <radialGradient id="spk-body" cx="50%" cy="45%" r="72%">
+      <stop offset="0%" stop-color="#6f2020"/>
+      <stop offset="55%" stop-color="#3f1010"/>
+      <stop offset="100%" stop-color="#1d0606"/>
+    </radialGradient>
+    <radialGradient id="spk-node" cx="50%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#d24a44"/>
+      <stop offset="55%" stop-color="#7e2020"/>
+      <stop offset="100%" stop-color="#330b0b"/>
+    </radialGradient>
+  </defs>
+  <!-- elongated hexagon token body with a coral rim -->
+  <polygon points="3,32 23,5 77,5 97,32 77,59 23,59"
+           fill="url(#spk-body)" stroke="#e88a64" stroke-width="3.2" stroke-linejoin="round"/>
+  <!-- corner rivet nodes -->
+  <circle cx="24" cy="15" r="5.2" fill="url(#spk-node)"/>
+  <circle cx="76" cy="15" r="5.2" fill="url(#spk-node)"/>
+  <circle cx="24" cy="49" r="5.2" fill="url(#spk-node)"/>
+  <circle cx="76" cy="49" r="5.2" fill="url(#spk-node)"/>
+  <!-- central banner with notched (bowtie) ends + coral focus -->
+  <path d="M30 25 H70 L64.5 32 L70 39 H30 L35.5 32 Z"
+        fill="#150505" stroke="#e88a64" stroke-width="1.6" stroke-linejoin="round"/>
+  <circle cx="50" cy="32" r="3.4" fill="#ef9c79"/>
+</svg>

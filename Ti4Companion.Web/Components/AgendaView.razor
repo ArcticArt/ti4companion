@@ -6,26 +6,33 @@
     var kind = current is null ? ElectType.ForAgainst : AgendaDisplay.ElectKind(current);
     var host = Store.IsHost;
     var hidden = s.AgendaVotesHidden;
-    var currentVoter = Store.CurrentVoterId; // visible one-by-one: whose turn it is
     // Votes may only be revealed once every player's vote is locked (so nobody can peek early).
     var allLocked = s.Players.Count > 0 && s.Players.All(p => s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
 
-    // ±1/5/10 influence editor (own row, or the host for anyone). Minus buttons disabled at 0.
-    RenderFragment<PlayerDto> influenceEditor = p =>
-        @<span class="row-wrap inf-edit" style="gap:.15rem;align-items:center;">
-            @if (Store.CanEdit(p.Id))
-            {
-                <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => AddInfluence(p, -10)">−10</button>
-                <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => AddInfluence(p, -5)">−5</button>
-                <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => AddInfluence(p, -1)">−1</button>
-            }
-            <span class="inf-val" title='@Loc["agenda.influence"]'>⬡ @p.Influence</span>
-            @if (Store.CanEdit(p.Id))
-            {
-                <button class="btn btn-sm" @onclick="() => AddInfluence(p, 1)">+1</button>
-                <button class="btn btn-sm" @onclick="() => AddInfluence(p, 5)">+5</button>
-                <button class="btn btn-sm" @onclick="() => AddInfluence(p, 10)">+10</button>
-            }
+    // ±1/5/10 weight stepper for a live (visible) vote.
+    RenderFragment<(Guid Pid, VoteOutcome O, int V, string? C)> voteStepper = x =>
+        @<span class="row-wrap vote-step" style="gap:.15rem;align-items:center;">
+            <button class="btn btn-sm" disabled="@(x.V == 0)" @onclick="() => Reweight(x.Pid, x.O, Math.Max(0, x.V - 10), x.C)">−10</button>
+            <button class="btn btn-sm" disabled="@(x.V == 0)" @onclick="() => Reweight(x.Pid, x.O, Math.Max(0, x.V - 5), x.C)">−5</button>
+            <button class="btn btn-sm" disabled="@(x.V == 0)" @onclick="() => Reweight(x.Pid, x.O, Math.Max(0, x.V - 1), x.C)">−1</button>
+            <span class="vote-step-n">@x.V</span>
+            <button class="btn btn-sm" @onclick="() => Reweight(x.Pid, x.O, x.V + 1, x.C)">+1</button>
+            <button class="btn btn-sm" @onclick="() => Reweight(x.Pid, x.O, x.V + 5, x.C)">+5</button>
+            <button class="btn btn-sm" @onclick="() => Reweight(x.Pid, x.O, x.V + 10, x.C)">+10</button>
+            <span class="faint">@Loc["agenda.votes"]</span>
+        </span>;
+
+    // ±1/5/10 weight stepper for the local secret-vote draft (dVotes).
+    RenderFragment draftStepper =
+        @<span class="row-wrap vote-step" style="gap:.15rem;align-items:center;">
+            <button class="btn btn-sm" disabled="@(dVotes == 0)" @onclick="() => dVotes = Math.Max(0, dVotes - 10)">−10</button>
+            <button class="btn btn-sm" disabled="@(dVotes == 0)" @onclick="() => dVotes = Math.Max(0, dVotes - 5)">−5</button>
+            <button class="btn btn-sm" disabled="@(dVotes == 0)" @onclick="() => dVotes = Math.Max(0, dVotes - 1)">−1</button>
+            <span class="vote-step-n">@dVotes</span>
+            <button class="btn btn-sm" @onclick="() => dVotes += 1">+1</button>
+            <button class="btn btn-sm" @onclick="() => dVotes += 5">+5</button>
+            <button class="btn btn-sm" @onclick="() => dVotes += 10">+10</button>
+            <span class="faint">@Loc["agenda.votes"]</span>
         </span>;
 }
 
@@ -34,7 +41,7 @@
     @if (current is null)
     {
         <input type="text" @bind="search" @bind:event="oninput" placeholder="@SearchPlaceholder" />
-        <div class="grid" style="gap:.3rem;margin-top:.6rem;max-height:40vh;overflow:auto;">
+        <div class="grid" style="gap:.3rem;margin-top:.6rem;max-height:60vh;overflow:auto;">
             @foreach (var a in Matches())
             {
                 <button class="btn btn-ghost agenda-pick" @onclick="() => Reveal(a.Id)">
@@ -45,19 +52,6 @@
             }
         </div>
         @if (Matches().Count == 0) { <p class="faint">@Loc["agenda.none"]</p> }
-
-        @* Record each player's influence before the agenda is revealed (votes are capped at it). *@
-        <div class="agenda-card" style="margin-top:.8rem;">
-            <div class="faint" style="margin-bottom:.4rem;">@Loc["agenda.recordInfluence"]</div>
-            @foreach (var p in Store.AgendaOrder())
-            {
-                <div class="player-card" style="--player-color:@p.ColorHex;gap:.5rem;flex-wrap:wrap;">
-                    <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
-                    <strong style="flex:1 1 100px;">@p.Name</strong>
-                    @influenceEditor(p)
-                </div>
-            }
-        </div>
     }
     else
     {
@@ -72,7 +66,6 @@
             {
                 <div class="row-wrap" style="gap:.4rem;align-items:center;">
                     <button class="btn btn-sm @(hidden ? "btn-gold" : "")" disabled="@(hidden && !allLocked)" @onclick="ToggleHidden">@(hidden ? Loc["agenda.reveal"] : Loc["agenda.secret"])</button>
-                    <button class="btn btn-sm @(s.VotingOrderReversed ? "btn-gold" : "")" @onclick="ToggleReverse">⇅ @Loc["agenda.reverseOrder"]</button>
                     @if (hidden) { <button class="btn btn-sm btn-danger" @onclick="ResetAll">↺ @Loc["agenda.reset"]</button> }
                     @if (hidden && !allLocked) { <span class="faint">@Loc["agenda.lockAllFirst"]</span> }
                 </div>
@@ -110,19 +103,7 @@
                 </div>
             }
 
-            @* Visible one-by-one: who is up now (speaker last, Argent Flight first, reversible). *@
-            @if (!hidden)
-            {
-                @if (currentVoter is Guid cv)
-                {
-                    <div class="vote-turn"><span class="dot-now"></span> @Loc["agenda.nowVoting"]: <strong>@(s.Players.FirstOrDefault(x => x.Id == cv)?.Name)</strong></div>
-                }
-                else
-                {
-                    <div class="vote-turn done">✓ @Loc["agenda.votingDone"]</div>
-                }
-            }
-
+            @* Rows follow the voting order (Argent Flight first, speaker last); the speaker is highlighted. *@
             @foreach (var p in Store.AgendaOrder())
             {
                 var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
@@ -131,25 +112,12 @@
                 var locked = vote?.Locked == true;
                 var mineRow = p.Id == Store.MyPlayerId;
                 var isSpeaker = s.SpeakerPlayerId == p.Id;
-                var isCurrent = p.Id == currentVoter;
-                var isArgent = p.FactionId == SessionStore.ArgentFactionId;
                 var cands = AgendaDisplay.Candidates(Store, Loc, current);
-                var remaining = p.Influence > 0 ? p.Influence - votes : (int?)null;
-                // Hidden: enter on your own device, or for the player the host has opened — committed only on lock.
                 var hiddenOpen = hidden && !locked && ((!host && mineRow) || (host && openFor == p.Id));
-                // Visible one-by-one: the current voter on their own device, or the host (who may override the order).
-                var visibleEnter = !hidden && !locked && (host || (mineRow && isCurrent));
-                <div class="player-card @(isSpeaker ? "speaker-row" : "") @(!hidden && isCurrent ? "voting-now" : "")" style="--player-color:@p.ColorHex;gap:.5rem;flex-wrap:wrap;">
+                var visibleOpen = !hidden && (host || mineRow);
+                <div class="player-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;gap:.5rem;flex-wrap:wrap;">
                     <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
-                    <strong style="flex:1 1 120px;">
-                        @p.Name
-                        @if (isSpeaker) { <span class="chip chip-active">★ @Loc["players.speaker"]</span> }
-                        @if (isArgent) { <span class="chip">1.</span> }
-                    </strong>
-
-                    @influenceEditor(p)
-                    @* Remaining = influence − votes; only in visible mode (in secret mode it would leak the vote weight). *@
-                    @if (!hidden && remaining is int rem) { <span class="chip @(rem <= 0 ? "chip-passed" : "chip-done")">@rem @Loc["agenda.remaining"]</span> }
+                    <strong style="flex:1 1 120px;">@p.Name @if (isSpeaker) { <span class="chip chip-active"><SpeakerIcon SizeCss="1em" /> @Loc["players.speaker"]</span> }</strong>
 
                     @if (hiddenOpen)
                     {
@@ -179,18 +147,10 @@
                                 <button class="btn btn-sm @(dOutcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => SetDraft(VoteOutcome.Abstain)">@Loc["agenda.abstain"]</button>
                             </div>
                         }
-                        @if (dOutcome != VoteOutcome.Abstain)
-                        {
-                            <span class="row-wrap" style="gap:.2rem;align-items:center;">
-                                <button class="btn btn-sm" @onclick="() => dVotes = Math.Max(0, dVotes - 1)">−</button>
-                                <span style="min-width:1.5em;text-align:center;">@dVotes</span>
-                                <button class="btn btn-sm" @onclick="() => dVotes++">+</button>
-                                <span class="faint">@Loc["agenda.votes"]</span>
-                            </span>
-                        }
+                        @if (dOutcome != VoteOutcome.Abstain) { @draftStepper }
                         <button class="btn btn-sm btn-gold" @onclick="() => Commit(p.Id)">@Loc["agenda.lock"]</button>
                     }
-                    else if (visibleEnter)
+                    else if (visibleOpen)
                     {
                         @if (kind == ElectType.ForAgainst)
                         {
@@ -217,16 +177,7 @@
                                 <button class="btn btn-sm @(outcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => Vote(p.Id, VoteOutcome.Abstain, 0)">@Loc["agenda.abstain"]</button>
                             </div>
                         }
-                        @if (outcome != VoteOutcome.Abstain)
-                        {
-                            <span class="row-wrap" style="gap:.2rem;align-items:center;">
-                                <button class="btn btn-sm" @onclick="() => Reweight(p.Id, outcome, Math.Max(0, votes - 1), vote?.Choice)">−</button>
-                                <span style="min-width:1.5em;text-align:center;">@votes</span>
-                                <button class="btn btn-sm" @onclick="() => Reweight(p.Id, outcome, votes + 1, vote?.Choice)">+</button>
-                                <span class="faint">@Loc["agenda.votes"]</span>
-                            </span>
-                        }
-                        <button class="btn btn-sm btn-gold" @onclick="() => ConfirmVisible(p.Id)">✓ @Loc["agenda.confirmVote"]</button>
+                        @if (outcome != VoteOutcome.Abstain) { @voteStepper((p.Id, outcome, votes, vote?.Choice)) }
                     }
                     else if (hidden)
                     {
@@ -234,21 +185,15 @@
                         <span class="chip @(locked ? "chip-done" : "")">@(locked ? Loc["agenda.locked"] : Loc["agenda.waiting"])</span>
                         @if (host && !locked) { <button class="btn btn-sm" @onclick="() => OpenFor(p.Id)">@Loc["agenda.voteFor"]</button> }
                     }
-                    else if (locked)
+                    else
                     {
-                        @* Visible mode, vote committed → read-only. *@
+                        @* Visible mode, another player's vote → read-only. *@
                         @if (outcome == VoteOutcome.Abstain) { <span class="faint">@Loc["agenda.abstain"]</span> }
                         else
                         {
                             <span>@(kind == ElectType.ForAgainst ? Loc[outcome == VoteOutcome.For ? "agenda.for" : "agenda.against"] : AgendaDisplay.ChoiceLabel(Store, Loc, current, vote?.Choice))</span>
-                            <span class="chip chip-done">@votes @Loc["agenda.votes"]</span>
+                            <span class="chip">@votes @Loc["agenda.votes"]</span>
                         }
-                    }
-                    else
-                    {
-                        @* Visible mode, not committed and not editable here: this row is either the current
-                           voter (someone else is entering it) or still waiting its turn. *@
-                        <span class="faint">@(isCurrent ? "▶ " + Loc["agenda.nowVoting"] : Loc["agenda.notYet"])</span>
                     }
                 </div>
             }
@@ -288,12 +233,6 @@
     private Task ToggleHidden()
         => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, !Store.Session!.AgendaVotesHidden)));
 
-    private Task ToggleReverse()
-        => Store.Mutate(Store.Api.SetVotingOrderReversedAsync(Sid, !Store.Session!.VotingOrderReversed));
-
-    private Task AddInfluence(PlayerDto p, int delta)
-        => Store.Mutate(Store.Api.SetInfluenceAsync(Sid, p.Id, Math.Max(0, p.Influence + delta)));
-
     private Task Vote(Guid playerId, VoteOutcome outcome, int votes)
         => Store.Mutate(Store.Api.CastVoteAsync(Sid, playerId, outcome, votes, null));
 
@@ -304,13 +243,6 @@
 
     private Task Reweight(Guid playerId, VoteOutcome outcome, int votes, string? choice)
         => Store.Mutate(Store.Api.CastVoteAsync(Sid, playerId, outcome, votes, choice));
-
-    // Visible one-by-one: commit the row's current (live) vote, which locks it and advances the turn.
-    private Task ConfirmVisible(Guid playerId)
-    {
-        var v = Store.Session!.AgendaVotes.FirstOrDefault(x => x.PlayerId == playerId);
-        return Store.Mutate(Store.Api.LockVoteAsync(Sid, playerId, v?.Outcome ?? VoteOutcome.Abstain, v?.Votes ?? 0, v?.Choice));
-    }
 
     // ---- Secret voting: a local draft, committed only on lock ----
     private VoteOutcome dOutcome = VoteOutcome.Abstain;
@@ -334,7 +266,6 @@
 
     private void OpenFor(Guid playerId) { openFor = playerId; ResetDraft(); }
 
-    // Commit the draft: the choice reaches the server only now, and the vote is locked in one step.
     private async Task Commit(Guid playerId)
     {
         await Store.Mutate(Store.Api.LockVoteAsync(Sid, playerId, dOutcome, dVotes, dChoice));

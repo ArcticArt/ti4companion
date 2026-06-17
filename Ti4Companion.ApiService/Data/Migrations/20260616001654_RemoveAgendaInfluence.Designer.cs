@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Ti4Companion.ApiService.Data;
@@ -12,9 +13,11 @@ using Ti4Companion.ApiService.Data;
 namespace Ti4Companion.ApiService.Data.Migrations
 {
     [DbContext(typeof(Ti4DbContext))]
-    partial class Ti4DbContextModelSnapshot : ModelSnapshot
+    [Migration("20260616001654_RemoveAgendaInfluence")]
+    partial class RemoveAgendaInfluence
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

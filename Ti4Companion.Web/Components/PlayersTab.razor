@@ -27,7 +27,7 @@
                     </div>
                     @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
                     @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
-                    @if (isSpeaker) { <span class="chip chip-active">★ @Loc["players.speaker"]</span> }
+                    @if (isSpeaker) { <span class="chip chip-active"><SpeakerIcon SizeCss="1em" /> @Loc["players.speaker"]</span> }
                     else if (Store.IsHost) { <button class="btn btn-sm" @onclick="() => MakeSpeaker(p.Id)">@Loc["players.makeSpeaker"]</button> }
                     @if (editable)
                     {

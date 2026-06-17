@@ -47,8 +47,8 @@ h1:focus { outline: none; }
 
 /* ---- App bar ---- */
 .appbar {
-    display: flex; align-items: center; gap: 1rem;
-    padding: .6rem 1rem;
+    display: flex; align-items: center; gap: .5rem .8rem; flex-wrap: wrap;
+    padding: .5rem 1rem;
     background: linear-gradient(180deg, rgba(20,30,60,.9), rgba(10,16,34,.85));
     border-bottom: 1px solid var(--panel-border);
     position: sticky; top: 0; z-index: 50;
@@ -58,6 +58,13 @@ h1:focus { outline: none; }
 .appbar .brand small { color: var(--text-faint); font-weight: 400; font-family: 'Rajdhani', sans-serif; letter-spacing: .12em; text-transform: uppercase; font-size: .62rem; display:block; }
 .appbar .spacer { flex: 1; }
 .appbar .conn { font-size: .72rem; color: var(--text-faint); display: flex; align-items: center; gap: .35rem; }
+/* In-session app bar: round + phase on the left, the player's badge + name on the right. */
+.appbar .ab-meta { display: flex; align-items: baseline; gap: .5rem; min-width: 0; }
+.appbar .ab-round { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); font-size: 1rem; white-space: nowrap; }
+.appbar .ab-phase { color: var(--text-dim); font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+.appbar .ab-name { font-weight: 700; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.appbar .ab-code { font-size: .85rem; letter-spacing: .2em; padding: .1rem .45rem; cursor: pointer; }
+.appbar .ab-code:hover { border-color: var(--gold); }
 .dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--text-faint); display: inline-block; }
 .dot.on { background: var(--good); box-shadow: 0 0 8px var(--good); }
 .dot.off { background: var(--danger); }
@@ -112,8 +119,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .pip-B { background: #4caf50; } .pip-P { background: #4a78d6; } .pip-C { background: #e0c341; } .pip-W { background: #d6534a; }
 
 /* ---- Tabs ---- */
-.tabs { display: flex; flex-wrap: wrap; gap: .35rem; border-bottom: 1px solid var(--panel-border); margin-bottom: 1rem; }
-.tab { padding: .5rem .85rem; border: 1px solid transparent; border-bottom: none; border-radius: 9px 9px 0 0; cursor: pointer; color: var(--text-dim); font-weight: 600; }
+.tabs { display: flex; flex-wrap: nowrap; gap: .25rem; border-bottom: 1px solid var(--panel-border); margin-bottom: 1rem; }
+/* Stay on one line: tabs may shrink, the label scales down with the viewport (so all 4 fit a phone). */
+.tab { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: .5rem .55rem; border: 1px solid transparent; border-bottom: none; border-radius: 9px 9px 0 0;
+    cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: clamp(.72rem, 2.9vw, .95rem); }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--panel); border-color: var(--panel-border); color: var(--gold); }
 
@@ -382,18 +392,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .vote-card.speaker-row { box-shadow: 0 0 0 2px var(--gold); }
 .beamer .vote-card .spk { color: var(--gold); }
 
-/* agenda influence + one-by-one voting (control view) */
-.inf-edit .inf-val { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); min-width: 2.4em; text-align: center; }
-.vote-turn { display: flex; align-items: center; gap: .5rem; padding: .4rem .7rem; margin: .2rem 0 .6rem; border-radius: 10px;
-    background: color-mix(in srgb, var(--gold) 14%, var(--panel)); border: 1px solid var(--gold-dim); font-size: .95rem; }
-.vote-turn.done { background: var(--panel-2); border-color: var(--panel-border); color: var(--text-dim); }
-.vote-turn .dot-now { width: .7rem; height: .7rem; border-radius: 50%; background: var(--gold); flex: 0 0 auto;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent); }
-.player-card.voting-now { box-shadow: inset 0 0 0 2px var(--gold); }
-
-/* agenda influence on the wall display */
-.beamer .vote-inf { font-family: 'Orbitron', sans-serif; font-size: clamp(.85rem, 1.2vw, 1.55rem); color: var(--accent); white-space: nowrap; }
-.beamer .vote-card.voting-now { box-shadow: 0 0 0 3px var(--gold), 0 0 2.5vh rgba(217,176,74,.4); }
+/* Speaker token icon (recreated Sprecher token) — scales to its inline height. */
+.speaker-icon { width: auto; vertical-align: -0.18em; filter: drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+/* Speaker marker among the display status flags: just the token, no chip background. */
+.beamer .p-flag.speaker { background: none; border: 0; padding: 0; display: inline-flex; align-items: center; }
+/* Agenda vote-weight stepper (±1/5/10). */
+.vote-step .vote-step-n { font-family: 'Orbitron', sans-serif; font-weight: 700; min-width: 1.7em; text-align: center; color: var(--gold); }
 
 /* "logged in as" tag in the session header */
 .you-tag { display: flex; align-items: center; gap: .5rem; padding: .25rem .6rem; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--gold-dim); }
@@ -441,6 +445,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .b-title { font-size: clamp(1.4rem, 2.4vw, 3rem); color: var(--gold); }
 .beamer .b-meta { font-size: clamp(.9rem, 1.4vw, 1.8rem); color: var(--text-dim); }
 .beamer .b-phase { font-family: 'Orbitron', sans-serif; color: var(--text); font-weight: 700; }
+/* Prominent join code on the wall so players can read it across the room and join. */
+.beamer .b-join { display: flex; align-items: center; gap: .6vw; }
+.beamer .b-join-lbl { font-size: clamp(.7rem, 1vw, 1.3rem); color: var(--text-faint); text-transform: uppercase; letter-spacing: .18em; }
+.beamer .b-join-code { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); letter-spacing: .22em;
+    font-size: clamp(1.4rem, 2.6vw, 3.2rem); line-height: 1; background: #0a1020; border: 1px dashed var(--gold-dim);
+    padding: .12em .42em; border-radius: 10px; }
 
 /* The two-column body fills the remaining height and clips (never scrolls). */
 .beamer-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1.15fr .85fr; gap: 1.2vw; }
@@ -471,11 +481,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
     background: linear-gradient(90deg, color-mix(in srgb, var(--player-color) 38%, var(--panel)), color-mix(in srgb, var(--player-color) 14%, var(--panel)));
     border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 2.5vh rgba(217,176,74,.35);
 }
-/* Passed players: receded — but the "PASSED" flag itself (in p-flags) stays bright. */
+/* Passed players: only the identity (initiative, badge, name, faction) recedes — the "PASSED" flag and
+   the player's content (techs / strategy cards / secondary boxes) stay bright. */
 .beamer .p-block.passed .p-init,
 .beamer .p-block.passed .faction-badge,
-.beamer .p-block.passed .p-id,
-.beamer .p-block.passed .p-content { opacity: .45; filter: saturate(.5); }
+.beamer .p-block.passed .p-name,
+.beamer .p-block.passed .p-fac { opacity: .45; filter: saturate(.5); }
 
 .beamer .p-init { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: clamp(1rem, 1.9vw, 2.4rem); min-width: 1.6em; text-align: center; flex: 0 0 auto; }
 .beamer .p-id { flex: 0 1 auto; min-width: 7em; }
@@ -515,6 +526,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .tech-col.cards .techcard.nonunit { --pre-icon: .8vw; --pre-gap: .1vh; --pt-h: 1.5vw; }
 .beamer .tech-col.cards .tc-name { font-size: clamp(.58rem, .82vw, 1.05rem); }
 .beamer .tech-col.cards .tc-desc { font-size: clamp(.5rem, .66vw, .88rem); line-height: 1.12; }
+/* Unit-upgrade cards on the wall are tiny — drop the prose (it overlapped the silhouette + stats) and
+   keep the legible bits: name, silhouette, ✦ ability keywords and the stat boxes. */
+.beamer .tech-col.cards .techcard.unitcard .tc-desc { display: none; }
+.beamer .tech-col.cards .techcard.unitcard .tc-abil { font-size: clamp(.5rem, .62vw, .8rem); }
 .beamer .tech-col.cards .tc-pre .tech-icon { width: .8vw !important; height: .8vw !important; }
 .beamer .tech-col.cards .tc-point .tech-icon { width: 1.5vw !important; height: 1.5vw !important; }
 /* Tech view: the player's strategy cards (title + exhausted), stacked compactly beside the name. */

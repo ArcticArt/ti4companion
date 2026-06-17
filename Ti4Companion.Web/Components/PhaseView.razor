@@ -5,6 +5,8 @@
     var allReady = s.Players.Count > 0 && s.Players.All(p => p.IsReady);
     var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
     var speakerSet = s.SpeakerPlayerId is not null;
+    // Action phase can't begin until everyone has their full strategy-card allotment.
+    var allPicked = s.Players.Count > 0 && s.Players.All(p => p.StrategyCards.Count >= Store.MaxStrategyCards);
     var host = Store.IsHost;
 }
 
@@ -31,7 +33,8 @@
                     <button class="btn btn-gold" disabled="@(!allReady || !speakerSet)" @onclick="StartGame">@Loc["turn.startGame"] ▸</button>
                     break;
                 case GamePhase.Strategy:
-                    <button class="btn btn-primary" @onclick="ToAction">@Loc["turn.toAction"] ▸</button>
+                    @if (!allPicked) { <span class="faint">@Loc["strategy.needAllPicks"]</span> }
+                    <button class="btn btn-primary" disabled="@(!allPicked)" @onclick="ToAction">@Loc["turn.toAction"] ▸</button>
                     break;
                 case GamePhase.Action:
                     <button class="btn btn-gold" disabled="@(!allPassed)" @onclick="EndAction">@Loc["turn.endAction"]</button>
