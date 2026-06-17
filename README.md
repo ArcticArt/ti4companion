@@ -5,8 +5,8 @@ the wall with a beamer while every player steers it live from their phone or an 
 order, strategy cards, who has passed, who performed their strategy action, public objectives and
 who scored them, and each player's technologies.
 
-Built with **.NET Aspire + Blazor WebAssembly + ASP.NET Core REST API + SignalR + PostgreSQL**, in
-English and German.
+Built with **.NET Aspire + Blazor WebAssembly + ASP.NET Core REST API + SignalR + SQLite**, in
+English and German. No Docker required — all data lives in a single SQLite file.
 
 ## Highlights
 
@@ -24,7 +24,7 @@ English and German.
 ## Projects
 
 ```
-Ti4Companion.AppHost          .NET Aspire orchestration (Postgres + API) — local dev
+Ti4Companion.AppHost          .NET Aspire orchestration (runs the API) — local dev
 Ti4Companion.ServiceDefaults  shared telemetry / health / resilience
 Ti4Companion.ApiService       REST API + SignalR hub + EF Core + content seeding + auto-wipe worker
                               (also hosts the published Blazor client)
@@ -34,8 +34,8 @@ Ti4Companion.Shared           DTOs / enums shared by API and client
 
 ## Run locally
 
-**Prerequisites:** the .NET 10 SDK and a container runtime (**Docker Desktop** or Podman) — Aspire
-starts PostgreSQL in a container.
+**Prerequisites:** the .NET 10 SDK. That's it — no Docker, no database server. SQLite is built in,
+and the database file (`ti4.db`) is created automatically on first run.
 
 ```bash
 dotnet run --project Ti4Companion.AppHost
@@ -48,25 +48,30 @@ project and press F5.)
 
 ### Without the AppHost
 
-You can also run the API on its own against any PostgreSQL by setting a connection string:
+The Aspire AppHost just launches the API, so you can also run the API directly:
 
 ```bash
-ConnectionStrings__ti4db="Host=localhost;Database=ti4db;Username=postgres;Password=***" \
+dotnet run --project Ti4Companion.ApiService
+```
+
+It listens on `http://localhost:5116` and creates `ti4.db` in the project directory. Override the
+location with a connection string if you like:
+
+```bash
+ConnectionStrings__ti4db="Data Source=/path/to/ti4.db" \
   dotnet run --project Ti4Companion.ApiService
 ```
 
 ### Resetting the dev database
 
-The Aspire AppHost keeps PostgreSQL data in a Docker volume (`ti4-pgdata`) so sessions survive
-restarts. If the **schema** changes (e.g. after pulling new migrations) you may see
-`relation "..." already exists` on startup, because the old volume still has the previous schema.
-Reset it once — stop the app, then:
+The SQLite database is the single file `ti4.db` (plus its `-wal`/`-shm` companions). To start fresh —
+stop the app, then delete it:
 
 ```powershell
-docker volume rm ti4-pgdata
+Remove-Item ti4.db, ti4.db-wal, ti4.db-shm -ErrorAction SilentlyContinue
 ```
 
-The next F5 recreates the database from the current migration and re-seeds the content. (This only
+The next run recreates the database from the current migration and re-seeds the content. (This only
 discards local test sessions; the game content lives in the JSON seed files.)
 
 ## Editing game content
@@ -80,25 +85,22 @@ there.
 ## Test on your phone (same Wi‑Fi)
 
 Yes — you can run it on your PC and open it from your iPhone/Android on the same network. The app
-just needs to listen on all interfaces instead of only `localhost`:
+just needs to listen on all interfaces instead of only `localhost` (no database setup — SQLite is a
+local file):
 
 ```powershell
-# 1. A database (Docker):
-docker run -d --name ti4-pg -e POSTGRES_DB=ti4db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=*** -p 5432:5432 postgres:17
-
-# 2. Run the API bound to all interfaces (the "lan" launch profile does this):
-$env:ConnectionStrings__ti4db = "Host=localhost;Port=5432;Database=ti4db;Username=postgres;Password=***"
+# 1. Run the API bound to all interfaces (the "lan" launch profile does this):
 dotnet run --project Ti4Companion.ApiService --launch-profile lan
 
-# 3. Allow the port through the Windows firewall (private network), once:
+# 2. Allow the port through the Windows firewall (private network), once:
 New-NetFirewallRule -DisplayName "TI4 Companion" -Direction Inbound -Protocol TCP -LocalPort 5116 -Action Allow -Profile Private
 ```
 
 Find your PC's IPv4 address with `ipconfig`, then on the phone open `http://<PC-IP>:5116`. Create a
 session on the PC and join with the code from the phone. (Plain HTTP over the LAN is fine for use;
-iOS "Add to Home Screen" works best over HTTPS, e.g. via the docker-compose + Caddy setup.)
+iOS "Add to Home Screen" works best over HTTPS, e.g. via the Caddy setup in deployment.)
 
 ## Deployment
 
-See [DEPLOY.md](DEPLOY.md) for the Linux host / docker-compose setup (Postgres + API + Caddy with
-automatic HTTPS).
+See [DEPLOY.md](DEPLOY.md) for the Docker-free Linux host setup (a `dotnet publish` build run as a
+systemd service behind Caddy, with automatic HTTPS and SQLite backups).
