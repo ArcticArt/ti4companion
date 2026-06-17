@@ -9,8 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Aspire service defaults (OpenTelemetry, health checks, resilience, service discovery).
 builder.AddServiceDefaults();
 
-// PostgreSQL via Aspire (connection string "ti4db" injected by the AppHost).
-builder.AddNpgsqlDbContext<Ti4DbContext>("ti4db");
+// SQLite — a single local file, no external database process (and no Docker).
+var connectionString = builder.Configuration.GetConnectionString("ti4db") ?? "Data Source=ti4.db";
+builder.Services.AddDbContext<Ti4DbContext>(options => options.UseSqlite(connectionString));
 
 builder.Services.AddSignalR();
 builder.Services.AddOpenApi();
@@ -26,6 +27,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<Ti4DbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     await db.Database.MigrateAsync();
+    await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;"); // better concurrency for SQLite
     await ContentSeeder.SeedAsync(db, logger);
 }
 

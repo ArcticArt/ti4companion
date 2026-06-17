@@ -15,7 +15,12 @@ artifacts/
 project.lock.json
 *.nupkg
 
-# Environment / secrets (keep .env.example)
+# SQLite database (created at runtime; back it up separately)
+ti4.db
+ti4.db-shm
+ti4.db-wal
+
+# Environment / secrets
 .env
 .env.local
 *.env.local

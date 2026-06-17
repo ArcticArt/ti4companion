@@ -1,8 +1,10 @@
-# SITE_ADDRESS is set from .env. Use a domain (e.g. ti4.example.com) for automatic HTTPS,
+# SITE_ADDRESS: use a domain (e.g. ti4.example.com) for automatic HTTPS,
 # or ":80" to serve over plain HTTP (e.g. when testing against the server's IP).
+# Replace {$SITE_ADDRESS} with your domain if you are not using an env var.
 {$SITE_ADDRESS} {
 	encode zstd gzip
 
-	# Proxy everything (REST API, the Blazor client's static files, and the SignalR WebSocket).
-	reverse_proxy api:8080
+	# Proxy everything (REST API, the Blazor client's static files, and the SignalR WebSocket)
+	# to the ASP.NET Core process (Kestrel) run by the systemd service on localhost.
+	reverse_proxy localhost:5000
 }
