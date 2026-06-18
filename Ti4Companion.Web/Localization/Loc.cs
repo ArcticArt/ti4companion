@@ -228,12 +228,9 @@ public class Loc
             "Twilight Imperium, Prophecy of Kings, Thunder's Edge and all related names, marks, text and artwork are © & ™ Asmodee North America, Inc. (Fantasy Flight Games). All rights reserved.",
             "Twilight Imperium, Prophecy of Kings, Thunder's Edge sowie alle zugehörigen Namen, Marken, Texte und Grafiken sind © & ™ Asmodee North America, Inc. (Fantasy Flight Games). Alle Rechte vorbehalten."),
         ["legal.noncommercial"] = (
-            "Non-commercial fan project — no sale, advertising, donations, or paywall.",
-            "Nicht-kommerzielles Fan-Projekt – kein Verkauf, keine Werbung, keine Spenden, keine Bezahlschranke."),
-        ["legal.credit"] = (
-            "Fan project based on Twilight Imperium 4th Edition.",
-            "Fan-Projekt auf Basis von Twilight Imperium 4. Edition."),
-        ["legal.policyLink"] = ("Asmodee/FFG IP policy", "Asmodee/FFG IP-Richtlinie"),
+            "Free, non-commercial fan project based on Twilight Imperium 4th Edition — provided free of charge; the author takes no money (no sale, advertising, donations, or paywall).",
+            "Kostenloses, nicht-kommerzielles Fan-Projekt auf Basis von Twilight Imperium 4. Edition – kostenlos bereitgestellt; der Autor nimmt kein Geld (kein Verkauf, keine Werbung, keine Spenden, keine Bezahlschranke)."),
+        ["legal.thanks"] = ("With thanks to", "Mit Dank an"),
 
         ["players.title"] = ("Players", "Spieler"),
         ["players.faction"] = ("Faction", "Fraktion"),
