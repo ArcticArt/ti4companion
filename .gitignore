@@ -38,3 +38,10 @@ Thumbs.db
 *.log
 _secrets.txt
 _tmp*
+
+# Local-only source assets — kept OUT of the repo (large binaries + licensed/copyrighted material):
+# GIMP card-art templates (~69 MB), commercial fonts (Myriad Pro/Adobe, Handel Gothic),
+# and faction source art (likely FFG-copyrighted). These live on the dev machine only.
+/xcf/
+/Resources/
+/References/Fonts/
