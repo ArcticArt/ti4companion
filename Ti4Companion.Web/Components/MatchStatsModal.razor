@@ -1,0 +1,154 @@
+@inherits Ti4ComponentBase
+
+@* Host-only match statistics + log overlay (opened from the app bar). Statistics are computed
+   client-side from the structured match log (see MatchStats). *@
+<div class="modal-backdrop" @onclick="Close">
+    <div class="modal stats-modal" @onclick:stopPropagation="true">
+        <div class="modal-head">
+            <h3 style="margin:0;color:var(--gold);">@Loc["stats.title"]</h3>
+            <div class="spacer" style="flex:1"></div>
+            <button class="btn btn-sm btn-ghost" @onclick="Load" title='@Loc["stats.refresh"]'>↻</button>
+            <button class="btn btn-sm btn-ghost" @onclick="Close" title='@Loc["common.close"]'>✕</button>
+        </div>
+
+        <div class="tabs" style="margin:.4rem 0 .6rem;">
+            <div class="tab @(tab == 0 ? "active" : "")" @onclick="() => tab = 0">@Loc["stats.tabStats"]</div>
+            <div class="tab @(tab == 1 ? "active" : "")" @onclick="() => tab = 1">@Loc["stats.tabLog"]</div>
+        </div>
+
+        <div class="modal-body">
+            @if (loading)
+            {
+                <p class="faint">@Loc["common.loading"]</p>
+            }
+            else if (tab == 0)
+            {
+                @if (stats.StartedUtc is null)
+                {
+                    <p class="faint">@Loc["stats.notStarted"]</p>
+                }
+                else
+                {
+                    <div class="stat-block">
+                        <div class="stat-big"><span class="stat-label">@Loc["stats.match"]</span><span class="stat-val">@MatchStats.Format(stats.Match ?? TimeSpan.Zero)</span></div>
+                    </div>
+
+                    <div class="stat-block">
+                        <h4>@Loc["stats.perRound"]</h4>
+                        @foreach (var r in stats.Rounds)
+                        {
+                            <div class="stat-row"><span>@Loc["stats.round"] @r.Round</span><span class="stat-val">@MatchStats.Format(r.Duration)</span></div>
+                        }
+                    </div>
+
+                    <div class="stat-block">
+                        <h4>@Loc["stats.perPhase"]</h4>
+                        @foreach (var ph in PhaseOrder.Where(p => stats.PhaseTotals.ContainsKey(p)))
+                        {
+                            <div class="stat-row"><span>@Loc[$"phase.{ph}"]</span><span class="stat-val">@MatchStats.Format(stats.PhaseTotals[ph])</span></div>
+                        }
+                    </div>
+
+                    <div class="stat-block">
+                        <h4>@Loc["stats.perPlayer"]</h4>
+                        @foreach (var p in Store.Session!.Players.OrderByDescending(p => PlayerTime(p.Id)))
+                        {
+                            <div class="stat-row" style="--player-color:@p.ColorHex">
+                                <span class="stat-player"><FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.4" Ring="@p.ColorHex" /> @p.Name</span>
+                                <span class="stat-val">@MatchStats.Format(PlayerTime(p.Id))</span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                @if (log.Count == 0)
+                {
+                    <p class="faint">@Loc["stats.empty"]</p>
+                }
+                else
+                {
+                    <div class="log-list">
+                        @foreach (var e in log.OrderByDescending(l => l.TimestampUtc))
+                        {
+                            <div class="log-row">
+                                <span class="log-time">@e.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</span>
+                                <span class="log-actor">@Actor(e.ActorPlayerId)</span>
+                                <span class="log-desc">@LogLine(e)</span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private int tab;
+    private bool loading = true;
+    private IReadOnlyList<SessionLogEntryDto> log = Array.Empty<SessionLogEntryDto>();
+    private MatchStats stats = new();
+
+    private static readonly GamePhase[] PhaseOrder =
+        { GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        StateHasChanged();
+        var code = Store.Session?.JoinCode;
+        log = code is null ? Array.Empty<SessionLogEntryDto>() : await Store.Api.GetLogAsync(code);
+        stats = MatchStats.Compute(log, DateTimeOffset.UtcNow);
+        loading = false;
+        StateHasChanged();
+    }
+
+    private TimeSpan PlayerTime(Guid id) => stats.PerPlayer.TryGetValue(id, out var t) ? t : TimeSpan.Zero;
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    // ---- Log line formatting (localized; ids resolved against the content bundle) ----
+    private string Actor(Guid? id) => Store.PlayerById(id)?.Name ?? Loc["log.system"];
+    private string Target(Guid? id) => Store.PlayerById(id)?.Name ?? "—";
+
+    private string CardName(string? d)
+    {
+        if (int.TryParse(d, out var n) && Store.Card(n) is { } c) return Loc.Pick(c.Name, c.NameDe);
+        return d ?? "";
+    }
+    private string ObjName(string? d) => string.IsNullOrEmpty(d) ? "" : (Store.Objective(d) is { } o ? Loc.Pick(o.Name, o.NameDe) : d);
+    private string AgendaName(string? d) => string.IsNullOrEmpty(d) ? "" : (Store.Agenda(d) is { } a ? Loc.Pick(a.Name, a.NameDe) : d);
+    private string TechName(string? d) => string.IsNullOrEmpty(d) ? "" : (Store.Tech(d) is { } t ? Loc.Pick(t.Name, t.NameDe) : d);
+
+    private string LogLine(SessionLogEntryDto e) => e.Kind switch
+    {
+        SessionLogKind.PlayerJoin => e.Detail == "host"
+            ? string.Format(Loc["log.host"], Actor(e.ActorPlayerId))
+            : string.Format(Loc["log.join"], Target(e.TargetPlayerId)),
+        SessionLogKind.PhaseChange => string.Format(Loc["log.phaseChange"], Loc[$"phase.{e.Phase}"]),
+        SessionLogKind.RoundChange => string.Format(Loc["log.roundChange"], e.Round),
+        SessionLogKind.TurnChange => string.Format(Loc["log.turnChange"], Target(e.TargetPlayerId)),
+        SessionLogKind.SpeakerSet => string.Format(Loc["log.speakerSet"], Target(e.TargetPlayerId)),
+        SessionLogKind.StrategyPick => string.Format(Loc["log.strategyPick"], Target(e.TargetPlayerId), CardName(e.Detail)),
+        SessionLogKind.StrategyReturn => string.Format(Loc["log.strategyReturn"], Target(e.TargetPlayerId), CardName(e.Detail)),
+        SessionLogKind.StrategyAction => string.Format(Loc["log.strategyAction"], Target(e.TargetPlayerId), CardName(e.Detail)),
+        SessionLogKind.Pass => string.Format(Loc["log.pass"], Target(e.TargetPlayerId)),
+        SessionLogKind.ObjectiveReveal => string.Format(Loc["log.objectiveReveal"], ObjName(e.Detail)),
+        SessionLogKind.ObjectiveScore => string.Format(Loc["log.objectiveScore"], Target(e.TargetPlayerId), ObjName(e.Detail)),
+        SessionLogKind.TechAdd => string.Format(Loc["log.techAdd"], Target(e.TargetPlayerId), TechName(e.Detail)),
+        SessionLogKind.TechRemove => string.Format(Loc["log.techRemove"], Target(e.TargetPlayerId), TechName(e.Detail)),
+        SessionLogKind.AgendaReveal => string.IsNullOrEmpty(e.Detail) ? Loc["log.agendaNew"] : string.Format(Loc["log.agendaReveal"], AgendaName(e.Detail)),
+        SessionLogKind.AgendaStartVote => e.Detail == "hidden" ? Loc["log.agendaStartHidden"] : Loc["log.agendaStart"],
+        SessionLogKind.AgendaCancel => Loc["log.agendaCancel"],
+        SessionLogKind.AgendaReveal2 => Loc["log.agendaReveal2"],
+        SessionLogKind.VoteLock => string.Format(Loc["log.voteLock"], Target(e.TargetPlayerId)),
+        SessionLogKind.InfluenceSet => string.Format(Loc["log.influenceSet"], Target(e.TargetPlayerId), e.Detail),
+        _ => Loc["log.generic"],
+    };
+}

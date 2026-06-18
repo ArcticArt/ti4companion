@@ -245,6 +245,21 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     // ---- Content lookups ----
     private Expansion Active => Session?.ActiveExpansions ?? Expansion.Base;
 
+    public PlayerDto? PlayerById(Guid? id) => id is null ? null : Session?.Players.FirstOrDefault(p => p.Id == id);
+
+    /// <summary>Which stage of the agenda phase we're in, derived from the session flags. Drives the
+    /// agenda control UI (influence entry → agenda revealed → open/face-down voting).</summary>
+    public AgendaStage CurrentAgendaStage
+    {
+        get
+        {
+            var s = Session;
+            if (s is null || s.CurrentAgendaId is null) return AgendaStage.Influence;
+            if (!s.VotingStarted) return AgendaStage.AgendaRevealed;
+            return s.AgendaVotesHidden ? AgendaStage.VotingHidden : AgendaStage.VotingOpen;
+        }
+    }
+
     public FactionDto? Faction(string? id) => id is null ? null : Content?.Factions.FirstOrDefault(f => f.Id == id);
     public StrategyCardDto? Card(int id) => Content?.StrategyCards.FirstOrDefault(c => c.Id == id);
     public ObjectiveDto? Objective(string id) => Content?.Objectives.FirstOrDefault(o => o.Id == id);
@@ -309,4 +324,17 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 internal static class SignalREvents
 {
     public const string SessionChanged = "SessionChanged";
+}
+
+/// <summary>Stage of the agenda phase (see <see cref="SessionStore.CurrentAgendaStage"/>).</summary>
+public enum AgendaStage
+{
+    /// <summary>No agenda revealed yet — players enter their available influence; host picks an agenda.</summary>
+    Influence,
+    /// <summary>Agenda revealed; host decides how to start the vote (open or face-down).</summary>
+    AgendaRevealed,
+    /// <summary>Open voting: drafts are locked one by one and shown as they lock.</summary>
+    VotingOpen,
+    /// <summary>Face-down voting: only "voted" shows until the host reveals.</summary>
+    VotingHidden
 }

@@ -1,6 +1,7 @@
-@* The TE "Sprecher" speaker token (recreated as wwwroot/speaker.svg). Used wherever the speaker is
-   marked, in place of a star. Size via SizeCss (height; width auto). *@
-<img src="speaker.svg" class="speaker-icon" alt="@Loc["players.speaker"]" title='@Loc["players.speaker"]'
+@* The TE "Sprecher" speaker token (wwwroot/speaker.png — the image already contains the word
+   "SPRECHER", so it's shown on its own with no text label beside it). Used wherever the speaker is
+   marked, in place of a star. Size via SizeCss (height; width auto keeps the wide aspect). *@
+<img src="speaker.png" class="speaker-icon" alt="@Loc["players.speaker"]" title='@Loc["players.speaker"]'
      style="@(SizeCss is null ? null : $"height:{SizeCss}")" />
 
 @code {

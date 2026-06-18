@@ -93,12 +93,25 @@ public class Ti4ApiClient(HttpClient http)
     // ---- Agenda phase ----
     public Task<SessionStateDto?> SetAgendaAsync(Guid id, string? agendaId)
         => PostFor($"api/sessions/{id}/agenda", new SetAgendaRequest(agendaId));
-    public Task<SessionStateDto?> CastVoteAsync(Guid id, Guid playerId, VoteOutcome outcome, int votes, string? choice = null)
-        => PostFor($"api/sessions/{id}/agenda/vote", new CastVoteRequest(playerId, outcome, votes, choice));
+    public Task<SessionStateDto?> StartVotingAsync(Guid id, bool hidden)
+        => PostForAllowBadRequest($"api/sessions/{id}/agenda/start", new StartVotingRequest(hidden));
+    public Task<SessionStateDto?> CancelVotingAsync(Guid id)
+        => PostFor<SessionStateDto>($"api/sessions/{id}/agenda/cancel", null);
+    public Task<SessionStateDto?> RevealVotesAsync(Guid id)
+        => PostFor<SessionStateDto>($"api/sessions/{id}/agenda/reveal", null);
     public Task<SessionStateDto?> LockVoteAsync(Guid id, Guid playerId, VoteOutcome outcome, int votes, string? choice)
-        => PostFor($"api/sessions/{id}/agenda/lock", new LockVoteRequest(playerId, outcome, votes, choice));
-    public Task<SessionStateDto?> ResetVotesAsync(Guid id)
-        => PostFor<SessionStateDto>($"api/sessions/{id}/agenda/reset", null);
+        => PostForAllowBadRequest($"api/sessions/{id}/agenda/lock", new LockVoteRequest(playerId, outcome, votes, choice));
+    public Task<SessionStateDto?> SetInfluenceAsync(Guid id, Guid playerId, int influence)
+        => PostForAllowBadRequest($"api/sessions/{id}/players/{playerId}/influence", new SetInfluenceRequest(playerId, influence));
+
+    // ---- Match log ----
+    public async Task<IReadOnlyList<SessionLogEntryDto>> GetLogAsync(string code)
+    {
+        var resp = await http.GetAsync($"api/sessions/{code}/log");
+        if (resp.StatusCode == HttpStatusCode.NotFound) return Array.Empty<SessionLogEntryDto>();
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<List<SessionLogEntryDto>>() ?? new();
+    }
 
     // ---- helpers ----
     // A 400 (rule violation) or 403 (not allowed — host only) returns null/default so the store

@@ -22,6 +22,7 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
     public DbSet<ObjectiveScore> ObjectiveScores => Set<ObjectiveScore>();
     public DbSet<PlayerTechnology> PlayerTechnologies => Set<PlayerTechnology>();
     public DbSet<AgendaVote> AgendaVotes => Set<AgendaVote>();
+    public DbSet<SessionLogEntry> SessionLog => Set<SessionLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -55,7 +56,7 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
                  {
                      typeof(GameSession), typeof(Player), typeof(PlayerStrategyCard),
                      typeof(StrategyCardState), typeof(SessionObjective), typeof(ObjectiveScore),
-                     typeof(PlayerTechnology), typeof(AgendaVote),
+                     typeof(PlayerTechnology), typeof(AgendaVote), typeof(SessionLogEntry),
                  })
         {
             b.Entity(entity).Property<Guid>("Id").ValueGeneratedNever();
@@ -91,6 +92,11 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
             .HasMany(o => o.Scores).WithOne(s => s.SessionObjective)
             .HasForeignKey(s => s.SessionObjectiveId).OnDelete(DeleteBehavior.Cascade);
 
+        // Match log: no navigation on GameSession (kept out of the loaded graph), but cascade-deleted.
+        b.Entity<SessionLogEntry>()
+            .HasOne<GameSession>().WithMany()
+            .HasForeignKey(l => l.SessionId).OnDelete(DeleteBehavior.Cascade);
+
         // Helpful lookups
         b.Entity<Player>().HasIndex(x => x.SessionId);
         b.Entity<PlayerStrategyCard>().HasIndex(x => new { x.SessionId, x.PlayerId });
@@ -98,5 +104,6 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
         b.Entity<SessionObjective>().HasIndex(x => x.SessionId);
         b.Entity<StrategyCardState>().HasIndex(x => new { x.SessionId, x.StrategyCardId }).IsUnique();
         b.Entity<AgendaVote>().HasIndex(x => new { x.SessionId, x.PlayerId }).IsUnique();
+        b.Entity<SessionLogEntry>().HasIndex(x => new { x.SessionId, x.TimestampUtc });
     }
 }

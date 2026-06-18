@@ -1,3 +1,5 @@
+// TI4 technologies (incl. faction techs); unit-upgrade techs carry a unitType for the card silhouette.
+// expansion=Base|ProphecyOfKings|Codex|ThundersEdge, verified vs ti4lookup technologies.csv. German body text is English-fallback.
 [
     {
         "id":  "neural-motivator",
@@ -44,7 +46,7 @@
         "name":  "X-89 Bacterial Weapon",
         "color":  "Biotic",
         "prerequisites":  "BBB",
-        "text":  "Double the hits produced by your units\u0027 BOMBARDMENT and ground combat rolls. Exhaust each planet you use BOMBARDMENT against.",
+        "text":  "Double the hits produced by your units' BOMBARDMENT and ground combat rolls. Exhaust each planet you use BOMBARDMENT against.",
         "expansion":  "Base"
     },
     {
@@ -92,7 +94,7 @@
         "name":  "Integrated Economy",
         "color":  "Cybernetic",
         "prerequisites":  "CCC",
-        "text":  "After you gain control of a planet, you may produce any number of units on that planet that have a combined cost equal to or less than that planet\u0027s resource value.",
+        "text":  "After you gain control of a planet, you may produce any number of units on that planet that have a combined cost equal to or less than that planet's resource value.",
         "expansion":  "Base"
     },
     {
@@ -100,7 +102,7 @@
         "name":  "Antimass Deflectors",
         "color":  "Propulsion",
         "prerequisites":  "",
-        "text":  "Your ships can move into and through asteroid fields. When other players\u0027 units use SPACE CANNON against your units, apply -1 to the result of each die roll.",
+        "text":  "Your ships can move into and through asteroid fields. When other players' units use SPACE CANNON against your units, apply -1 to the result of each die roll.",
         "expansion":  "Base"
     },
     {
@@ -108,7 +110,7 @@
         "name":  "Dark Energy Tap",
         "color":  "Propulsion",
         "prerequisites":  "",
-        "text":  "After you perform a tactical action in a system that contains a frontier token, if you have 1 or more ships in that system, explore that token. Your ships can retreat into adjacent systems that do not contain other players\u0027 units, even if you do not have units or control planets in that system.",
+        "text":  "After you perform a tactical action in a system that contains a frontier token, if you have 1 or more ships in that system, explore that token. Your ships can retreat into adjacent systems that do not contain other players' units, even if you do not have units or control planets in that system.",
         "expansion":  "ProphecyOfKings"
     },
     {
@@ -140,7 +142,7 @@
         "name":  "Light/Wave Deflector",
         "color":  "Propulsion",
         "prerequisites":  "PPP",
-        "text":  "Your ships can move through systems that contain other players\u0027 ships.",
+        "text":  "Your ships can move through systems that contain other players' ships.",
         "expansion":  "Base"
     },
     {
@@ -167,7 +169,7 @@
         "color":  "Unit",
         "unitType":  "Fighter",
         "prerequisites":  "BP",
-        "text":  "Cost 1(x2), Combat 8, Move 2. This unit may move without being transported. Fighters in excess of your ships\u0027 capacity count against your fleet pool.",
+        "text":  "Cost 1(x2), Combat 8, Move 2. This unit may move without being transported. Fighters in excess of your ships' capacity count against your fleet pool.",
         "expansion":  "Base"
     },
     {
@@ -185,7 +187,7 @@
         "color":  "Unit",
         "unitType":  "Pds",
         "prerequisites":  "WC",
-        "text":  "PLANETARY SHIELD, SPACE CANNON 5. You may use this unit\u0027s SPACE CANNON against ships that are adjacent to this unit\u0027s system.",
+        "text":  "PLANETARY SHIELD, SPACE CANNON 5. You may use this unit's SPACE CANNON against ships that are adjacent to this unit's system.",
         "expansion":  "Base"
     },
     {
@@ -194,7 +196,7 @@
         "color":  "Unit",
         "unitType":  "SpaceDock",
         "prerequisites":  "CC",
-        "text":  "PRODUCTION X. This unit\u0027s PRODUCTION value is equal to 4 more than the resource value of this planet. Up to 3 fighters in this system do not count against your ships\u0027 capacity.",
+        "text":  "PRODUCTION X. This unit's PRODUCTION value is equal to 4 more than the resource value of this planet. Up to 3 fighters in this system do not count against your ships' capacity.",
         "expansion":  "Base"
     },
     {
@@ -221,7 +223,7 @@
         "color":  "Unit",
         "unitType":  "WarSun",
         "prerequisites":  "WWWC",
-        "text":  "Cost 12, Combat 3(x3), Move 2, Capacity 6. SUSTAIN DAMAGE, BOMBARDMENT 3(x3). Other players\u0027 units in this system lose PLANETARY SHIELD.",
+        "text":  "Cost 12, Combat 3(x3), Move 2, Capacity 6. SUSTAIN DAMAGE, BOMBARDMENT 3(x3). Other players' units in this system lose PLANETARY SHIELD.",
         "expansion":  "Base"
     },
     {
@@ -245,7 +247,7 @@
         "name":  "Magen Defense Grid",
         "color":  "Warfare",
         "prerequisites":  "W",
-        "text":  "When any player activates a system that contains 1 or more of your structures, place 1 infantry from your reinforcements with each of those structures. At the start of ground combat on a planet that contains 1 or more of your structures, produce 1 hit and assign it to 1 of your opponent\u0027s ground forces.",
+        "text":  "When any player activates a system that contains 1 or more of your structures, place 1 infantry from your reinforcements with each of those structures. At the start of ground combat on a planet that contains 1 or more of your structures, produce 1 hit and assign it to 1 of your opponent's ground forces.",
         "expansion":  "Base"
     },
     {
@@ -334,7 +336,7 @@
         "color":  "Unit",
         "unitType":  "SpaceDock",
         "prerequisites":  "CC",
-        "text":  "This unit\u0027s PRODUCTION value is equal to 4 more than the resource value of this planet. The resource value of this planet is increased by 2. Up to 3 fighters in this system do not count against your ships\u0027 capacity.",
+        "text":  "This unit's PRODUCTION value is equal to 4 more than the resource value of this planet. The resource value of this planet is increased by 2. Up to 3 fighters in this system do not count against your ships' capacity.",
         "expansion":  "ThundersEdge",
         "factionId":  "bastion"
     },
@@ -343,7 +345,7 @@
         "name":  "Proxima Targeting VI",
         "color":  "Warfare",
         "prerequisites":  "W",
-        "text":  "Cancel 1 hit produced by BOMBARDMENT rolls made against your ground forces for each of your galvanized units present. At the start of a round of ground combat, you may resolve BOMBARDMENT 8 (x3) against your opponent\u0027s ground forces; if you do, make an identical roll against your ground forces.",
+        "text":  "Cancel 1 hit produced by BOMBARDMENT rolls made against your ground forces for each of your galvanized units present. At the start of a round of ground combat, you may resolve BOMBARDMENT 8 (x3) against your opponent's ground forces; if you do, make an identical roll against your ground forces.",
         "expansion":  "ThundersEdge",
         "factionId":  "bastion"
     },
@@ -353,7 +355,7 @@
         "color":  "Unit",
         "unitType":  "SpaceDock",
         "prerequisites":  "CC",
-        "text":  "PRODUCTION 7. This system is a gravity rift; your ships do not roll for this gravity rift. Place a dimensional tear token beneath this unit as a reminder. Up to 12 fighters in this system do not count against your ships\u0027 capacity.",
+        "text":  "PRODUCTION 7. This system is a gravity rift; your ships do not roll for this gravity rift. Place a dimensional tear token beneath this unit as a reminder. Up to 12 fighters in this system do not count against your ships' capacity.",
         "expansion":  "ProphecyOfKings",
         "factionId":  "cabal"
     },
@@ -362,7 +364,7 @@
         "name":  "Vortex",
         "color":  "Warfare",
         "prerequisites":  "W",
-        "text":  "ACTION: Exhaust this card to choose another player\u0027s non-structure unit in a system that is adjacent to 1 or more of your space docks. Capture 1 unit of that type from that player\u0027s reinforcements.",
+        "text":  "ACTION: Exhaust this card to choose another player's non-structure unit in a system that is adjacent to 1 or more of your space docks. Capture 1 unit of that type from that player's reinforcements.",
         "expansion":  "ProphecyOfKings",
         "factionId":  "cabal"
     },
@@ -381,7 +383,7 @@
         "color":  "Unit",
         "unitType":  "Destroyer",
         "prerequisites":  "WW",
-        "text":  "Cost 1, Combat 7, Move 2, ANTI-FIGHTER BARRAGE 6 (x3). At the end of any players\u0027 combat in this unit\u0027s system or up to 2 systems away, you may place 1 active or inactive breach in that system.",
+        "text":  "Cost 1, Combat 7, Move 2, ANTI-FIGHTER BARRAGE 6 (x3). At the end of any players' combat in this unit's system or up to 2 systems away, you may place 1 active or inactive breach in that system.",
         "expansion":  "ThundersEdge",
         "factionId":  "crimson"
     },
@@ -417,7 +419,7 @@
         "name":  "Aetherstream",
         "color":  "Propulsion",
         "prerequisites":  "PP",
-        "text":  "After you or one of your neighbors activates a system that is adjacent to an anomaly, you may apply +1 to the move value of all of that player\u0027s ships during this tactical action.",
+        "text":  "After you or one of your neighbors activates a system that is adjacent to an anomaly, you may apply +1 to the move value of all of that player's ships during this tactical action.",
         "expansion":  "ProphecyOfKings",
         "factionId":  "empyrean"
     },
@@ -444,7 +446,7 @@
         "name":  "Wormhole Generator",
         "color":  "Propulsion",
         "prerequisites":  "PP",
-        "text":  "ACTION: Exhaust this card to place or move a Creuss wormhole token into either a system that contains a planet you control or a non-home system that does not contain another player\u0027s ships.",
+        "text":  "ACTION: Exhaust this card to place or move a Creuss wormhole token into either a system that contains a planet you control or a non-home system that does not contain another player's ships.",
         "expansion":  "Base",
         "factionId":  "ghosts"
     },
@@ -453,7 +455,7 @@
         "name":  "Dimensional Splicer",
         "color":  "Warfare",
         "prerequisites":  "W",
-        "text":  "At the start of space combat in a system that contains a wormhole and 1 or more of your ships, you may produce 1 hit and assign it to 1 of your opponent\u0027s ships.",
+        "text":  "At the start of space combat in a system that contains a wormhole and 1 or more of your ships, you may produce 1 hit and assign it to 1 of your opponent's ships.",
         "expansion":  "Base",
         "factionId":  "ghosts"
     },
@@ -499,7 +501,7 @@
         "color":  "Cybernetic",
         "prerequisites":  "C",
         "text":  "ACTION: Exhaust this card and draw the top or bottom card of the Agenda deck. Players immediately vote on this agenda as if you were the speaker; you can spend trade goods and resources on this agenda as if they were votes.",
-        "expansion":  "Codex",
+        "expansion":  "ThundersEdge",
         "factionId":  "keleres"
     },
     {
@@ -516,7 +518,7 @@
         "name":  "Agency Supply Network",
         "color":  "Cybernetic",
         "prerequisites":  "CC",
-        "text":  "Once per action, when you resolve a unit\u0027s PRODUCTION ability, you may resolve another of your unit\u0027s PRODUCTION abilities in any system.",
+        "text":  "Once per action, when you resolve a unit's PRODUCTION ability, you may resolve another of your unit's PRODUCTION abilities in any system.",
         "expansion":  "Codex",
         "factionId":  "keleres"
     },
@@ -544,7 +546,7 @@
         "name":  "Inheritance Systems",
         "color":  "Cybernetic",
         "prerequisites":  "CC",
-        "text":  "You may exhaust this card and spend 2 resources when you research a technology; ignore all of that technology\u0027s prerequisites.",
+        "text":  "You may exhaust this card and spend 2 resources when you research a technology; ignore all of that technology's prerequisites.",
         "expansion":  "Base",
         "factionId":  "lizix"
     },
@@ -601,7 +603,7 @@
         "color":  "Unit",
         "unitType":  "WarSun",
         "prerequisites":  "WWWC",
-        "text":  "Cost 10, Combat 3(x3), Move 3, Capacity 6. SUSTAIN DAMAGE, BOMBARDMENT 3(x3). Other players\u0027 units in this system lose PLANETARY SHIELD.",
+        "text":  "Cost 10, Combat 3(x3), Move 3, Capacity 6. SUSTAIN DAMAGE, BOMBARDMENT 3(x3). Other players' units in this system lose PLANETARY SHIELD.",
         "expansion":  "Base",
         "factionId":  "muaat"
     },
@@ -629,7 +631,7 @@
         "color":  "Unit",
         "unitType":  "Fighter",
         "prerequisites":  "BP",
-        "text":  "Cost 1(x2), Combat 7, Move 2 This unit may move without being transported. Fighters in excess of your ships\u0027 capacity count as 1/2 of a ship against your fleet pool.",
+        "text":  "Cost 1(x2), Combat 7, Move 2 This unit may move without being transported. Fighters in excess of your ships' capacity count as 1/2 of a ship against your fleet pool.",
         "expansion":  "Base",
         "factionId":  "naalu"
     },
@@ -638,7 +640,7 @@
         "name":  "Temporal Command Suite",
         "color":  "Cybernetic",
         "prerequisites":  "C",
-        "text":  "After any player\u0027s agent becomes exhausted, you may exhaust this card to ready that agent; if you ready another player\u0027s agent, you may perform a transaction with that player.",
+        "text":  "After any player's agent becomes exhausted, you may exhaust this card to ready that agent; if you ready another player's agent, you may perform a transaction with that player.",
         "expansion":  "ProphecyOfKings",
         "factionId":  "nomad"
     },
@@ -666,7 +668,7 @@
         "name":  "Supercharge",
         "color":  "Warfare",
         "prerequisites":  "W",
-        "text":  "At the start of a combat round, you may exhaust this card to apply +1 to the result of each of your unit\u0027s combat rolls during this combat round.",
+        "text":  "At the start of a combat round, you may exhaust this card to apply +1 to the result of each of your unit's combat rolls during this combat round.",
         "expansion":  "ProphecyOfKings",
         "factionId":  "nra"
     },
@@ -675,7 +677,7 @@
         "name":  "Neural Parasite (Obsidian)",
         "color":  "Biotic",
         "prerequisites":  "",
-        "text":  "At the start of your turn, destroy 1 of another player\u0027s infantry in or adjacent to a system that contains your infantry. This technology cannot be researched.",
+        "text":  "At the start of your turn, destroy 1 of another player's infantry in or adjacent to a system that contains your infantry. This technology cannot be researched.",
         "expansion":  "ThundersEdge",
         "factionId":  "obsidian"
     },
@@ -752,7 +754,7 @@
         "color":  "Unit",
         "unitType":  "Pds",
         "prerequisites":  "CW",
-        "text":  "Combat 6. PLANETARY SHIELD, SPACE CANNON 5, SUSTAIN DAMAGE, PRODUCTION 1. This unit is treated as both a structure and a ground force. It cannot be transported. You may use this unit\u0027s SPACE CANNON against ships that are adjacent to this unit\u0027s systems.",
+        "text":  "Combat 6. PLANETARY SHIELD, SPACE CANNON 5, SUSTAIN DAMAGE, PRODUCTION 1. This unit is treated as both a structure and a ground force. It cannot be transported. You may use this unit's SPACE CANNON against ships that are adjacent to this unit's systems.",
         "expansion":  "ProphecyOfKings",
         "factionId":  "titans"
     },
@@ -798,7 +800,7 @@
         "name":  "Nullification Field",
         "color":  "Cybernetic",
         "prerequisites":  "CC",
-        "text":  "After another player activates a system that contains 1 or more of your ships, you may exhaust this card and spend 1 token from your strategy pool; immediately end that player\u0027s turn.",
+        "text":  "After another player activates a system that contains 1 or more of your ships, you may exhaust this card and spend 1 token from your strategy pool; immediately end that player's turn.",
         "expansion":  "Base",
         "factionId":  "xxcha"
     },
@@ -816,7 +818,7 @@
         "name":  "Impulse Core",
         "color":  "Cybernetic",
         "prerequisites":  "CC",
-        "text":  "At the start of a space combat, you may destroy 1 of your cruisers or destroyers in the active system to produce 1 hit against your opponent\u0027s ships; that hit must be assigned by your opponent to 1 of their non-fighters ships if able.",
+        "text":  "At the start of a space combat, you may destroy 1 of your cruisers or destroyers in the active system to produce 1 hit against your opponent's ships; that hit must be assigned by your opponent to 1 of their non-fighters ships if able.",
         "expansion":  "Base",
         "factionId":  "yin"
     },
@@ -834,7 +836,7 @@
         "name":  "Mageon Implants",
         "color":  "Biotic",
         "prerequisites":  "BBB",
-        "text":  "ACTION: Exhaust this card to look at another player\u0027s hand of action cards. Choose 1 of those cards and add it to your hand.",
+        "text":  "ACTION: Exhaust this card to look at another player's hand of action cards. Choose 1 of those cards and add it to your hand.",
         "expansion":  "Base",
         "factionId":  "yssaril"
     }
