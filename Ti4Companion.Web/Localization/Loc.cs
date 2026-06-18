@@ -224,12 +224,15 @@ public class Loc
         ["legal.disclaimer"] = (
             "Unofficial fan-made companion — not affiliated with, endorsed, or sponsored by Asmodee or Fantasy Flight Games.",
             "Inoffizieller, von Fans erstellter Begleiter – nicht verbunden mit, unterstützt oder gesponsert von Asmodee oder Fantasy Flight Games."),
-        ["legal.copyright"] = (
-            "Twilight Imperium, Prophecy of Kings, Thunder's Edge and all related names, marks, text and artwork are © & ™ Asmodee North America, Inc. (Fantasy Flight Games). All rights reserved.",
-            "Twilight Imperium, Prophecy of Kings, Thunder's Edge sowie alle zugehörigen Namen, Marken, Texte und Grafiken sind © & ™ Asmodee North America, Inc. (Fantasy Flight Games). Alle Rechte vorbehalten."),
+        // The copyright line wraps inline links to Asmodee / Fantasy Flight Games (see MainLayout), so it
+        // is split into a prefix (… © & ™ ) and a suffix (… All rights reserved.) around those anchors.
+        ["legal.copyrightPre"] = (
+            "Twilight Imperium, Prophecy of Kings, Thunder's Edge and all related names, marks, text and artwork are © & ™ ",
+            "Twilight Imperium, Prophecy of Kings, Thunder's Edge sowie alle zugehörigen Namen, Marken, Texte und Grafiken sind © & ™ "),
+        ["legal.copyrightPost"] = (". All rights reserved.", ". Alle Rechte vorbehalten."),
         ["legal.noncommercial"] = (
             "Free, non-commercial fan project based on Twilight Imperium 4th Edition — provided free of charge; the author takes no money (no sale, advertising, donations, or paywall).",
-            "Kostenloses, nicht-kommerzielles Fan-Projekt auf Basis von Twilight Imperium 4. Edition – kostenlos bereitgestellt; der Autor nimmt kein Geld (kein Verkauf, keine Werbung, keine Spenden, keine Bezahlschranke)."),
+            "Kostenloses, nicht-kommerzielles Fan-Projekt auf Basis von Twilight Imperium 4. Edition – kostenlos bereitgestellt; der Autor nimmt kein Geld (kein Verkauf, keine Werbung, keine Spenden, keine Paywall)."),
         ["legal.thanks"] = ("With thanks to", "Mit Dank an"),
         ["legal.createdBy"] = ("Created by ArcticArt", "Erstellt von ArcticArt"),
         ["legal.contact"] = (
