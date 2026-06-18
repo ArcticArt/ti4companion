@@ -5,6 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- This hosted app is published and served as plain static files (UseBlazorFrameworkFiles +
+         UseStaticFiles behind Apache), NOT via MapStaticAssets — so the .NET 9+ fingerprint import map
+         is never populated at runtime and the boot chain (dotnet.js etc.) 404s. Disable fingerprinting
+         so the framework files keep stable names that resolve without an import map. -->
+    <WasmFingerprintAssets>false</WasmFingerprintAssets>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
   </PropertyGroup>
 

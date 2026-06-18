@@ -14,6 +14,33 @@ certificate.
 > The `.NET Aspire AppHost` is for local development only. In production you run the published
 > `Ti4Companion.ApiService` directly as a service — there is no Aspire dashboard and no container.
 
+## Live deployment (ti4companion.com)
+The live box (Hetzner, Debian 13) **also hosts an SVN repo via Apache** (`mod_dav_svn`, reachable over
+the bare IP). SVN is Apache-only, so the live site uses **Apache as the reverse proxy** instead of Caddy
+(steps 1 + 4 below — install Caddy only on a clean box). The rest is identical: publish (step 2) → systemd
+service as the `ti4` user (step 3). Key facts:
+- **Hetzner Cloud Firewall:** inbound **22** (SSH, ideally your IP), **80** and **443** (`0.0.0.0/0` + `::/0`).
+  SSH is **key-only** (`PasswordAuthentication no`, root `prohibit-password`) + `fail2ban`.
+- **Apache vHost** for the domain (a separate `sites-available/ti4companion.conf`; the SVN stays the
+  default vHost so the IP keeps serving it). Enable `proxy proxy_http proxy_wstunnel headers rewrite`:
+  ```apache
+  <VirtualHost *:80>
+      ServerName ti4companion.com
+      ServerAlias *.ti4companion.com
+      DocumentRoot /var/www/html
+      ProxyPass /.well-known/acme-challenge/ !            # let certbot serve the ACME challenge
+      RewriteEngine On
+      RewriteCond %{HTTP:Upgrade} =websocket [NC]
+      RewriteRule ^/(.*) ws://127.0.0.1:5000/$1 [P,L]     # SignalR WebSocket
+      ProxyPreserveHost On
+      ProxyPass / http://127.0.0.1:5000/
+      ProxyPassReverse / http://127.0.0.1:5000/
+  </VirtualHost>
+  ```
+  Then HTTPS: `certbot --apache -d ti4companion.com -d www.ti4companion.com --redirect` (auto-renews).
+- **After every upload:** if you `dotnet publish` by hand instead of `publish.ps1`, you MUST rewrite the
+  boot script in `index.html` (see step 2) or the page spins forever.
+
 ## 1. Prepare the server
 
 A small Hetzner Cloud VM (e.g. CX22, 2 vCPU / 4 GB) running Ubuntu is plenty.
@@ -36,18 +63,29 @@ ufw allow 80 && ufw allow 443 && ufw allow OpenSSH && ufw enable
 
 ## 2. Build & publish
 
-Publish on your dev machine (or on the server if you installed the SDK). This produces a
-self-contained folder with the API and the compiled Blazor client:
+Publish with the repo script **`publish.ps1`** (PowerShell, runs on the dev machine). It builds a
+**self-contained linux-x64** bundle (so the server needs **no .NET runtime** — important on Debian 13,
+which has no .NET 10 packages) and fixes the Blazor boot script in `index.html` (see the gotcha below):
 
-```bash
-dotnet publish Ti4Companion.ApiService -c Release -o publish
+```powershell
+./publish.ps1            # output in ./publish
 ```
 
-Copy the output to the server and create a data directory for the database:
+> **Don't `dotnet publish` by hand for deployment.** This app is served as plain static files
+> (`UseBlazorFrameworkFiles`/`UseStaticFiles`), not via `MapStaticAssets`, so the .NET 9+ Blazor WASM
+> fingerprint **import map is never populated** → the boot chain 404s and the page spins forever. The
+> fixes (both already in the repo): `<WasmFingerprintAssets>false</WasmFingerprintAssets>` keeps the
+> `dotnet.*` files at stable names, and `publish.ps1` writes the real `blazor.webassembly.<hash>.js`
+> name into `index.html`. `dotnet publish` alone skips that rewrite → broken deploy.
+
+Create the server dirs + a non-root service user, then upload:
 
 ```bash
-ssh root@SERVER 'mkdir -p /opt/ti4companion /var/lib/ti4companion'
-scp -r publish/* root@SERVER:/opt/ti4companion/
+ssh root@SERVER 'adduser --system --group --no-create-home --home /opt/ti4companion ti4; \
+                 mkdir -p /opt/ti4companion /var/lib/ti4companion; chown ti4:ti4 /var/lib/ti4companion'
+scp -r publish/* root@SERVER:/opt/ti4companion/        # first deploy: everything
+# later updates (client-only changes): scp -r publish/wwwroot root@SERVER:/opt/ti4companion/
+ssh root@SERVER 'chmod +x /opt/ti4companion/Ti4Companion.ApiService; chmod -R a+rX /opt/ti4companion/wwwroot'
 ```
 
 ## 3. Run it as a systemd service
@@ -60,17 +98,27 @@ Description=TI4 Companion
 After=network.target
 
 [Service]
+User=ti4
+Group=ti4
 WorkingDirectory=/opt/ti4companion
-ExecStart=/usr/bin/dotnet /opt/ti4companion/Ti4Companion.ApiService.dll
+# Self-contained publish → run the native host directly (no `dotnet` runtime on the server).
+ExecStart=/opt/ti4companion/Ti4Companion.ApiService
 Restart=always
 RestartSec=5
-# Kestrel listens on localhost; Caddy proxies to it and handles TLS.
+# Kestrel listens on localhost; the reverse proxy (Apache/Caddy) handles TLS.
 Environment=ASPNETCORE_URLS=http://localhost:5000
 Environment=ASPNETCORE_ENVIRONMENT=Production
-# Put the SQLite file on a stable path outside the deploy folder so updates don't touch it.
-Environment=ConnectionStrings__ti4db=Data Source=/var/lib/ti4companion/ti4.db
+Environment=HOME=/var/lib/ti4companion
+# NOTE the quotes: systemd splits Environment= on spaces, and "Data Source=" contains one — without
+# quotes only "Data" reaches the app → "Format of the initialization string..." crash.
+Environment="ConnectionStrings__ti4db=Data Source=/var/lib/ti4companion/ti4.db"
 # Auto-wipe inactive sessions (hours). Lower this for a public URL.
 Environment=Ti4__DefaultRetentionHours=168
+# Hardening (runs as the unprivileged ti4 user)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
