@@ -233,7 +233,7 @@ public class Loc
         ["legal.noncommercial"] = (
             "Free, non-commercial fan project based on Twilight Imperium 4th Edition — provided free of charge; the author takes no money (no sale, advertising, donations, or paywall).",
             "Kostenloses, nicht-kommerzielles Fan-Projekt auf Basis von Twilight Imperium 4. Edition – kostenlos bereitgestellt; der Autor nimmt kein Geld (kein Verkauf, keine Werbung, keine Spenden, keine Paywall)."),
-        ["legal.thanks"] = ("With thanks to", "Mit Dank an"),
+        ["legal.thanks"] = ("Special thanks to", "Besonderer Dank an"),
         ["legal.createdBy"] = ("Created by ArcticArt", "Erstellt von ArcticArt"),
         ["legal.contact"] = (
             "Bugs, suggestions, feedback, questions, thanks via",
