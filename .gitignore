@@ -2,6 +2,7 @@
 [Bb]in/
 [Oo]bj/
 artifacts/
+publish/
 
 # Visual Studio / Rider / VS Code
 .vs/
