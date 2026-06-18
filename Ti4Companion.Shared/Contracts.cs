@@ -61,7 +61,8 @@ public record PlayerDto(
     Guid Id, string Name, string? FactionId, string ColorHex, int SeatOrder,
     bool HasPassed, bool IsReady, bool IsHost, int? Initiative,
     IReadOnlyList<PlayerStrategyCardDto> StrategyCards,
-    IReadOnlyList<string> TechnologyIds);
+    IReadOnlyList<string> TechnologyIds,
+    int Influence);
 
 /// <summary><paramref name="CustomName"/>/<paramref name="CustomPoints"/> are set for an objective added
 /// by hand (e.g. a secret made public via "Classified Document Leaks") rather than from the content set.</summary>
@@ -82,12 +83,18 @@ public record SessionStateDto(
     int CurrentRound, GamePhase Phase,
     Guid? SpeakerPlayerId, Guid? ActivePlayerId, int? ActiveStrategyCardId,
     string? CurrentAgendaId, bool AllowEditAllPlayers,
-    bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, int RetentionHours,
+    bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, int RetentionHours,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
     IReadOnlyList<StrategyCardStateDto> StrategyCardStates,
     IReadOnlyList<AgendaVoteDto> AgendaVotes);
+
+/// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
+/// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>
+public record SessionLogEntryDto(
+    Guid Id, DateTimeOffset TimestampUtc, SessionLogKind Kind,
+    Guid? ActorPlayerId, Guid? TargetPlayerId, GamePhase? Phase, int? Round, string? Detail);
 
 /// <summary>Returned when creating or joining a session: the state plus this device's identity.</summary>
 public record JoinResultDto(SessionStateDto Session, Guid PlayerId, string DeviceToken);
@@ -134,8 +141,15 @@ public record AddTechnologyRequest(string TechnologyId);
 
 public record SetAgendaRequest(string? AgendaId);
 
-public record CastVoteRequest(Guid PlayerId, VoteOutcome Outcome, int Votes, string? Choice);
+/// <summary>A player's available influence for the agenda phase (entered before voting starts). Not a
+/// cap on votes — action cards/abilities can exceed it; it's tracked only for display and the
+/// auto-deduction when the next agenda is revealed.</summary>
+public record SetInfluenceRequest(Guid PlayerId, int Influence);
 
-/// <summary>Commit a secret vote: sets the vote and locks it in one atomic step, so the choice is
-/// only transmitted on lock (nobody — not even the host — sees it beforehand).</summary>
+/// <summary>Host starts the vote on the revealed agenda, open or face-down (<paramref name="Hidden"/>).</summary>
+public record StartVotingRequest(bool Hidden);
+
+/// <summary>Commit a vote: sets the vote and locks it in one atomic step. The choice is only
+/// transmitted on lock, so in a face-down vote nobody — not even the host — sees it beforehand.
+/// Used for both open and hidden voting (a vote counts only once locked).</summary>
 public record LockVoteRequest(Guid PlayerId, VoteOutcome Outcome, int Votes, string? Choice);

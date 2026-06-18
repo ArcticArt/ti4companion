@@ -600,11 +600,64 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .tally-row { display: flex; gap: 1.2vw; flex-wrap: wrap; }
 .beamer .tally { font-family: 'Orbitron', sans-serif; font-size: clamp(1.1rem, 2vw, 2.8rem); padding: .4vh 1.2vw; border-radius: 10px; border: 1px solid var(--panel-border); }
 .beamer .tally.lead { box-shadow: 0 0 0 2px var(--gold); }
-.beamer .votes-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(16vw, 1fr)); gap: .8vh 1vw; align-content: start; overflow: hidden; }
-.beamer .vote-card { display: flex; align-items: center; gap: .7vw; padding: .5vh .8vw; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--panel-border); border-left: .4vw solid var(--player-color, #888); }
-.beamer .vote-name { flex: 1 1 auto; min-width: 0; font-weight: 700; font-size: clamp(.9rem, 1.3vw, 1.7rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.beamer .vote-choice { font-size: clamp(.8rem, 1.1vw, 1.4rem); color: var(--text-dim); }
-.beamer .vote-weight { font-family: 'Orbitron', sans-serif; font-size: clamp(1rem, 1.6vw, 2.1rem); color: var(--gold); }
+/* Each player is a faction portrait with votes above and influence below. */
+.beamer .votes-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9vw, 1fr)); grid-auto-rows: 1fr; gap: .8vh .8vw; align-content: stretch; overflow: hidden; }
+.beamer .vote-card { display: flex; flex-direction: column; align-items: center; gap: .4vh; min-height: 0; padding: .5vh .4vw; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--panel-border); border-top: .5vh solid var(--player-color, #888); }
+.beamer .vote-top { display: flex; flex-direction: column; align-items: center; gap: .1vh; justify-content: flex-end; flex: 0 0 auto; min-height: 2.6em; text-align: center; }
+.beamer .vote-choice { font-size: clamp(.8rem, 1.1vw, 1.5rem); color: var(--text); line-height: 1.05; }
+.beamer .vote-choice.waiting { color: var(--text-faint); }
+.beamer .vote-weight { font-family: 'Orbitron', sans-serif; font-size: clamp(1.1rem, 1.9vw, 2.6rem); color: var(--gold); line-height: 1; }
+.beamer .vote-influence { flex: 0 0 auto; font-size: clamp(.75rem, 1vw, 1.35rem); color: var(--text-dim); }
+.beamer .vote-card .fac-portrait { flex: 1 1 auto; }
+
+/* Faction portrait with name bar (a quarter up from the bottom, in the faction colour). */
+.fac-portrait { position: relative; width: 100%; overflow: hidden; border-radius: 8px; }
+.fac-portrait-img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
+.fac-portrait.noimg { display: flex; align-items: flex-start; justify-content: center; padding-top: 8%; background: #0d1426; }
+.fac-portrait-bar { position: absolute; left: 0; right: 0; bottom: 22%; background: var(--fac-color, #444); padding: .15em .4em; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.fac-portrait-name { display: block; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fac-portrait-spk { display: block; margin-top: .1em; line-height: 1; }
+.beamer .fac-portrait-name { font-size: clamp(.8rem, 1.2vw, 1.7rem); }
+
+/* ===================================================================
+   Setup — player card header (wraps so names stay readable on phones)
+   =================================================================== */
+.setup-pcard-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.setup-pcard-id { display: flex; align-items: center; gap: .5rem; flex: 1 1 12rem; min-width: 0; }
+.setup-pcard-id .seat-no { font-family: 'Orbitron', sans-serif; color: var(--gold); min-width: 1.4em; text-align: center; flex: 0 0 auto; }
+.setup-pcard-name { flex: 1 1 auto; min-width: 0; }
+.setup-pcard-name input { width: 100%; }
+.setup-pcard-ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+
+/* Agenda influence-entry rows */
+.inf-row { flex-wrap: wrap; }
+.inf-row .inf-name { flex: 1 1 6rem; min-width: 0; }
+.inf-step { flex-wrap: wrap; }
+
+/* ===================================================================
+   Modal overlay (match statistics / log)
+   =================================================================== */
+.modal-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(4, 8, 18, .66); display: flex; align-items: flex-start; justify-content: center; padding: 4vh 1rem; overflow: auto; }
+.modal { width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--shadow); padding: 1rem; }
+.modal-head { display: flex; align-items: center; gap: .5rem; }
+.modal-body { overflow: auto; min-height: 0; }
+.stats-modal .stat-block { margin: .6rem 0; }
+.stats-modal .stat-block h4 { margin: .2rem 0 .4rem; color: var(--text-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
+.stats-modal .stat-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem .25rem; border-bottom: 1px solid var(--panel-border); border-left: 3px solid var(--player-color, transparent); padding-left: .5rem; }
+.stats-modal .stat-player { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.stats-modal .stat-val { font-family: 'Orbitron', sans-serif; color: var(--gold); white-space: nowrap; }
+.stats-modal .stat-big { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; padding: .3rem .25rem; }
+.stats-modal .stat-big .stat-val { font-size: 1.6rem; }
+.stats-modal .stat-label { color: var(--text-dim); }
+.log-list { display: flex; flex-direction: column; }
+.log-row { display: flex; gap: .5rem; align-items: baseline; font-size: .82rem; padding: .2rem 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.log-time { color: var(--text-faint); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.log-actor { color: var(--gold); font-weight: 600; flex: 0 0 auto; }
+.log-desc { color: var(--text); min-width: 0; }
+
+/* iPad / tablet: never scroll sideways — the control view must fit the viewport width. */
+html, body { max-width: 100%; overflow-x: hidden; }
+.container { width: 100%; box-sizing: border-box; }
 
 /* ===================================================================
    Blazor essentials (loading + error)

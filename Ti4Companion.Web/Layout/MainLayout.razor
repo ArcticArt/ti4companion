@@ -19,6 +19,7 @@
         {
             <span class="codechip ab-code" @onclick="CopyCode" title='@Loc["common.copy"]'>@s.JoinCode</span>
             <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(inviteCopied ? "✓" : "🔗")</button>
+            <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'>📊</button>
             @if (codeCopied || inviteCopied) { <span class="chip chip-done">@Loc["common.copied"]</span> }
         }
         <div class="spacer"></div>
@@ -43,7 +44,15 @@
     @Body
 </div>
 
+@if (showStats && Store.Session is not null)
+{
+    <MatchStatsModal OnClose="CloseStats" />
+}
+
 @code {
+    private bool showStats;
+    private void CloseStats() { showStats = false; StateHasChanged(); }
+
     protected override void OnInitialized()
     {
         Loc.OnChange += Changed;

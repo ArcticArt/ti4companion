@@ -19,6 +19,7 @@ public static class SessionEndpoints
         // ---- Session lifecycle ----
         g.MapPost("/", CreateSession);
         g.MapGet("/{code}", GetByCode);
+        g.MapGet("/{code}/log", GetLog);                          // match log (read-only; client shows it host-side)
         g.MapPatch("/{id:guid}", UpdateSession);
         g.MapDelete("/{id:guid}", DeleteSession);
         g.MapPost("/{id:guid}/display", SetDisplayMode);          // wall-display view switch (any player)
@@ -41,6 +42,7 @@ public static class SessionEndpoints
         g.MapPatch("/{id:guid}/players/{playerId:guid}", UpdatePlayer);
         g.MapDelete("/{id:guid}/players/{playerId:guid}", RemovePlayer);
         g.MapPost("/{id:guid}/players/{playerId:guid}/pass", SetPassed);
+        g.MapPost("/{id:guid}/players/{playerId:guid}/influence", SetInfluence); // agenda-phase influence (self/host)
 
         // ---- Strategy cards (per player) ----
         g.MapPost("/{id:guid}/players/{playerId:guid}/strategy-cards", AssignStrategyCard);
@@ -59,10 +61,11 @@ public static class SessionEndpoints
         g.MapDelete("/{id:guid}/players/{playerId:guid}/technologies/{techId}", RemoveTechnology);
 
         // ---- Agenda phase ----
-        g.MapPost("/{id:guid}/agenda", SetAgenda);
-        g.MapPost("/{id:guid}/agenda/vote", CastVote);
-        g.MapPost("/{id:guid}/agenda/lock", LockVote);   // secret voting: commit a vote (host)
-        g.MapPost("/{id:guid}/agenda/reset", ResetVotes); // clear all votes (host)
+        g.MapPost("/{id:guid}/agenda", SetAgenda);              // reveal an agenda / clear it (deducts spent influence)
+        g.MapPost("/{id:guid}/agenda/start", StartVoting);      // host opens the vote (open or face-down)
+        g.MapPost("/{id:guid}/agenda/cancel", CancelVoting);    // host aborts → back to influence entry
+        g.MapPost("/{id:guid}/agenda/reveal", RevealVotes);     // host flips a face-down vote face-up
+        g.MapPost("/{id:guid}/agenda/lock", LockVote);          // commit a vote (open or hidden); counts only once locked
 
         return app;
     }
@@ -97,6 +100,7 @@ public static class SessionEndpoints
         session.Players.Add(host);
 
         db.Sessions.Add(session);
+        Log(db, session, SessionLogKind.PlayerJoin, host.Id, host.Id, detail: "host");
         await db.SaveChangesAsync(ct);
 
         var overrides = await GetFactionOverridesAsync(db, ct);
@@ -112,6 +116,18 @@ public static class SessionEndpoints
         return Results.Ok(session.ToDto(overrides));
     }
 
+    // The match log (chronological). Read-only like GetByCode; the client only surfaces it to the host.
+    private static async Task<IResult> GetLog(string code, Ti4DbContext db, CancellationToken ct)
+    {
+        var session = await db.Sessions.AsNoTracking().FirstOrDefaultAsync(s => s.JoinCode == SessionHub.Normalize(code), ct);
+        if (session is null) return Results.NotFound();
+        // SQLite can't ORDER BY a DateTimeOffset in SQL, so sort in memory (as the cleanup worker does).
+        var rows = await db.SessionLog.AsNoTracking()
+            .Where(l => l.SessionId == session.Id)
+            .ToListAsync(ct);
+        return Results.Ok(rows.OrderBy(l => l.TimestampUtc).Select(l => l.ToDto()).ToList());
+    }
+
     private static async Task<IResult> UpdateSession(Guid id, UpdateSessionRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
@@ -125,7 +141,11 @@ public static class SessionEndpoints
         if (req.AllowEditAllPlayers is not null) session.AllowEditAllPlayers = req.AllowEditAllPlayers.Value;
         if (req.Phase is not null) session.Phase = req.Phase.Value;
         if (req.CurrentRound is > 0) session.CurrentRound = req.CurrentRound.Value;
-        if (req.SpeakerPlayerId is not null) session.SpeakerPlayerId = req.SpeakerPlayerId;
+        if (req.SpeakerPlayerId is not null && req.SpeakerPlayerId != session.SpeakerPlayerId)
+        {
+            session.SpeakerPlayerId = req.SpeakerPlayerId;
+            Log(db, session, http, SessionLogKind.SpeakerSet, target: req.SpeakerPlayerId);
+        }
         if (req.AgendaVotesHidden is not null) session.AgendaVotesHidden = req.AgendaVotesHidden.Value;
 
         return await SaveAndReturn(db, hub, session, ct);
@@ -169,6 +189,9 @@ public static class SessionEndpoints
         // The 2 starting public objectives are chosen physically and recorded by the host during
         // setup (see ObjectivesTab) — they are no longer auto-revealed here.
         session.Phase = GamePhase.Strategy;
+        // Timeline markers for the statistics view: the match (and round 1) begin now.
+        Log(db, session, SessionLogKind.RoundChange, GetCaller(session, http)?.Id, round: session.CurrentRound);
+        Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Strategy, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -210,6 +233,8 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Action;
         session.ActiveStrategyCardId = null;
         session.ActivePlayerId = TurnService.FirstActive(session, overrides);
+        Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Action, round: session.CurrentRound);
+        if (session.ActivePlayerId is Guid first) Log(db, session, SessionLogKind.TurnChange, GetCaller(session, http)?.Id, target: first);
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
@@ -224,6 +249,7 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Status;
         session.ActivePlayerId = null;
         session.ActiveStrategyCardId = null;
+        Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Status, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -233,8 +259,13 @@ public static class SessionEndpoints
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
         session.Phase = GamePhase.Agenda;
+        // Fresh agenda phase: clear the agenda/votes and reset every player's entered influence.
         session.CurrentAgendaId = null;
+        session.VotingStarted = false;
+        session.AgendaVotesHidden = false;
         session.AgendaVotes.Clear();
+        foreach (var p in session.Players) p.Influence = 0;
+        Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Agenda, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -249,13 +280,18 @@ public static class SessionEndpoints
         session.ActivePlayerId = null;
         session.ActiveStrategyCardId = null;
         session.CurrentAgendaId = null;
+        session.VotingStarted = false;
+        session.AgendaVotesHidden = false;
         session.AgendaVotes.Clear();
         foreach (var p in session.Players)
         {
             p.HasPassed = false;
+            p.Influence = 0;
             p.StrategyCards.Clear();
         }
 
+        Log(db, session, SessionLogKind.RoundChange, GetCaller(session, http)?.Id, round: session.CurrentRound);
+        Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Strategy, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -278,6 +314,7 @@ public static class SessionEndpoints
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden(); // jumping the active player is a host takeover
         session.ActivePlayerId = req.PlayerId;
+        if (req.PlayerId is Guid p) Log(db, session, http, SessionLogKind.TurnChange, target: p);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -289,6 +326,7 @@ public static class SessionEndpoints
         var overrides = await GetFactionOverridesAsync(db, ct);
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
+        if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
@@ -300,6 +338,7 @@ public static class SessionEndpoints
         var overrides = await GetFactionOverridesAsync(db, ct);
         session.ActivePlayerId = TurnService.PreviousActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
+        if (session.ActivePlayerId is Guid prev) Log(db, session, http, SessionLogKind.TurnChange, target: prev);
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
@@ -333,6 +372,7 @@ public static class SessionEndpoints
                 DeviceToken = deviceToken,
             };
             session.Players.Add(existing);
+            Log(db, session, SessionLogKind.PlayerJoin, existing.Id, existing.Id);
         }
 
         session.LastActivityUtc = DateTimeOffset.UtcNow;
@@ -399,9 +439,11 @@ public static class SessionEndpoints
                 return Results.BadRequest(new { error = "Play all strategy actions before passing." });
 
             player.HasPassed = true;
+            Log(db, session, http, SessionLogKind.Pass, target: playerId);
             var overrides = await GetFactionOverridesAsync(db, ct);
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
+            if (session.ActivePlayerId is Guid nxt) Log(db, session, http, SessionLogKind.TurnChange, target: nxt);
             return await SaveAndReturn(db, hub, session, ct, overrides);
         }
 
@@ -435,6 +477,7 @@ public static class SessionEndpoints
         foreach (var other in session.Players) other.StrategyCards.RemoveAll(c => c.StrategyCardId == req.StrategyCardId);
 
         player.StrategyCards.Add(new PlayerStrategyCard { SessionId = session.Id, PlayerId = player.Id, StrategyCardId = req.StrategyCardId });
+        Log(db, session, http, SessionLogKind.StrategyPick, target: player.Id, detail: req.StrategyCardId.ToString());
 
         // Accumulated trade goods stay on the card until the action phase begins (see StartActionPhase),
         // so picking and then returning a card no longer discards them.
@@ -448,6 +491,7 @@ public static class SessionEndpoints
         if (session is null || player is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();
         player.StrategyCards.RemoveAll(c => c.StrategyCardId == cardId);
+        Log(db, session, http, SessionLogKind.StrategyReturn, target: playerId, detail: cardId.ToString());
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -459,6 +503,7 @@ public static class SessionEndpoints
         if (session is null || player is null || card is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, playerId)) return Forbidden(); // play your own action; host may play for others
         card.IsExhausted = req.Used;
+        if (req.Used) Log(db, session, http, SessionLogKind.StrategyAction, target: playerId, detail: cardId.ToString());
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -472,7 +517,10 @@ public static class SessionEndpoints
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
         if (!session.Objectives.Any(o => o.ObjectiveId == req.ObjectiveId))
+        {
             session.Objectives.Add(new SessionObjective { SessionId = session.Id, ObjectiveId = req.ObjectiveId });
+            Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: req.ObjectiveId);
+        }
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -490,6 +538,7 @@ public static class SessionEndpoints
             CustomName = req.Name.Trim(),
             CustomPoints = Math.Clamp(req.Points, 0, 10),
         });
+        Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: req.Name.Trim());
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -503,13 +552,17 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> ScoreObjective(Guid id, Guid sessionObjectiveId, ScoreObjectiveRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    private static async Task<IResult> ScoreObjective(Guid id, Guid sessionObjectiveId, ScoreObjectiveRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
         if (session is null || obj is null) return Results.NotFound();
         if (!obj.Scores.Any(s => s.PlayerId == req.PlayerId))
+        {
             obj.Scores.Add(new ObjectiveScore { SessionObjectiveId = obj.Id, PlayerId = req.PlayerId });
+            Log(db, session, http, SessionLogKind.ObjectiveScore, target: req.PlayerId,
+                detail: string.IsNullOrEmpty(obj.ObjectiveId) ? obj.CustomName : obj.ObjectiveId);
+        }
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -533,7 +586,10 @@ public static class SessionEndpoints
         if (session is null || player is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();
         if (!player.Technologies.Any(t => t.TechnologyId == req.TechnologyId))
+        {
             player.Technologies.Add(new PlayerTechnology { SessionId = session.Id, PlayerId = player.Id, TechnologyId = req.TechnologyId });
+            Log(db, session, http, SessionLogKind.TechAdd, target: playerId, detail: req.TechnologyId);
+        }
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -544,6 +600,7 @@ public static class SessionEndpoints
         if (session is null || player is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();
         player.Technologies.RemoveAll(t => t.TechnologyId == techId);
+        Log(db, session, http, SessionLogKind.TechRemove, target: playerId, detail: techId);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -551,40 +608,73 @@ public static class SessionEndpoints
     // Agenda phase
     // -----------------------------------------------------------------------
 
-    private static async Task<IResult> SetAgenda(Guid id, SetAgendaRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    // Reveal an agenda (or clear it with a null id for "reveal a new agenda"). Host only. Leaving an
+    // agenda that was voted on first spends each player's locked votes from their entered influence
+    // (min 0), then resets to the influence-entry stage for the next agenda.
+    private static async Task<IResult> SetAgenda(Guid id, SetAgendaRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
-        session.CurrentAgendaId = string.IsNullOrWhiteSpace(req.AgendaId) ? null : req.AgendaId;
-        session.AgendaVotes.Clear(); // a freshly revealed agenda starts a new vote
-        return await SaveAndReturn(db, hub, session, ct);
-    }
-
-    private static async Task<IResult> CastVote(Guid id, CastVoteRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
-    {
-        var session = await LoadGraphAsync(db, id, ct);
-        if (session is null) return Results.NotFound();
-        if (!CallerCanActFor(session, http, req.PlayerId)) return Forbidden(); // cast your own vote; host may cast for others
-        var vote = session.AgendaVotes.FirstOrDefault(v => v.PlayerId == req.PlayerId);
-        if (vote?.Locked == true) return Forbidden(); // committed secret vote — host must reset to change it
-        if (vote is null)
+        if (!CallerIsHost(session, http)) return Forbidden();
+        foreach (var v in session.AgendaVotes.Where(v => v.Votes > 0))
         {
-            vote = new AgendaVote { SessionId = session.Id, PlayerId = req.PlayerId };
-            session.AgendaVotes.Add(vote);
+            var p = session.Players.FirstOrDefault(pl => pl.Id == v.PlayerId);
+            if (p is not null) p.Influence = Math.Max(0, p.Influence - v.Votes);
         }
-        vote.Outcome = req.Outcome;
-        vote.Votes = Math.Max(0, req.Votes);
-        // For elect agendas the choice carries the candidate; an abstention clears both weight and choice.
-        vote.Choice = req.Outcome == VoteOutcome.Abstain ? null : (string.IsNullOrWhiteSpace(req.Choice) ? null : req.Choice.Trim());
+        session.CurrentAgendaId = string.IsNullOrWhiteSpace(req.AgendaId) ? null : req.AgendaId;
+        session.AgendaVotes.Clear();
+        session.VotingStarted = false;     // back to influence entry until the host starts the vote
+        session.AgendaVotesHidden = false;
+        Log(db, session, http, SessionLogKind.AgendaReveal, detail: session.CurrentAgendaId ?? "");
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    // Secret voting: commit a vote (set + lock) atomically. The choice reaches the server only here,
-    // on lock — so nobody sees it beforehand. Self or host; a locked vote can't be changed until reset.
+    // Host opens the vote on the revealed agenda (open or face-down). Influence then locks.
+    private static async Task<IResult> StartVoting(Guid id, StartVotingRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (session.CurrentAgendaId is null) return Results.BadRequest(new { error = "Reveal an agenda first." });
+        session.VotingStarted = true;
+        session.AgendaVotesHidden = req.Hidden;
+        session.AgendaVotes.Clear();
+        Log(db, session, http, SessionLogKind.AgendaStartVote, detail: req.Hidden ? "hidden" : "open");
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Host aborts the vote → back to influence entry (no influence is spent). Host only.
+    private static async Task<IResult> CancelVoting(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        session.VotingStarted = false;
+        session.AgendaVotesHidden = false;
+        session.AgendaVotes.Clear();
+        Log(db, session, http, SessionLogKind.AgendaCancel);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Host flips a face-down vote face-up (reveal). Host only.
+    private static async Task<IResult> RevealVotes(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        session.AgendaVotesHidden = false;
+        Log(db, session, http, SessionLogKind.AgendaReveal2);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Commit a vote (set + lock) atomically — used for both open and face-down voting. The choice
+    // reaches the server only here, on lock, so a face-down vote can't be peeked beforehand. Self or
+    // host; a locked vote can't change until the host cancels the vote. A vote counts only once locked.
     private static async Task<IResult> LockVote(Guid id, LockVoteRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
+        if (!session.VotingStarted) return Results.BadRequest(new { error = "Voting has not started." });
         if (!CallerCanActFor(session, http, req.PlayerId)) return Forbidden();
         var vote = session.AgendaVotes.FirstOrDefault(v => v.PlayerId == req.PlayerId);
         if (vote?.Locked == true) return Forbidden();
@@ -597,16 +687,22 @@ public static class SessionEndpoints
         vote.Votes = Math.Max(0, req.Votes);
         vote.Choice = req.Outcome == VoteOutcome.Abstain ? null : (string.IsNullOrWhiteSpace(req.Choice) ? null : req.Choice.Trim());
         vote.Locked = true;
+        // Don't record the choice of a face-down vote (the log is host-only, but reveal is the host's call).
+        Log(db, session, http, SessionLogKind.VoteLock, target: req.PlayerId,
+            detail: session.AgendaVotesHidden ? null : $"{vote.Outcome}:{vote.Votes}:{vote.Choice}");
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    // Clear all votes for the current agenda (host only) — e.g. to undo a mistake during secret voting.
-    private static async Task<IResult> ResetVotes(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    // A player's available influence for the agenda phase. Self or host; only before voting starts.
+    private static async Task<IResult> SetInfluence(Guid id, Guid playerId, SetInfluenceRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
-        if (session is null) return Results.NotFound();
-        if (!CallerIsHost(session, http)) return Forbidden();
-        session.AgendaVotes.Clear();
+        var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
+        if (session is null || player is null) return Results.NotFound();
+        if (!CallerCanActFor(session, http, playerId)) return Forbidden();
+        if (session.VotingStarted) return Results.BadRequest(new { error = "Voting already started." });
+        player.Influence = Math.Clamp(req.Influence, 0, 999);
+        Log(db, session, http, SessionLogKind.InfluenceSet, target: playerId, detail: player.Influence.ToString());
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -641,6 +737,21 @@ public static class SessionEndpoints
 
     private static IResult Forbidden() =>
         Results.Json(new { error = "Not allowed — host only." }, statusCode: StatusCodes.Status403Forbidden);
+
+    // -----------------------------------------------------------------------
+    // Match log — append a structured event; persisted by the next SaveChangesAsync (SaveAndReturn).
+    // -----------------------------------------------------------------------
+    private static void Log(Ti4DbContext db, GameSession s, SessionLogKind kind, Guid? actor,
+        Guid? target = null, GamePhase? phase = null, int? round = null, string? detail = null)
+        => db.SessionLog.Add(new SessionLogEntry
+        {
+            SessionId = s.Id, Kind = kind, ActorPlayerId = actor, TargetPlayerId = target,
+            Phase = phase, Round = round, Detail = detail,
+        });
+
+    private static void Log(Ti4DbContext db, GameSession s, HttpContext http, SessionLogKind kind,
+        Guid? target = null, GamePhase? phase = null, int? round = null, string? detail = null)
+        => Log(db, s, kind, GetCaller(s, http)?.Id, target, phase, round, detail);
 
     private static IQueryable<GameSession> WithGraph(this Ti4DbContext db) =>
         db.Sessions

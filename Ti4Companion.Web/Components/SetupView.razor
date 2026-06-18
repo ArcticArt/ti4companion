@@ -19,36 +19,40 @@
             var editable = Store.CanEdit(p.Id);
             var isSpeaker = s.SpeakerPlayerId == p.Id;
             <div class="player-card" style="--player-color:@p.ColorHex;flex-direction:column;align-items:stretch;gap:.5rem;">
-                <div style="display:flex;align-items:center;gap:.6rem;">
-                    @if (host)
-                    {
-                        <span style="font-family:'Orbitron';color:var(--gold);min-width:1.4em;text-align:center;">@(idx + 1)</span>
-                        <span class="seat-btns">
-                            <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveUp"]" disabled="@(idx == 0)" @onclick="() => MoveSeat(idx, -1)">▲</button>
-                            <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveDown"]" disabled="@(idx == ordered.Count - 1)" @onclick="() => MoveSeat(idx, 1)">▼</button>
-                        </span>
-                    }
-                    <FactionBadge Faction="fac" Ring="@p.ColorHex" />
-                    <div style="flex:1;">
-                        @if (editable)
+                <div class="setup-pcard-head">
+                    <div class="setup-pcard-id">
+                        @if (host)
                         {
-                            <input type="text" value="@p.Name" @onchange="e => SetName(p.Id, e)" />
+                            <span class="seat-no">@(idx + 1)</span>
+                            <span class="seat-btns">
+                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveUp"]" disabled="@(idx == 0)" @onclick="() => MoveSeat(idx, -1)">▲</button>
+                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveDown"]" disabled="@(idx == ordered.Count - 1)" @onclick="() => MoveSeat(idx, 1)">▼</button>
+                            </span>
                         }
-                        else
+                        <FactionBadge Faction="fac" Ring="@p.ColorHex" />
+                        <div class="setup-pcard-name">
+                            @if (editable)
+                            {
+                                <input type="text" value="@p.Name" @onchange="e => SetName(p.Id, e)" />
+                            }
+                            else
+                            {
+                                <strong>@p.Name</strong>
+                            }
+                        </div>
+                    </div>
+                    <div class="setup-pcard-ctrls">
+                        @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
+                        @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
+                        <button class="btn btn-sm @(isSpeaker ? "btn-gold" : "")" disabled="@(!host)" @onclick="() => SetSpeaker(p.Id)" title='@Loc["setup.makeSpeaker"]'>
+                            @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> } else { @Loc["setup.makeSpeaker"] }
+                        </button>
+                        <span class="chip @(p.IsReady ? "chip-done" : "")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
+                        @if (host && p.Id != Store.MyPlayerId)
                         {
-                            <strong>@p.Name</strong>
+                            <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@Loc["players.remove"]">✕</button>
                         }
                     </div>
-                    @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
-                    @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
-                    <button class="btn btn-sm @(isSpeaker ? "btn-gold" : "")" disabled="@(!host)" @onclick="() => SetSpeaker(p.Id)">
-                        <SpeakerIcon SizeCss="1.1em" /> @(isSpeaker ? Loc["setup.speaker"] : Loc["setup.makeSpeaker"])
-                    </button>
-                    <span class="chip @(p.IsReady ? "chip-done" : "")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
-                    @if (host && p.Id != Store.MyPlayerId)
-                    {
-                        <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@Loc["players.remove"]">✕</button>
-                    }
                 </div>
 
                 @if (editable)

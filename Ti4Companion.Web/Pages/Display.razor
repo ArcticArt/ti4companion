@@ -30,16 +30,16 @@ else
 
         @if (isAgenda)
         {
-            @* Agenda phase: show ONLY the agenda and the votes — nothing else. *@
+            @* Agenda phase: the agenda + a portrait per player with their votes above and influence below. *@
+            var elect = agenda is null ? ElectType.ForAgainst : AgendaDisplay.ElectKind(agenda);
             <div class="agenda-stage">
                 @if (agenda is null)
                 {
                     <div class="agenda-headline">@Loc["agenda.title"]</div>
-                    <div class="agenda-kind">@Loc["agenda.none"]</div>
+                    <div class="agenda-kind">@Loc["agenda.waitingForHost"]</div>
                 }
                 else
                 {
-                    var elect = AgendaDisplay.ElectKind(agenda);
                     <div>
                         <span class="agenda-kind chip @(agenda.Type == AgendaType.Law ? "chip-active" : "")">@Loc[agenda.Type == AgendaType.Law ? "agenda.law" : "agenda.directive"]</span>
                     </div>
@@ -52,8 +52,8 @@ else
                     }
                     else if (elect == ElectType.ForAgainst)
                     {
-                        var forVotes = s.AgendaVotes.Where(v => v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
-                        var againstVotes = s.AgendaVotes.Where(v => v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+                        var forVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
+                        var againstVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
                         <div class="tally-row">
                             <span class="tally @(forVotes >= againstVotes && forVotes > 0 ? "lead" : "")" style="color:#8fe0bd;">@Loc["agenda.for"]: @forVotes</span>
                             <span class="tally @(againstVotes > forVotes ? "lead" : "")" style="color:#f1a3ae;">@Loc["agenda.against"]: @againstVotes</span>
@@ -61,8 +61,8 @@ else
                     }
                     else
                     {
-                        @* Elect agendas: tally votes per chosen candidate, leader highlighted. *@
-                        var tally = s.AgendaVotes.Where(v => !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
+                        @* Elect agendas: tally locked votes per chosen candidate, leader highlighted. *@
+                        var tally = s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
                             .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
                             .OrderByDescending(t => t.Votes).ToList();
                         var lead = tally.FirstOrDefault().Votes;
@@ -75,33 +75,43 @@ else
                             @if (tally.Count == 0) { <span class="agenda-kind">@Loc["agenda.noVotes"]</span> }
                         </div>
                     }
+                }
 
-                    <div class="votes-grid">
-                        @foreach (var p in Store.AgendaOrder())
-                        {
-                            var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
-                            var isSpeaker = s.SpeakerPlayerId == p.Id;
-                            <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex">
-                                <FactionBadge Faction="Store.Faction(p.FactionId)" SizeCss="@badge" Ring="@p.ColorHex" />
-                                <span class="vote-name">@p.Name @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> }</span>
-                                @if (s.AgendaVotesHidden)
+                <div class="votes-grid">
+                    @foreach (var p in Store.AgendaOrder())
+                    {
+                        var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
+                        var isSpeaker = s.SpeakerPlayerId == p.Id;
+                        var locked = vote?.Locked == true;
+                        <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex">
+                            <div class="vote-top">
+                                @if (agenda is null)
                                 {
-                                    var voted = vote is not null && vote.Outcome != VoteOutcome.Abstain;
-                                    <span class="vote-choice">@(voted ? "✓ " + Loc["agenda.voted"] : Loc["agenda.waiting"])</span>
+                                    @* Influence-entry stage: no votes yet. *@
                                 }
-                                else if (vote is null || vote.Outcome == VoteOutcome.Abstain)
+                                else if (s.AgendaVotesHidden)
+                                {
+                                    <span class="vote-choice">@(locked ? "✓ " + Loc["agenda.voted"] : Loc["agenda.waiting"])</span>
+                                }
+                                else if (!locked)
+                                {
+                                    <span class="vote-choice waiting">@Loc["agenda.waiting"]</span>
+                                }
+                                else if (vote!.Outcome == VoteOutcome.Abstain)
                                 {
                                     <span class="vote-choice">@Loc["agenda.abstain"]</span>
                                 }
                                 else
                                 {
+                                    <span class="vote-weight">@vote.Votes @Loc["agenda.votes"]</span>
                                     <span class="vote-choice">@VoteLabel(agenda, elect, vote)</span>
-                                    <span class="vote-weight">@vote.Votes</span>
                                 }
                             </div>
-                        }
-                    </div>
-                }
+                            <FactionPortrait Player="p" Faction="Store.Faction(p.FactionId)" Speaker="isSpeaker" />
+                            <span class="vote-influence">@Loc["agenda.influence"]: @p.Influence</span>
+                        </div>
+                    }
+                </div>
             </div>
         }
         else

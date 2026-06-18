@@ -164,6 +164,10 @@ public class GameSession
     public DisplayMode DisplayMode { get; set; } = DisplayMode.Objectives;
     /// <summary>When true, agenda votes are cast face-down and only revealed when the host flips them.</summary>
     public bool AgendaVotesHidden { get; set; }
+    /// <summary>Agenda phase: false while players enter their available influence and the host picks an
+    /// agenda; true once the host has started the vote (influence then locks). Cleared on cancel / new
+    /// agenda / next round.</summary>
+    public bool VotingStarted { get; set; }
 
     public List<Player> Players { get; set; } = new();
     public List<SessionObjective> Objectives { get; set; } = new();
@@ -185,6 +189,10 @@ public class Player
     public bool IsReady { get; set; }
     /// <summary>The session creator. Stable regardless of seat order; grants host privileges.</summary>
     public bool IsHost { get; set; }
+    /// <summary>Available influence the player entered for the agenda phase. Not a vote cap (action
+    /// cards/abilities can exceed it); used for display and auto-deducted when the next agenda is
+    /// revealed. Reset at the start of each agenda phase / round.</summary>
+    public int Influence { get; set; }
     public string? DeviceToken { get; set; }
 
     public List<PlayerStrategyCard> StrategyCards { get; set; } = new();
@@ -258,4 +266,30 @@ public class AgendaVote
     /// <summary>Secret voting: once locked, this vote can't be opened or changed by anyone (not even
     /// the host) until the host resets all votes — so passing the tablet around doesn't leak choices.</summary>
     public bool Locked { get; set; }
+}
+
+/// <summary>
+/// One match-log event. Structured (not pre-rendered prose) so the client can localize it; the
+/// statistics view diffs the timeline kinds (<see cref="SessionLogKind.PhaseChange"/> /
+/// <see cref="SessionLogKind.RoundChange"/> / <see cref="SessionLogKind.TurnChange"/>) to derive
+/// durations. Kept out of the session graph (<c>WithGraph()</c>) and loaded only for the log view, so
+/// it never bloats the per-mutation round-trips. Cascade-deleted with its session.
+/// </summary>
+public class SessionLogEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionId { get; set; }
+    public DateTimeOffset TimestampUtc { get; set; } = DateTimeOffset.UtcNow;
+    public SessionLogKind Kind { get; set; }
+    /// <summary>Player who performed the action (resolved from the caller's device token); null for
+    /// server/system events or spectator-triggered ones.</summary>
+    public Guid? ActorPlayerId { get; set; }
+    /// <summary>Player the action targeted (e.g. the new active player, the scorer, the voter).</summary>
+    public Guid? TargetPlayerId { get; set; }
+    /// <summary>Phase context (set for <see cref="SessionLogKind.PhaseChange"/>).</summary>
+    public GamePhase? Phase { get; set; }
+    /// <summary>Round context.</summary>
+    public int? Round { get; set; }
+    /// <summary>Free-form detail: an id (card/objective/agenda/tech) or a small encoded value.</summary>
+    public string? Detail { get; set; }
 }

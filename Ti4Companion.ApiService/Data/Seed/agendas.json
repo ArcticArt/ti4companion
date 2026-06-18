@@ -76,7 +76,7 @@
         "name":  "Galactic Crisis Pact",
         "type":  "Directive",
         "elect":  "Strategy Card",
-        "text":  "Each player may perform the secondary ability of the elected strategy card without spending a command token; command tokens placed by the ability are placed from a player\u0027s reinforcements instead.",
+        "text":  "Each player may perform the secondary ability of the elected strategy card without spending a command token; command tokens placed by the ability are placed from a player's reinforcements instead.",
         "expansion":  "ProphecyOfKings",
         "removedInPok":  false
     },
@@ -94,7 +94,7 @@
         "name":  "Ixthian Artifact",
         "type":  "Directive",
         "elect":  "",
-        "text":  "FOR: The speaker rolls 1 die. If the result is 6-10, each player may research 2 technologies. If the result is 1-5, destroy all units in Mecatol Rex\u0027s system, and each player with units in systems adjacent to Mecatol Rex\u0027s system destroys 3 of their units in each of those systems. AGAINST: No effect.",
+        "text":  "FOR: The speaker rolls 1 die. If the result is 6-10, each player may research 2 technologies. If the result is 1-5, destroy all units in Mecatol Rex's system, and each player with units in systems adjacent to Mecatol Rex's system destroys 3 of their units in each of those systems. AGAINST: No effect.",
         "expansion":  "Base",
         "removedInPok":  false
     },
@@ -265,7 +265,7 @@
         "name":  "Core Mining",
         "type":  "Law",
         "elect":  "Hazardous Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. Then, destroy 1 infantry on the planet. The resource value of this planet is increased by 2.",
+        "text":  "Attach this card to the elected planet's card. Then, destroy 1 infantry on the planet. The resource value of this planet is increased by 2.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -274,7 +274,7 @@
         "name":  "Demilitarized Zone",
         "type":  "Law",
         "elect":  "Cultural Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. Then, destroy all units on that planet. Player\u0027s units cannot land, be produced, or be placed on this planet.",
+        "text":  "Attach this card to the elected planet's card. Then, destroy all units on that planet. Player's units cannot land, be produced, or be placed on this planet.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -310,7 +310,7 @@
         "name":  "Holy Planet of Ixth",
         "type":  "Law",
         "elect":  "Cultural Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. The planet\u0027s owner gains 1 victory point. Units on this planet cannot use PRODUCTION. When a player gains control of this planet, they gain 1 victory point. When a player loses control of this planet, they lose 1 victory point.",
+        "text":  "Attach this card to the elected planet's card. The planet's owner gains 1 victory point. Units on this planet cannot use PRODUCTION. When a player gains control of this planet, they gain 1 victory point. When a player loses control of this planet, they lose 1 victory point.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -328,7 +328,7 @@
         "name":  "Imperial Arbiter",
         "type":  "Law",
         "elect":  "Player",
-        "text":  "The elected player gains this card. At the end of the strategy phase, the owner of this card may discard this card to swap 1 of their strategy cards with 1 of another player\u0027s strategy cards.",
+        "text":  "The elected player gains this card. At the end of the strategy phase, the owner of this card may discard this card to swap 1 of their strategy cards with 1 of another player's strategy cards.",
         "expansion":  "Base",
         "removedInPok":  false
     },
@@ -364,7 +364,7 @@
         "name":  "Minister of Peace",
         "type":  "Law",
         "elect":  "Player",
-        "text":  "The elected player gains this card. After a player activates a system that contains 1 or more of a different player\u0027s units, the owner of this card may discard this card; immediately end the active player\u0027s turn.",
+        "text":  "The elected player gains this card. After a player activates a system that contains 1 or more of a different player's units, the owner of this card may discard this card; immediately end the active player's turn.",
         "expansion":  "Base",
         "removedInPok":  false
     },
@@ -418,7 +418,7 @@
         "name":  "Prophecy of Ixth",
         "type":  "Law",
         "elect":  "Player",
-        "text":  "The elected player gains this card. The owner of this card applies +1 to the result of their fighter\u0027s combat rolls. When the owner of this card uses PRODUCTION, they discard this card unless they produce 2 or more fighters.",
+        "text":  "The elected player gains this card. The owner of this card applies +1 to the result of their fighter's combat rolls. When the owner of this card uses PRODUCTION, they discard this card unless they produce 2 or more fighters.",
         "expansion":  "Base",
         "removedInPok":  false
     },
@@ -446,7 +446,7 @@
         "type":  "Law",
         "elect":  "",
         "text":  "FOR: Players cannot exhaust planets to cast votes during the agenda phase; each player may cast 1 vote on each agenda instead. Players cannot cast additional votes. AGAINST: At the start of the next strategy phase, each player that voted Against exhausts all of their cultural planets.",
-        "expansion":  "ProphecyOfKings",
+        "expansion":  "Base",
         "removedInPok":  false
     },
     {
@@ -454,7 +454,7 @@
         "name":  "Research Team: Biotic",
         "type":  "Law",
         "elect":  "Industrial Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 green prerequisite.",
+        "text":  "Attach this card to the elected planet's card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 green prerequisite.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -463,7 +463,7 @@
         "name":  "Research Team: Cybernetic",
         "type":  "Law",
         "elect":  "Industrial Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 yellow prerequisite.",
+        "text":  "Attach this card to the elected planet's card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 yellow prerequisite.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -472,7 +472,7 @@
         "name":  "Research Team: Propulsion",
         "type":  "Law",
         "elect":  "Industrial Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 blue prerequisite.",
+        "text":  "Attach this card to the elected planet's card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 blue prerequisite.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -481,7 +481,7 @@
         "name":  "Research Team: Warfare",
         "type":  "Law",
         "elect":  "Hazardous Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 red prerequisite.",
+        "text":  "Attach this card to the elected planet's card. When the owner of this planet researches technology, they may exhaust this card to ignore 1 red prerequisite.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -499,7 +499,7 @@
         "name":  "Senate Sanctuary",
         "type":  "Law",
         "elect":  "Cultural Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. The influence value of this planet is increased by 2.",
+        "text":  "Attach this card to the elected planet's card. The influence value of this planet is increased by 2.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -517,7 +517,7 @@
         "name":  "Shared Research",
         "type":  "Law",
         "elect":  "",
-        "text":  "FOR: Each player\u0027s units can move through nebulae. AGAINST: Each player places a command token from their reinforcements in their home system, if able.",
+        "text":  "FOR: Each player's units can move through nebulae. AGAINST: Each player places a command token from their reinforcements in their home system, if able.",
         "expansion":  "Base",
         "removedInPok":  false
     },
@@ -526,7 +526,7 @@
         "name":  "Terraforming Initiative",
         "type":  "Law",
         "elect":  "Hazardous Planet",
-        "text":  "Attach this card to the elected planet\u0027s card. The resource and influence values of this planet are increased by 1.",
+        "text":  "Attach this card to the elected planet's card. The resource and influence values of this planet are increased by 1.",
         "expansion":  "Base",
         "removedInPok":  true
     },
@@ -535,7 +535,7 @@
         "name":  "The Crown of Emphidia",
         "type":  "Law",
         "elect":  "Player",
-        "text":  "The elected player gains this card and 1 victory point. A player gains this card and 1 victory point after they gain control of a planet in the home system of this card\u0027s owner. Then, the previous owner of this card loses 1 victory point.",
+        "text":  "The elected player gains this card and 1 victory point. A player gains this card and 1 victory point after they gain control of a planet in the home system of this card's owner. Then, the previous owner of this card loses 1 victory point.",
         "expansion":  "Base",
         "removedInPok":  true
     },

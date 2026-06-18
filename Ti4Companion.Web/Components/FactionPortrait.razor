@@ -1,0 +1,40 @@
+@inject Loc Loc
+
+@* A player's faction portrait (wwwroot/portraits/<slug>.png) with the player name overlaid on a
+   solid faction-coloured bar ~a quarter up from the bottom; the speaker token sits under the name.
+   Keleres and the Thunder's Edge factions have no portrait → fall back to the faction badge. Sizing
+   is driven by the parent (e.g. .vote-card in app.css). *@
+<div class="fac-portrait @(HasPortrait ? "" : "noimg") @(Speaker ? "is-speaker" : "")"
+     style="--player-color:@Player.ColorHex; --fac-color:@FacColor">
+    @if (HasPortrait)
+    {
+        <img class="fac-portrait-img" src="portraits/@(Player.FactionId!.ToLowerInvariant()).jpg" alt="" loading="lazy" />
+    }
+    else
+    {
+        <div class="fac-portrait-badge"><FactionBadge Faction="Faction" SizeCss="@BadgeSize" Ring="@Player.ColorHex" /></div>
+    }
+    <div class="fac-portrait-bar">
+        <span class="fac-portrait-name">@Player.Name</span>
+        @if (Speaker) { <span class="fac-portrait-spk"><SpeakerIcon SizeCss="1em" /></span> }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlayerDto Player { get; set; } = default!;
+    [Parameter] public FactionDto? Faction { get; set; }
+    [Parameter] public bool Speaker { get; set; }
+    /// <summary>Badge height for the no-portrait fallback.</summary>
+    [Parameter] public string BadgeSize { get; set; } = "clamp(2.2rem, 5vh, 5rem)";
+
+    private string FacColor => Faction?.ColorHex ?? Player.ColorHex;
+    private bool HasPortrait => Player.FactionId is not null && WithPortrait.Contains(Player.FactionId);
+
+    // Slugs with a portrait asset (base 17 + PoK 7). Keleres + the Thunder's Edge factions have none.
+    private static readonly HashSet<string> WithPortrait = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "arborec", "barony", "saar", "muaat", "hacan", "sol", "ghosts", "lizix", "mentak", "naalu",
+        "nekro", "sardakk", "jolnar", "winnu", "xxcha", "yin", "yssaril",
+        "argent", "empyrean", "mahact", "nra", "nomad", "titans", "cabal",
+    };
+}

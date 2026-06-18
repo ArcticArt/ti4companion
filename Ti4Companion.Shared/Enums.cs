@@ -114,3 +114,35 @@ public enum DisplayMode
     Secondary = 1,   // strategy-card secondary abilities for un-exhausted cards
     Tech = 2
 }
+
+/// <summary>
+/// Type of a match-log event. The log is structured (not pre-rendered prose) so the client can
+/// localize it; <see cref="SessionLogEntry"/> carries the actor/target/phase/round/detail. The
+/// timeline kinds (<see cref="PhaseChange"/>, <see cref="RoundChange"/>, <see cref="TurnChange"/>)
+/// are what the statistics view diffs to derive match/round/phase/per-player durations — keep their
+/// numeric values stable. <see cref="Generic"/> is a catch-all.
+/// </summary>
+public enum SessionLogKind
+{
+    Generic = 0,
+    PhaseChange = 1,    // Phase = new phase, Round = current round
+    RoundChange = 2,    // Round = new round
+    TurnChange = 3,     // TargetPlayerId = new active player
+    PlayerJoin = 4,
+    PlayerUpdate = 5,
+    SpeakerSet = 6,     // TargetPlayerId = new speaker
+    StrategyPick = 7,   // TargetPlayerId = owner, Detail = card number
+    StrategyReturn = 8,
+    StrategyAction = 9, // Detail = card number (played) or empty (cleared)
+    Pass = 10,          // TargetPlayerId = player who passed
+    ObjectiveReveal = 11,  // Detail = objective id or custom name
+    ObjectiveScore = 12,   // TargetPlayerId = scorer, Detail = session-objective label
+    TechAdd = 13,       // TargetPlayerId = owner, Detail = tech id
+    TechRemove = 14,
+    AgendaReveal = 15,  // Detail = agenda id (or empty when cleared)
+    AgendaStartVote = 16, // Detail = "hidden"/"open"
+    AgendaCancel = 17,
+    AgendaReveal2 = 18, // host flips hidden votes face-up
+    VoteLock = 19,      // TargetPlayerId = voter, Detail = "outcome:votes:choice"
+    InfluenceSet = 20   // TargetPlayerId = player, Detail = influence value
+}

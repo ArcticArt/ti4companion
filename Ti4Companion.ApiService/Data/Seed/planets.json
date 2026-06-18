@@ -3,7 +3,7 @@
 // planets are listed (home-system planets are never electable and have no trait); the agenda picker
 // also allows free text, so anything missing here can still be recorded.
 // Source: standard base game + Prophecy of Kings. trait = Cultural | Hazardous | Industrial | None.
-// VERIFY/EXTEND against the TI4 wiki if your group plays homebrew sets (e.g. Thunder's Edge planets).
+// TE legendary + regular planets added from the TI4 Cheat Sheet; faction home planets omitted (faction legendaries kept with homeFactionId).
 [
   { "id": "mecatol-rex", "name": "Mecatol Rex", "nameDe": "Mecatol Rex", "trait": "None", "resources": 1, "influence": 6, "legendary": false, "expansion": "Base" },
 
@@ -73,5 +73,35 @@
   { "id": "primor",      "name": "Primor",      "nameDe": "Primor",      "trait": "Cultural",   "resources": 2, "influence": 1, "legendary": true,  "expansion": "ProphecyOfKings" },
   { "id": "hopes-end",   "name": "Hope's End",  "nameDe": "Hope's End",  "trait": "Hazardous",  "resources": 3, "influence": 0, "legendary": true,  "expansion": "ProphecyOfKings" },
   { "id": "mirage",      "name": "Mirage",      "nameDe": "Mirage",      "trait": "Cultural",   "resources": 1, "influence": 2, "legendary": true,  "expansion": "ProphecyOfKings" },
-  { "id": "mallice",     "name": "Mallice",     "nameDe": "Mallice",     "trait": "Cultural",   "resources": 0, "influence": 3, "legendary": true,  "expansion": "ProphecyOfKings" }
+  { "id": "mallice",     "name": "Mallice",     "nameDe": "Mallice",     "trait": "Cultural",   "resources": 0, "influence": 3, "legendary": true,  "expansion": "ProphecyOfKings" },
+  // ---- Thunder's Edge planets (legendary + regular) from the TI4 Cheat Sheet "Planets" tab. Dual-trait planets take their first trait; faction-bound legendaries carry homeFactionId. ----
+  { "id": "cealdri", "name": "Cealdri", "nameDe": "Cealdri", "trait": "Cultural", "resources": 0, "influence": 2, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "xanhact", "name": "Xanhact", "nameDe": "Xanhact", "trait": "Hazardous", "resources": 0, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "ordinian", "name": "Ordinian", "nameDe": "Ordinian", "trait": "None", "resources": 0, "influence": 0, "homeFactionId": "bastion", "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "faunus", "name": "Faunus", "nameDe": "Faunus", "trait": "Industrial", "resources": 1, "influence": 3, "homeFactionId": null, "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "garbozia", "name": "Garbozia", "nameDe": "Garbozia", "trait": "Hazardous", "resources": 2, "influence": 1, "homeFactionId": null, "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "emelpar", "name": "Emelpar", "nameDe": "Emelpar", "trait": "Cultural", "resources": 0, "influence": 2, "homeFactionId": null, "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "tempesta", "name": "Tempesta", "nameDe": "Tempesta", "trait": "Hazardous", "resources": 1, "influence": 1, "homeFactionId": null, "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "olergodt", "name": "Olergodt", "nameDe": "Olergodt", "trait": "Cultural", "resources": 2, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "andeara", "name": "Andeara", "nameDe": "Andeara", "trait": "Industrial", "resources": 1, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "vira-pics-iii", "name": "Vira-Pics III", "nameDe": "Vira-Pics III", "trait": "Cultural", "resources": 2, "influence": 3, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "lesab", "name": "Lesab", "nameDe": "Lesab", "trait": "Hazardous", "resources": 2, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "new-terra", "name": "New Terra", "nameDe": "New Terra", "trait": "Industrial", "resources": 1, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "tinnes", "name": "Tinnes", "nameDe": "Tinnes", "trait": "Hazardous", "resources": 2, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "cresius", "name": "Cresius", "nameDe": "Cresius", "trait": "Hazardous", "resources": 0, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "lazul-rex", "name": "Lazul Rex", "nameDe": "Lazul Rex", "trait": "Industrial", "resources": 2, "influence": 2, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "tiamat", "name": "Tiamat", "nameDe": "Tiamat", "trait": "Cultural", "resources": 1, "influence": 2, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "hercalor", "name": "Hercalor", "nameDe": "Hercalor", "trait": "Industrial", "resources": 1, "influence": 0, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "kostboth", "name": "Kostboth", "nameDe": "Kostboth", "trait": "Cultural", "resources": 0, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "capha", "name": "Capha", "nameDe": "Capha", "trait": "Hazardous", "resources": 3, "influence": 0, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "bellatrix", "name": "Bellatrix", "nameDe": "Bellatrix", "trait": "Cultural", "resources": 1, "influence": 2, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "elnath", "name": "El'Nath", "nameDe": "El'Nath", "trait": "Hazardous", "resources": 2, "influence": 0, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "horizon", "name": "Horizon", "nameDe": "Horizon", "trait": "Cultural", "resources": 1, "influence": 2, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "luthen-vi", "name": "Luthen VI", "nameDe": "Luthen VI", "trait": "Hazardous", "resources": 3, "influence": 1, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "tarana", "name": "Tarana", "nameDe": "Tarana", "trait": "Industrial", "resources": 1, "influence": 2, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "industrex", "name": "Industrex", "nameDe": "Industrex", "trait": "Industrial", "resources": 2, "influence": 0, "homeFactionId": null, "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "lemox", "name": "Lemox", "nameDe": "Lemox", "trait": "Industrial", "resources": 0, "influence": 3, "homeFactionId": null, "legendary": false, "expansion": "ThundersEdge" },
+  { "id": "thunders-edge", "name": "Thunder's Edge", "nameDe": "Thunder's Edge", "trait": "None", "resources": 5, "influence": 1, "homeFactionId": null, "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "avernus", "name": "Avernus", "nameDe": "Avernus", "trait": "Hazardous", "resources": 2, "influence": 0, "homeFactionId": "muaat", "legendary": true, "expansion": "ThundersEdge" },
+  { "id": "styx", "name": "Styx", "nameDe": "Styx", "trait": "None", "resources": 4, "influence": 0, "homeFactionId": null, "legendary": true, "expansion": "ThundersEdge" }
 ]
