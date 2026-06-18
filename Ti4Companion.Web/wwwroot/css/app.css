@@ -659,6 +659,13 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 html, body { max-width: 100%; overflow-x: hidden; }
 .container { width: 100%; box-sizing: border-box; }
 
+/* Legal / IP notice footer (Asmodee/FFG community-use guidelines) */
+.legal-footer { max-width: 1180px; margin: 1.5rem auto 0; padding: .9rem 1rem 1.4rem; border-top: 1px solid var(--panel-border); color: var(--text-faint); font-size: .68rem; line-height: 1.4; }
+.legal-footer p { margin: .15rem 0; }
+.legal-footer .legal-meta { margin-top: .4rem; opacity: .85; }
+.legal-footer a { color: var(--text-dim); text-decoration: underline; }
+.legal-footer a:hover { color: var(--gold); }
+
 /* ===================================================================
    Blazor essentials (loading + error)
    =================================================================== */

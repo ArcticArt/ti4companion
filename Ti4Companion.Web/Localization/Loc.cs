@@ -220,6 +220,21 @@ public class Loc
         ["log.generic"] = ("Event", "Ereignis"),
         ["log.system"] = ("System", "System"),
 
+        // Legal / IP notice (Asmodee/FFG community-use guidelines)
+        ["legal.disclaimer"] = (
+            "Unofficial fan-made companion — not affiliated with, endorsed, or sponsored by Asmodee or Fantasy Flight Games.",
+            "Inoffizieller, von Fans erstellter Begleiter – nicht verbunden mit, unterstützt oder gesponsert von Asmodee oder Fantasy Flight Games."),
+        ["legal.copyright"] = (
+            "Twilight Imperium, Prophecy of Kings, Thunder's Edge and all related names, marks, text and artwork are © & ™ Asmodee North America, Inc. (Fantasy Flight Games). All rights reserved.",
+            "Twilight Imperium, Prophecy of Kings, Thunder's Edge sowie alle zugehörigen Namen, Marken, Texte und Grafiken sind © & ™ Asmodee North America, Inc. (Fantasy Flight Games). Alle Rechte vorbehalten."),
+        ["legal.noncommercial"] = (
+            "Non-commercial fan project — no sale, advertising, donations, or paywall.",
+            "Nicht-kommerzielles Fan-Projekt – kein Verkauf, keine Werbung, keine Spenden, keine Bezahlschranke."),
+        ["legal.credit"] = (
+            "Fan project based on Twilight Imperium 4th Edition.",
+            "Fan-Projekt auf Basis von Twilight Imperium 4. Edition."),
+        ["legal.policyLink"] = ("Asmodee/FFG IP policy", "Asmodee/FFG IP-Richtlinie"),
+
         ["players.title"] = ("Players", "Spieler"),
         ["players.faction"] = ("Faction", "Fraktion"),
         ["players.color"] = ("Color", "Farbe"),

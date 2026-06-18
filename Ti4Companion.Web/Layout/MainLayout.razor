@@ -44,6 +44,17 @@
     @Body
 </div>
 
+@* Legal / IP notice — see Asmodee/FFG "Guidelines for Community Use of Our Intellectual Property". *@
+<footer class="legal-footer">
+    <p>@Loc["legal.disclaimer"]</p>
+    <p>@Loc["legal.copyright"]</p>
+    <p>@Loc["legal.noncommercial"]</p>
+    <p class="legal-meta">
+        @Loc["legal.credit"] ·
+        <a href="https://images-cdn.fantasyflightgames.com/filer_public/51/c8/51c8035b-240e-4a12-8ab6-a7b34b97c819/ip_policy_2024_aug20.pdf" target="_blank" rel="noopener noreferrer">@Loc["legal.policyLink"]</a>
+    </p>
+</footer>
+
 @if (showStats && Store.Session is not null)
 {
     <MatchStatsModal OnClose="CloseStats" />
