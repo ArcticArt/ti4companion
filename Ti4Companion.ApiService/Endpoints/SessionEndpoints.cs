@@ -23,6 +23,25 @@ public static class SessionEndpoints
         g.MapPatch("/{id:guid}", UpdateSession);
         g.MapDelete("/{id:guid}", DeleteSession);
         g.MapPost("/{id:guid}/display", SetDisplayMode);          // wall-display view switch (any player)
+        g.MapPost("/{id:guid}/pause", PauseGame);                 // host pauses (locks all input; excluded from stats)
+        g.MapPost("/{id:guid}/resume", ResumeGame);               // host resumes
+
+        // While a session is paused, reject every mutation except resume (and reads). The host must resume first.
+        g.AddEndpointFilter(async (ctx, next) =>
+        {
+            var http = ctx.HttpContext;
+            var path = http.Request.Path.Value ?? "";
+            if (!HttpMethods.IsGet(http.Request.Method)
+                && !path.EndsWith("/resume", StringComparison.OrdinalIgnoreCase)
+                && http.Request.RouteValues.TryGetValue("id", out var idv)
+                && Guid.TryParse(idv?.ToString(), out var sid))
+            {
+                var db = http.RequestServices.GetRequiredService<Ti4DbContext>();
+                if (await db.Sessions.Where(s => s.Id == sid).Select(s => s.Paused).FirstOrDefaultAsync())
+                    return Results.Json(new { error = "Game is paused." }, statusCode: StatusCodes.Status423Locked);
+            }
+            return await next(ctx);
+        });
 
         // ---- Phase / round flow ----
         g.MapPost("/{id:guid}/phase/start", StartGame);          // Setup -> Strategy
@@ -172,6 +191,26 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
+    // Host pauses / resumes. The GamePaused→GameResumed interval is excluded from the statistics, and the
+    // endpoint filter rejects every other mutation while paused (host must resume first).
+    private static async Task<IResult> PauseGame(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (!session.Paused) { session.Paused = true; Log(db, session, http, SessionLogKind.GamePaused); }
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    private static async Task<IResult> ResumeGame(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (session.Paused) { session.Paused = false; Log(db, session, http, SessionLogKind.GameResumed); }
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
     // -----------------------------------------------------------------------
     // Phase / round flow
     // -----------------------------------------------------------------------
@@ -275,6 +314,7 @@ public static class SessionEndpoints
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
 
+        LogAgendaResult(db, session);   // capture the last agenda's result before the round resets
         session.CurrentRound += 1;
         session.Phase = GamePhase.Strategy;
         session.ActivePlayerId = null;
@@ -352,27 +392,49 @@ public static class SessionEndpoints
         if (session is null) return Results.NotFound();
 
         var deviceToken = string.IsNullOrWhiteSpace(req.DeviceToken) ? Guid.NewGuid().ToString("N") : req.DeviceToken;
+        Player target;
 
-        var existing = session.Players.FirstOrDefault(p => p.DeviceToken == deviceToken);
-        if (existing is not null)
+        if (req.ClaimPlayerId is Guid claimId)
         {
-            if (!string.IsNullOrWhiteSpace(req.Name)) existing.Name = req.Name.Trim();
-            if (req.FactionId is not null) existing.FactionId = req.FactionId;
-            if (req.ColorHex is not null) existing.ColorHex = req.ColorHex;
+            // Take over (claim) an existing seat. Any non-host player may be claimed; the host cannot.
+            var claimed = session.Players.FirstOrDefault(p => p.Id == claimId);
+            if (claimed is null) return Results.NotFound();
+            if (claimed.IsHost) return Forbidden();
+            // One device controls one seat: orphan any other player this device currently held.
+            foreach (var other in session.Players.Where(p => p.Id != claimed.Id && p.DeviceToken == deviceToken))
+                other.DeviceToken = Guid.NewGuid().ToString("N");
+            claimed.DeviceToken = deviceToken;
+            if (!string.IsNullOrWhiteSpace(req.Name)) claimed.Name = req.Name.Trim();
+            target = claimed;
         }
         else
         {
-            existing = new Player
+            var existing = session.Players.FirstOrDefault(p => p.DeviceToken == deviceToken);
+            if (existing is not null)
             {
-                SessionId = session.Id,
-                Name = string.IsNullOrWhiteSpace(req.Name) ? "Player" : req.Name.Trim(),
-                FactionId = req.FactionId,
-                ColorHex = req.ColorHex ?? "#cccccc",
-                SeatOrder = session.Players.Count == 0 ? 0 : session.Players.Max(p => p.SeatOrder) + 1,
-                DeviceToken = deviceToken,
-            };
-            session.Players.Add(existing);
-            Log(db, session, SessionLogKind.PlayerJoin, existing.Id, existing.Id);
+                if (!string.IsNullOrWhiteSpace(req.Name)) existing.Name = req.Name.Trim();
+                if (req.FactionId is not null) existing.FactionId = req.FactionId;
+                if (req.ColorHex is not null) existing.ColorHex = req.ColorHex;
+                target = existing;
+            }
+            else
+            {
+                // A brand-new seat — capped at 8 players. The join UI hides "create" at 8, so this is
+                // only a backstop (a 400 the client turns into a refresh, never a hard error).
+                if (session.Players.Count >= 8)
+                    return Results.BadRequest(new { error = "This session already has 8 players." });
+                target = new Player
+                {
+                    SessionId = session.Id,
+                    Name = string.IsNullOrWhiteSpace(req.Name) ? "Player" : req.Name.Trim(),
+                    FactionId = req.FactionId,
+                    ColorHex = req.ColorHex ?? "#cccccc",
+                    SeatOrder = session.Players.Count == 0 ? 0 : session.Players.Max(p => p.SeatOrder) + 1,
+                    DeviceToken = deviceToken,
+                };
+                session.Players.Add(target);
+                Log(db, session, SessionLogKind.PlayerJoin, target.Id, target.Id);
+            }
         }
 
         session.LastActivityUtc = DateTimeOffset.UtcNow;
@@ -380,7 +442,7 @@ public static class SessionEndpoints
         await hub.NotifySessionChanged(session.JoinCode);
 
         var overrides = await GetFactionOverridesAsync(db, ct);
-        return Results.Ok(new JoinResultDto(session.ToDto(overrides), existing.Id, deviceToken));
+        return Results.Ok(new JoinResultDto(session.ToDto(overrides), target.Id, deviceToken));
     }
 
     private static async Task<IResult> UpdatePlayer(Guid id, Guid playerId, UpdatePlayerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
@@ -621,6 +683,7 @@ public static class SessionEndpoints
             var p = session.Players.FirstOrDefault(pl => pl.Id == v.PlayerId);
             if (p is not null) p.Influence = Math.Max(0, p.Influence - v.Votes);
         }
+        LogAgendaResult(db, session);   // summarise the concluding agenda before its votes are cleared
         session.CurrentAgendaId = string.IsNullOrWhiteSpace(req.AgendaId) ? null : req.AgendaId;
         session.AgendaVotes.Clear();
         session.VotingStarted = false;     // back to influence entry until the host starts the vote
@@ -687,9 +750,8 @@ public static class SessionEndpoints
         vote.Votes = Math.Max(0, req.Votes);
         vote.Choice = req.Outcome == VoteOutcome.Abstain ? null : (string.IsNullOrWhiteSpace(req.Choice) ? null : req.Choice.Trim());
         vote.Locked = true;
-        // Don't record the choice of a face-down vote (the log is host-only, but reveal is the host's call).
-        Log(db, session, http, SessionLogKind.VoteLock, target: req.PlayerId,
-            detail: session.AgendaVotesHidden ? null : $"{vote.Outcome}:{vote.Votes}:{vote.Choice}");
+        // Individual vote inputs are intentionally NOT logged — the agenda log shows only the reveal and a
+        // single summarised result (see LogAgendaResult, emitted when the agenda concludes).
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -702,7 +764,7 @@ public static class SessionEndpoints
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();
         if (session.VotingStarted) return Results.BadRequest(new { error = "Voting already started." });
         player.Influence = Math.Clamp(req.Influence, 0, 999);
-        Log(db, session, http, SessionLogKind.InfluenceSet, target: playerId, detail: player.Influence.ToString());
+        // Per-change influence is not logged (it was pure noise) — the agenda log keeps only reveal + result.
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -752,6 +814,25 @@ public static class SessionEndpoints
     private static void Log(Ti4DbContext db, GameSession s, HttpContext http, SessionLogKind kind,
         Guid? target = null, GamePhase? phase = null, int? round = null, string? detail = null)
         => Log(db, s, kind, GetCaller(s, http)?.Id, target, phase, round, detail);
+
+    // One summary entry for a concluding agenda (no per-vote logging). Detail packs the For/Against tally
+    // and the leading elect candidate so the client can render either kind; see SessionLogKind.AgendaResult.
+    private static void LogAgendaResult(Ti4DbContext db, GameSession session)
+    {
+        if (session.CurrentAgendaId is null) return;
+        var locked = session.AgendaVotes.Where(v => v.Locked).ToList();
+        if (locked.Count == 0) return;
+        var forVotes = locked.Where(v => v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
+        var againstVotes = locked.Where(v => v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+        var tally = locked.Where(v => !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
+            .GroupBy(v => v.Choice!).Select(g => new { Key = g.Key, Votes = g.Sum(v => v.Votes) })
+            .OrderByDescending(t => t.Votes).ToList();
+        var topKey = (tally.Count > 0 ? tally[0].Key : "").Replace("|", "/");
+        var topVotes = tally.Count > 0 ? tally[0].Votes : 0;
+        var runnerUp = tally.Count > 1 ? tally[1].Votes : 0;
+        var detail = $"{session.CurrentAgendaId}|{forVotes}|{againstVotes}|{topKey}|{topVotes}|{runnerUp}";
+        Log(db, session, SessionLogKind.AgendaResult, null, detail: detail);
+    }
 
     private static IQueryable<GameSession> WithGraph(this Ti4DbContext db) =>
         db.Sessions

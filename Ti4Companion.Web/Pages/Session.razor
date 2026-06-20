@@ -15,12 +15,15 @@ else
 {
     var s = Store.Session;
     <div class="container">
-        @* Wall-display view switch (any player can flip what the beamer shows). *@
-        <div class="panel display-switch" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-            <span class="faint">@Loc["display.shows"]:</span>
-            <button class="btn btn-sm @(s.DisplayMode == DisplayMode.Objectives ? "btn-gold" : "")" @onclick="() => SetDisplay(DisplayMode.Objectives)">@Loc["display.objectives"]</button>
-            <button class="btn btn-sm @(s.DisplayMode == DisplayMode.Secondary ? "btn-gold" : "")" @onclick="() => SetDisplay(DisplayMode.Secondary)">@Loc["display.secondary"]</button>
-            <button class="btn btn-sm @(s.DisplayMode == DisplayMode.Tech ? "btn-gold" : "")" @onclick="() => SetDisplay(DisplayMode.Tech)">@Loc["display.tech"]</button>
+        @* Wall-display view switch (any player can flip what the beamer shows). A compact titled
+           control — stays ~1.5 lines on a phone. Statistics is NOT here (set only by "End game"). *@
+        <div class="display-ctl">
+            <span class="display-ctl-lbl">@Loc["display.control"]</span>
+            <div class="seg">
+                <button class="seg-btn @(s.DisplayMode == DisplayMode.Objectives ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Objectives)">@Loc["display.objectives"]</button>
+                <button class="seg-btn @(s.DisplayMode == DisplayMode.Secondary ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Secondary)">@Loc["display.secondaryShort"]</button>
+                <button class="seg-btn @(s.DisplayMode == DisplayMode.Tech ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Tech)">@Loc["display.techShort"]</button>
+            </div>
         </div>
 
         <div class="tabs" style="margin-top:.6rem;">
@@ -44,6 +47,9 @@ else
             case TabId.Techs:
                 <TechsTab />
                 break;
+            case TabId.Production:
+                <ProductionTab />
+                break;
         }
     </div>
 }
@@ -51,7 +57,7 @@ else
 @code {
     [Parameter] public string Code { get; set; } = "";
 
-    private enum TabId { Phase, Players, Objectives, Techs }
+    private enum TabId { Phase, Players, Objectives, Techs, Production }
     private static readonly TabId[] Tabs = Enum.GetValues<TabId>();
     private TabId tab = TabId.Phase;
     private bool notFound;
@@ -62,6 +68,7 @@ else
         TabId.Players => "nav.players",
         TabId.Objectives => "nav.objectives",
         TabId.Techs => "nav.techs",
+        TabId.Production => "nav.production",
         _ => "",
     };
 

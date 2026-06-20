@@ -5,7 +5,7 @@
 
 <PageTitle>Twilight Imperium Companion</PageTitle>
 
-<div class="container">
+<div class="container home-view">
     @if (view == View.Landing)
     {
         <div class="panel" style="text-align:center;">
@@ -52,24 +52,55 @@
     else
     {
         <div class="panel" style="max-width:480px;margin:0 auto;">
-            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
+            <button class="btn btn-ghost btn-sm" @onclick="BackToLanding">◂ @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.joinSession"]</h2>
             <div class="field">
                 <label>@Loc["home.joinCode"]</label>
-                <input type="text" @bind="joinCode" placeholder="ABCDE" style="text-transform:uppercase;letter-spacing:.2em;" />
+                <input type="text" @bind="joinCode" @bind:event="oninput" placeholder="ABCDE" style="text-transform:uppercase;letter-spacing:.2em;" />
             </div>
             @* Join as a player, or open this code on a wall/beamer as the shared display. *@
             <div class="row-wrap" style="gap:.4rem;margin:.2rem 0 .8rem;">
-                <button class="btn btn-sm @(joinAs == JoinMode.Player ? "btn-gold" : "")" @onclick="() => joinAs = JoinMode.Player">@Loc["home.asPlayer"]</button>
-                <button class="btn btn-sm @(joinAs == JoinMode.Display ? "btn-gold" : "")" @onclick="() => joinAs = JoinMode.Display">@Loc["home.asDisplay"]</button>
+                <button class="btn btn-sm @(joinAs == JoinMode.Player ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Player)">@Loc["home.asPlayer"]</button>
+                <button class="btn btn-sm @(joinAs == JoinMode.Display ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Display)">@Loc["home.asDisplay"]</button>
             </div>
             @if (joinAs == JoinMode.Player)
             {
-                <div class="field">
-                    <label>@Loc["home.yourName"]</label>
-                    <input type="text" @bind="joinName" placeholder="@NamePlaceholder" />
-                </div>
-                <button class="btn btn-primary btn-block" @onclick="Join" disabled="@busy">@Loc["home.join.button"]</button>
+                @if (peek is null)
+                {
+                    @* Step 1: enter a code, then load the player list to choose an identity. *@
+                    <button class="btn btn-primary btn-block" @onclick="LoadIdentities" disabled="@busy">@Loc["home.continue"]</button>
+                }
+                else
+                {
+                    @* Step 2: take over an existing player, or create a new one. *@
+                    <p class="faint" style="margin:.2rem 0 .6rem;">@Loc["join.pickIdentity"]</p>
+                    <div class="join-players">
+                        @foreach (var jp in peek.Players.OrderBy(x => x.SeatOrder))
+                        {
+                            <button class="join-player" disabled="@(jp.IsHost || busy)" @onclick="() => Claim(jp.Id)">
+                                <FactionBadge Faction="Store.Faction(jp.FactionId)" Ring="@jp.ColorHex" />
+                                <span class="jp-name">@jp.Name</span>
+                                @if (jp.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
+                                else { <span class="chip">@Loc["join.takeOver"]</span> }
+                            </button>
+                        }
+                    </div>
+                    @if (peek.Players.Count < 8)
+                    {
+                        <hr style="border-color:var(--panel-border);margin:.8rem 0;" />
+                        <div class="field">
+                            <label>@Loc["join.createNew"]</label>
+                            <input type="text" @bind="joinName" placeholder="@NamePlaceholder" />
+                        </div>
+                        <button class="btn btn-primary btn-block" @onclick="Join" disabled="@busy">@Loc["join.createNew"]</button>
+                    }
+                    else
+                    {
+                        @* Session full (8 players): no create — take over above, or open the wall display. *@
+                        <p class="faint" style="margin:.6rem 0;">@Loc["setup.maxPlayers"]</p>
+                        <button class="btn btn-gold btn-block" @onclick="OpenDisplay" disabled="@busy">@Loc["home.openDisplay"]</button>
+                    }
+                }
             }
             else
             {
@@ -107,6 +138,7 @@
     private bool busy;
     private string? error;
     private string? lastCode;
+    private SessionStateDto? peek;   // the loaded session whose players you choose an identity from
 
     private string NamePlaceholder => Loc["players.you"];
 
@@ -141,6 +173,36 @@
         finally { busy = false; }
     }
 
+    // Step 1 → 2: load the session's player list so the joiner can pick who they are.
+    private async Task LoadIdentities()
+    {
+        busy = true; error = null;
+        try
+        {
+            var code = joinCode.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(code)) return;
+            peek = await Store.Api.GetSessionAsync(code);
+            if (peek is null) error = Loc["home.notfound"];
+        }
+        finally { busy = false; }
+    }
+
+    // Take over an existing seat.
+    private async Task Claim(Guid playerId)
+    {
+        busy = true; error = null;
+        try
+        {
+            var code = joinCode.Trim().ToUpperInvariant();
+            // Empty name → keep the existing player's name (the server only renames on a non-empty name).
+            var s = await Store.JoinAsync(code, new JoinSessionRequest("", null, null, null, playerId));
+            if (s is null) { error = Loc["home.notfound"]; return; }
+            Nav.NavigateTo($"/s/{s.JoinCode}");
+        }
+        finally { busy = false; }
+    }
+
+    // Create a brand-new player (only offered while the session has < 8 players).
     private async Task Join()
     {
         busy = true; error = null;
@@ -155,6 +217,9 @@
         }
         finally { busy = false; }
     }
+
+    private void SetJoinAs(JoinMode m) { joinAs = m; peek = null; error = null; }
+    private void BackToLanding() { view = View.Landing; peek = null; error = null; }
 
     // Open the entered code on this device as the shared wall display (no player join).
     private void OpenDisplay()

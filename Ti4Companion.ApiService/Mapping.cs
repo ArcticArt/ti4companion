@@ -66,7 +66,7 @@ public static class Mapping
         return new SessionStateDto(
             s.Id, s.JoinCode, s.Name, s.DefaultLanguage, s.ActiveExpansions,
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
-            s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.RetentionHours,
+            s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.Paused, s.RetentionHours,
             s.CreatedAtUtc, s.LastActivityUtc,
             players, objectives, cardStates, votes);
     }

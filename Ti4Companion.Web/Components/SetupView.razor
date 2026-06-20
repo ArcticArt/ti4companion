@@ -59,7 +59,7 @@
                 {
                     <div>
                         <label>@Loc["setup.chooseFaction"]</label>
-                        <FactionPicker Factions="Store.ActiveFactions()" Current="@p.FactionId" OnPick="id => SetFactionId(p.Id, id)" />
+                        <FactionPicker Factions="Store.ActiveFactions()" Current="@p.FactionId" Taken="@TakenFactions(p.Id)" OnPick="id => SetFactionId(p.Id, id)" />
                     </div>
                     <div>
                         <label>@Loc["setup.chooseColor"]</label>
@@ -85,12 +85,17 @@
         }
     </div>
 
-    @if (host)
+    @* Max 8 players: hide the add control once full. *@
+    @if (host && ordered.Count < 8)
     {
         <div style="display:flex;gap:.5rem;margin-top:1rem;">
             <input type="text" @bind="newName" placeholder="@AddPlaceholder" style="max-width:240px;" />
             <button class="btn btn-primary" @onclick="Add">+ @Loc["players.add"]</button>
         </div>
+    }
+    else if (host)
+    {
+        <p class="faint" style="margin-top:1rem;">@Loc["setup.maxPlayers"]</p>
     }
 </div>
 
@@ -110,6 +115,13 @@
 
     private string? TakenBy(string hex, Guid exceptId)
         => Store.Session!.Players.FirstOrDefault(p => p.Id != exceptId && string.Equals(p.ColorHex, hex, StringComparison.OrdinalIgnoreCase))?.Name;
+
+    // Faction ids already chosen by OTHER players — removed from this player's faction picker.
+    private IReadOnlySet<string> TakenFactions(Guid exceptId)
+        => Store.Session!.Players
+            .Where(p => p.Id != exceptId && !string.IsNullOrEmpty(p.FactionId))
+            .Select(p => p.FactionId!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private Task SetName(Guid id, ChangeEventArgs e)
         => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(e.Value?.ToString(), null, null, null, null, null)));

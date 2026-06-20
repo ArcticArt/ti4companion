@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
+<div class="app-shell">
 <div class="appbar">
     @if (Store.Session is { } s)
     {
@@ -19,7 +20,9 @@
         {
             <span class="codechip ab-code" @onclick="CopyCode" title='@Loc["common.copy"]'>@s.JoinCode</span>
             <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(inviteCopied ? "✓" : "🔗")</button>
-            <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'>📊</button>
+            <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'><StatIcon /></button>
+            <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'>⏸</button>
+        <button class="btn btn-sm btn-danger ab-endgame" @onclick="EndGame" title='@Loc["turn.endGame"]'>@Loc["turn.endGame"]</button>
             @if (codeCopied || inviteCopied) { <span class="chip chip-done">@Loc["common.copied"]</span> }
         }
         <div class="spacer"></div>
@@ -34,7 +37,7 @@
     }
     else
     {
-        <a class="brand" href="/">@Loc["app.title"]<small>@Loc["app.subtitle"]</small></a>
+        <a class="brand" href="/">@Loc["app.title"]</a>
         <div class="spacer"></div>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
     }
@@ -60,10 +63,30 @@
         <a href="https://boardgamegeek.com/filepage/180049/ti4-race-and-tech-symbols-vectorized" target="_blank" rel="noopener noreferrer">TI4 Race &amp; Tech Symbols (BGG)</a>
     </p>
 </footer>
+</div>
 
 @if (showStats && Store.Session is not null)
 {
     <MatchStatsModal OnClose="CloseStats" />
+}
+
+@* Pause overlay — blocks all input while the game is paused; only the host can resume. *@
+@if (Store.Session is { Paused: true })
+{
+    <div class="pause-overlay">
+        <div class="pause-box">
+            <div class="pause-icon">⏸</div>
+            <div class="pause-title">@Loc["pause.title"]</div>
+            @if (Store.IsHost)
+            {
+                <button class="btn btn-gold btn-lg" @onclick="Resume">▶ @Loc["pause.resume"]</button>
+            }
+            else
+            {
+                <div class="faint">@Loc["pause.waiting"]</div>
+            }
+        </div>
+    </div>
 }
 
 @code {
@@ -101,6 +124,21 @@
         if (!ok) return;
         await Store.LeaveAsync();
         Nav.NavigateTo("/");
+    }
+
+    private Task Pause() => Store.Session is null ? Task.CompletedTask : Store.Mutate(Store.Api.PauseGameAsync(Store.Session.Id));
+    private Task Resume() => Store.Session is null ? Task.CompletedTask : Store.Mutate(Store.Api.ResumeGameAsync(Store.Session.Id));
+
+    // End the match: bring the statistics onto the wall display and open the host stats overlay.
+    // Non-destructive — the game can still continue; the wall switches back via the display control.
+    private async Task EndGame()
+    {
+        if (Store.Session is null) return;
+        var ok = await JS.InvokeAsync<bool>("confirm", Loc["turn.endGameConfirm"]);
+        if (!ok) return;
+        await Store.Mutate(Store.Api.SetDisplayModeAsync(Store.Session.Id, DisplayMode.Statistics));
+        showStats = true;
+        StateHasChanged();
     }
 
     public void Dispose()

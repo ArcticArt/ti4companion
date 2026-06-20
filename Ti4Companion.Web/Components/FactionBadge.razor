@@ -33,9 +33,11 @@ else
     [Parameter] public string? Ring { get; set; }
     [Inject] private Loc Loc { get; set; } = default!;
 
+    // Invariant formatting: under a comma-decimal culture (e.g. German) "{Size}rem" would emit
+    // "1,5rem" — invalid CSS, so the badge silently fell back to the stylesheet default size.
     private string SizeStyle => SizeCss is not null
         ? $"width:{SizeCss};height:{SizeCss};font-size:calc({SizeCss} * 0.4);"
-        : $"width:{Size}rem;height:{Size}rem;font-size:{Size * 0.4}rem;";
+        : FormattableString.Invariant($"width:{Size}rem;height:{Size}rem;font-size:{Size * 0.4}rem;");
 
     private static string Initials(FactionDto f)
     {

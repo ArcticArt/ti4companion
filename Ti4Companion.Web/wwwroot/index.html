@@ -39,28 +39,21 @@
         <span class="dismiss">🗙</span>
     </div>
     <script>
-        // Wall-display helper: shrink each tech card's description until it fits the fixed-height card
-        // (down to minPx). Returns the data-tech ids of cards whose description STILL overflows at the min,
-        // so Display.razor can re-render those as compact names. Cards have overflow:hidden + a fixed height,
-        // so font-shrinking only affects whether the text clips — never the card size.
+        // Wall-display helper: flow the tech cards into balanced columns; while a column flow overflows its
+        // height, collapse the lowest-prerequisite tech to just its name (top-down, one at a time) until it
+        // fits. Reset (uncollapse) first so removing techs re-expands the cards. Purely visual (CSS classes).
         window.ti4 = window.ti4 || {};
-        window.ti4.fitTechCards = function (minPx) {
-            var overflow = [], seen = {};
-            document.querySelectorAll('.beamer .tech-col.cards .techcard.nonunit').forEach(function (card) {
-                var desc = card.querySelector('.tc-desc');
-                if (!desc) return;
-                desc.style.fontSize = '';                                   // reset to the CSS clamp base
-                var size = parseFloat(getComputedStyle(desc).fontSize) || 12, guard = 0;
-                while (card.scrollHeight > card.clientHeight + 1 && size > minPx && guard++ < 60) {
-                    size = Math.max(minPx, size - 0.5);
-                    desc.style.fontSize = size + 'px';
-                }
-                if (card.scrollHeight > card.clientHeight + 1) {
-                    var key = card.getAttribute('data-tech');
-                    if (key && !seen[key]) { seen[key] = 1; overflow.push(key); }
+        window.ti4.fitTechCols = function () {
+            document.querySelectorAll('.beamer .tech-col, .beamer .tech-unit-row').forEach(function (col) {
+                col.querySelectorAll('.tech-item.collapsed').forEach(function (it) { it.classList.remove('collapsed'); });
+                var guard = 0;
+                while (col.scrollHeight > col.clientHeight + 2 && guard++ < 400) {
+                    var items = Array.prototype.slice.call(col.querySelectorAll('.tech-item:not(.collapsed)'));
+                    if (!items.length) break;
+                    items.sort(function (a, b) { return (+a.dataset.prereqs) - (+b.dataset.prereqs); });
+                    items[0].classList.add('collapsed');
                 }
             });
-            return overflow;
         };
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>

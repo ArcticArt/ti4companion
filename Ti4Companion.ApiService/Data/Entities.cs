@@ -169,6 +169,10 @@ public class GameSession
     /// agenda / next round.</summary>
     public bool VotingStarted { get; set; }
 
+    /// <summary>Host paused the game: all mutations are rejected (except resume) and the paused interval is
+    /// excluded from the statistics.</summary>
+    public bool Paused { get; set; }
+
     public List<Player> Players { get; set; } = new();
     public List<SessionObjective> Objectives { get; set; } = new();
     public List<StrategyCardState> StrategyCardStates { get; set; } = new();
