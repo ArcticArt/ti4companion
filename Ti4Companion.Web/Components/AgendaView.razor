@@ -25,6 +25,41 @@
             <button class="btn btn-sm" @onclick="() => dVotes += 10">+10</button>
             <span class="faint">@Loc["agenda.votes"]</span>
         </span>;
+
+    // Local vote draft for one player — committed only on "Festlegen" (lock). For/Against is ordered
+    // Against · Abstain · For with colours; choosing For/Against starts at 0 votes, so "Festlegen" stays
+    // disabled until votes are added. Nothing here reveals other players' results (display-only).
+    RenderFragment<Guid> draftControls = pid =>
+        @<div class="vote-draft">
+            @if (kind == ElectType.ForAgainst)
+            {
+                <div class="oa-row">
+                    <button class="oa oa-against @(dOutcome == VoteOutcome.Against ? "on" : "")" @onclick="() => SetDraft(VoteOutcome.Against)">@Loc["agenda.against"]</button>
+                    <button class="oa oa-abstain @(dOutcome == VoteOutcome.Abstain ? "on" : "")" @onclick="() => SetDraft(VoteOutcome.Abstain)">@Loc["agenda.abstain"]</button>
+                    <button class="oa oa-for @(dOutcome == VoteOutcome.For ? "on" : "")" @onclick="() => SetDraft(VoteOutcome.For)">@Loc["agenda.for"]</button>
+                </div>
+            }
+            else
+            {
+                var cands = AgendaDisplay.Candidates(Store, Loc, current);
+                <div class="row-wrap" style="gap:.3rem;align-items:center;">
+                    @if (cands.Count > 0)
+                    {
+                        <select value="@dChoice" @onchange="e => SetDraftChoice(e.Value?.ToString())" style="flex:1 1 14em;min-width:11em;">
+                            <option value="">@Loc["agenda.choose"]</option>
+                            @foreach (var c in cands) { <option value="@c.Key" selected="@(c.Key == dChoice)">@c.Label</option> }
+                        </select>
+                    }
+                    @if (AgendaDisplay.AllowsFreeText(kind))
+                    {
+                        <input type="text" value="@(cands.Any(c => c.Key == dChoice) ? "" : dChoice)" placeholder="@Loc["agenda.freeText"]" @onchange="e => SetDraftChoice(e.Value?.ToString())" style="flex:1;min-width:0;" />
+                    }
+                    <button class="oa oa-abstain @(dOutcome == VoteOutcome.Abstain ? "on" : "")" @onclick="() => SetDraft(VoteOutcome.Abstain)">@Loc["agenda.abstain"]</button>
+                </div>
+            }
+            @if (dOutcome != VoteOutcome.Abstain) { @draftStepper }
+            <button class="btn vote-set" disabled="@(dOutcome != VoteOutcome.Abstain && dVotes == 0)" @onclick="() => Commit(pid)"><VoteIcon /> @Loc["agenda.castVote"]</button>
+        </div>;
 }
 
 <div class="panel">
@@ -33,33 +68,29 @@
     @* ===== Influence entry (before the vote starts) ===== *@
     @if (!voting)
     {
+        <div class="agenda-prompt"><span class="ap-big">@Loc["agenda.enterInfluence"]</span></div>
         <div class="agenda-influence">
-            <div class="row-wrap" style="justify-content:space-between;align-items:baseline;gap:.5rem;">
-                <strong>@Loc["agenda.influence"]</strong>
+            <div class="row-wrap" style="justify-content:flex-end;">
                 <span class="faint" style="font-size:.75rem;">@Loc["agenda.influenceHint"]</span>
             </div>
             @foreach (var p in Store.AgendaOrder())
             {
                 var mineRow = p.Id == Store.MyPlayerId;
-                var canEdit = host || mineRow;     // privacy: a non-host only sees/edits their own influence
+                // Privacy: a non-host sees and edits only their own influence (others aren't shown at all).
+                if (!host && !mineRow) { continue; }
                 var isSpeaker = s.SpeakerPlayerId == p.Id;
                 <div class="player-card inf-row" style="--player-color:@p.ColorHex;">
                     <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
                     <strong class="inf-name">@p.Name @if (isSpeaker) { <SpeakerIcon SizeCss="1.2em" /> }</strong>
-                    @if (canEdit)
-                    {
-                        <span class="row-wrap vote-step inf-step" style="gap:.15rem;align-items:center;">
-                            <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => SetInfluence(p.Id, p.Influence - 5)">−5</button>
-                            <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => SetInfluence(p.Id, p.Influence - 1)">−1</button>
-                            <span class="vote-step-n">@p.Influence</span>
-                            <button class="btn btn-sm" @onclick="() => SetInfluence(p.Id, p.Influence + 1)">+1</button>
-                            <button class="btn btn-sm" @onclick="() => SetInfluence(p.Id, p.Influence + 5)">+5</button>
-                        </span>
-                    }
-                    else
-                    {
-                        <span class="faint">···</span>
-                    }
+                    <span class="row-wrap vote-step inf-step" style="gap:.15rem;align-items:center;">
+                        <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => SetInfluence(p.Id, p.Influence - 10)">−10</button>
+                        <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => SetInfluence(p.Id, p.Influence - 5)">−5</button>
+                        <button class="btn btn-sm" disabled="@(p.Influence == 0)" @onclick="() => SetInfluence(p.Id, p.Influence - 1)">−1</button>
+                        <span class="inf-val"><img class="inf-ico" src="symbols/influence.png" alt="" />@p.Influence</span>
+                        <button class="btn btn-sm" @onclick="() => SetInfluence(p.Id, p.Influence + 1)">+1</button>
+                        <button class="btn btn-sm" @onclick="() => SetInfluence(p.Id, p.Influence + 5)">+5</button>
+                        <button class="btn btn-sm" @onclick="() => SetInfluence(p.Id, p.Influence + 10)">+10</button>
+                    </span>
                 </div>
             }
         </div>
@@ -109,7 +140,8 @@
                     }
                     else
                     {
-                        <button class="btn btn-sm btn-danger" @onclick="CancelVote">@Loc["agenda.cancelVote"]</button>
+                        @* Once everyone has locked, "Cancel vote" reads as "Repeat vote". *@
+                        <button class="btn btn-sm btn-danger" @onclick="CancelVote">@Loc[allLocked ? "agenda.repeatVote" : "agenda.cancelVote"]</button>
                         @if (hidden)
                         {
                             <button class="btn btn-sm btn-gold" disabled="@(!allLocked)" @onclick="RevealVotes">@Loc["agenda.reveal"]</button>
@@ -122,99 +154,64 @@
             }
         </div>
 
-        @* ===== Voting ===== *@
+        @* ===== Voting — controls only; results are shown on the wall display, never here ===== *@
         @if (voting)
         {
             <div style="margin-top:.8rem;">
-                @if (hidden)
+                @if (host)
                 {
-                    <p class="faint" style="margin:.2rem 0 .5rem;">@Loc["agenda.hidden"]</p>
-                }
-                else if (kind == ElectType.ForAgainst)
-                {
-                    var forVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
-                    var againstVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
-                    <div class="row-wrap" style="gap:1rem;margin-bottom:.5rem;">
-                        <span class="chip chip-done">@Loc["agenda.for"]: @forVotes</span>
-                        <span class="chip chip-passed">@Loc["agenda.against"]: @againstVotes</span>
-                    </div>
+                    @* Host enters everyone's vote: own row open by default, others via "Vote". *@
+                    @foreach (var p in Store.AgendaOrder())
+                    {
+                        var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
+                        var locked = vote?.Locked == true;
+                        var isSpeaker = s.SpeakerPlayerId == p.Id;
+                        var open = !locked && effOpenFor == p.Id;
+                        <div class="player-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;gap:.5rem;flex-wrap:wrap;">
+                            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+                            <strong style="flex:1 1 120px;">@p.Name @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> }</strong>
+                            @if (open)
+                            {
+                                @draftControls(p.Id)
+                            }
+                            else if (locked)
+                            {
+                                <span class="chip chip-done">@Loc["agenda.locked"]</span>
+                            }
+                            else
+                            {
+                                <span class="chip">@Loc["agenda.waiting"]</span>
+                                <button class="btn btn-sm" @onclick="() => OpenFor(p.Id)">@Loc["agenda.castFor"]</button>
+                            }
+                        </div>
+                    }
                 }
                 else
                 {
-                    var tally = Tally();
-                    var lead = tally.Count == 0 ? 0 : tally[0].Votes;
-                    <div class="row-wrap" style="gap:.5rem;margin-bottom:.5rem;">
-                        @if (tally.Count == 0) { <span class="faint">@Loc["agenda.noVotes"]</span> }
-                        @foreach (var t in tally)
-                        {
-                            <span class="chip @(t.Votes == lead ? "chip-active" : "")">
-                                @AgendaDisplay.ChoiceLabel(Store, Loc, current, t.Choice): @t.Votes
-                                @if (t.Votes == lead) { <text> · @Loc["agenda.leading"]</text> }
-                            </span>
-                        }
-                    </div>
-                }
-
-                @foreach (var p in Store.AgendaOrder())
-                {
-                    var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
-                    var locked = vote?.Locked == true;
-                    var mineRow = p.Id == Store.MyPlayerId;
-                    var isSpeaker = s.SpeakerPlayerId == p.Id;
-                    var cands = AgendaDisplay.Candidates(Store, Loc, current);
-                    var open = !locked && (host ? effOpenFor == p.Id : mineRow);
-                    <div class="player-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;gap:.5rem;flex-wrap:wrap;">
-                        <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
-                        <strong style="flex:1 1 120px;">@p.Name @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> }</strong>
-
-                        @if (open)
-                        {
-                            @* Draft held locally; nothing is sent until "Lock". *@
-                            @if (kind == ElectType.ForAgainst)
+                    @* Player: only their OWN card (other players are hidden entirely), enlarged. *@
+                    @if (Store.Me is { } me)
+                    {
+                        var myVote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == me.Id);
+                        var myLocked = myVote?.Locked == true;
+                        <div class="vote-self" style="--player-color:@me.ColorHex">
+                            <div class="vs-head">
+                                <FactionBadge Faction="Store.Faction(me.FactionId)" Size="2.4" Ring="@me.ColorHex" />
+                                <strong>@me.Name</strong>
+                            </div>
+                            @if (myLocked)
                             {
-                                <div class="row-wrap" style="gap:.25rem;">
-                                    <button class="btn btn-sm @(dOutcome == VoteOutcome.For ? "btn-gold" : "")" @onclick="() => SetDraft(VoteOutcome.For)">@Loc["agenda.for"]</button>
-                                    <button class="btn btn-sm @(dOutcome == VoteOutcome.Against ? "btn-danger" : "")" @onclick="() => SetDraft(VoteOutcome.Against)">@Loc["agenda.against"]</button>
-                                    <button class="btn btn-sm @(dOutcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => SetDraft(VoteOutcome.Abstain)">@Loc["agenda.abstain"]</button>
-                                </div>
+                                <p class="vs-done">@Loc["agenda.youVoted"]</p>
                             }
                             else
                             {
-                                <div class="row-wrap" style="gap:.25rem;align-items:center;flex:1 1 240px;">
-                                    @if (cands.Count > 0)
-                                    {
-                                        <select value="@dChoice" @onchange="e => SetDraftChoice(e.Value?.ToString())" style="flex:1;min-width:0;">
-                                            <option value="">@Loc["agenda.choose"]</option>
-                                            @foreach (var c in cands) { <option value="@c.Key" selected="@(c.Key == dChoice)">@c.Label</option> }
-                                        </select>
-                                    }
-                                    @if (AgendaDisplay.AllowsFreeText(kind))
-                                    {
-                                        <input type="text" value="@(cands.Any(c => c.Key == dChoice) ? "" : dChoice)" placeholder="@Loc["agenda.freeText"]" @onchange="e => SetDraftChoice(e.Value?.ToString())" style="flex:1;min-width:0;" />
-                                    }
-                                    <button class="btn btn-sm @(dOutcome == VoteOutcome.Abstain ? "btn-gold" : "")" @onclick="() => SetDraft(VoteOutcome.Abstain)">@Loc["agenda.abstain"]</button>
-                                </div>
+                                @draftControls(me.Id)
                             }
-                            @if (dOutcome != VoteOutcome.Abstain) { @draftStepper }
-                            <button class="btn btn-sm btn-gold" @onclick="() => Commit(p.Id)">@Loc["agenda.lock"]</button>
-                        }
-                        else if (locked && !hidden)
-                        {
-                            @* Open vote, already locked → show the result to everyone. *@
-                            @if (vote!.Outcome == VoteOutcome.Abstain) { <span class="faint">@Loc["agenda.abstain"]</span> }
-                            else
-                            {
-                                <span>@(kind == ElectType.ForAgainst ? Loc[vote.Outcome == VoteOutcome.For ? "agenda.for" : "agenda.against"] : AgendaDisplay.ChoiceLabel(Store, Loc, current, vote.Choice))</span>
-                                <span class="chip">@vote.Votes @Loc["agenda.votes"]</span>
-                            }
-                        }
-                        else
-                        {
-                            @* Not open here → status only (face-down keeps the value secret until reveal). *@
-                            <span class="chip @(locked ? "chip-done" : "")">@(locked ? Loc["agenda.locked"] : Loc["agenda.waiting"])</span>
-                            @if (host && !locked && effOpenFor != p.Id) { <button class="btn btn-sm" @onclick="() => OpenFor(p.Id)">@Loc["agenda.castFor"]</button> }
-                        }
-                    </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="faint">@Loc["agenda.waiting"]</p>
+                    }
                 }
             </div>
         }
@@ -236,38 +233,32 @@
             .Take(40).ToList();
     }
 
-    private List<(string Choice, int Votes)> Tally()
-        => Store.Session!.AgendaVotes
-            .Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
-            .GroupBy(v => v.Choice!)
-            .Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
-            .OrderByDescending(t => t.Votes)
-            .ToList();
-
     private Task Reveal(string? agendaId) { openFor = Guid.Empty; ResetDraft(); return Store.Mutate(Store.Api.SetAgendaAsync(Sid, agendaId)); }
     private Task SetInfluence(Guid playerId, int value) => Store.Mutate(Store.Api.SetInfluenceAsync(Sid, playerId, Math.Max(0, value)));
     private async Task StartVote(bool hidden) { openFor = Guid.Empty; ResetDraft(); await Store.Mutate(Store.Api.StartVotingAsync(Sid, hidden)); }
     private async Task CancelVote() { openFor = Guid.Empty; ResetDraft(); await Store.Mutate(Store.Api.CancelVotingAsync(Sid)); }
     private Task RevealVotes() => Store.Mutate(Store.Api.RevealVotesAsync(Sid));
 
-    // ---- Vote draft, committed only on lock ----
+    // ---- Vote draft, committed only on lock ("Festlegen") ----
     private VoteOutcome dOutcome = VoteOutcome.Abstain;
     private int dVotes;
     private string? dChoice;
 
     private void ResetDraft() { dOutcome = VoteOutcome.Abstain; dVotes = 0; dChoice = null; }
 
+    // Clicking For/Against (or a candidate) starts at 0 votes — "Festlegen" stays disabled until votes
+    // are added. Abstain commits immediately (0 votes is valid for an abstention).
     private void SetDraft(VoteOutcome o)
     {
         dOutcome = o;
-        if (o == VoteOutcome.Abstain) { dVotes = 0; dChoice = null; }
-        else if (dVotes < 1) dVotes = 1;
+        dVotes = 0;
+        if (o == VoteOutcome.Abstain) dChoice = null;
     }
 
     private void SetDraftChoice(string? c)
     {
         if (string.IsNullOrWhiteSpace(c)) { dChoice = null; dOutcome = VoteOutcome.Abstain; dVotes = 0; }
-        else { dChoice = c.Trim(); dOutcome = VoteOutcome.For; if (dVotes < 1) dVotes = 1; }
+        else { dChoice = c.Trim(); dOutcome = VoteOutcome.For; dVotes = 0; }
     }
 
     private void OpenFor(Guid playerId) { openFor = playerId; ResetDraft(); }

@@ -83,7 +83,7 @@ public record SessionStateDto(
     int CurrentRound, GamePhase Phase,
     Guid? SpeakerPlayerId, Guid? ActivePlayerId, int? ActiveStrategyCardId,
     string? CurrentAgendaId, bool AllowEditAllPlayers,
-    bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, int RetentionHours,
+    bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, bool Paused, int RetentionHours,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
@@ -107,7 +107,10 @@ public record CreateSessionRequest(
     string Name, Language Language, Expansion? ActiveExpansions,
     string HostName, string? FactionId, string? ColorHex, string? DeviceToken);
 
-public record JoinSessionRequest(string Name, string? FactionId, string? ColorHex, string? DeviceToken);
+/// <summary>Join a session. With <paramref name="ClaimPlayerId"/> set, take over (claim) that existing
+/// non-host seat instead of creating a new player; otherwise a new player is added (capped at 8).</summary>
+public record JoinSessionRequest(string Name, string? FactionId, string? ColorHex, string? DeviceToken,
+    Guid? ClaimPlayerId = null);
 
 public record UpdateSessionRequest(
     string? Name, Language? Language, Expansion? ActiveExpansions,

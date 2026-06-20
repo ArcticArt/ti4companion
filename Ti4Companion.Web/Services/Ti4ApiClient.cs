@@ -41,6 +41,9 @@ public class Ti4ApiClient(HttpClient http)
     public Task<SessionStateDto?> SetDisplayModeAsync(Guid id, DisplayMode mode)
         => PostFor($"api/sessions/{id}/display", new SetDisplayModeRequest(mode));
 
+    public Task<SessionStateDto?> PauseGameAsync(Guid id) => PostFor<SessionStateDto>($"api/sessions/{id}/pause", null);
+    public Task<SessionStateDto?> ResumeGameAsync(Guid id) => PostFor<SessionStateDto>($"api/sessions/{id}/resume", null);
+
     // ---- Phase / round flow ----
     public Task<SessionStateDto?> StartGameAsync(Guid id) => PostFor<SessionStateDto>($"api/sessions/{id}/phase/start", null);
     public Task<SessionStateDto?> StartActionPhaseAsync(Guid id) => PostFor<SessionStateDto>($"api/sessions/{id}/phase/action", null);
@@ -117,7 +120,7 @@ public class Ti4ApiClient(HttpClient http)
     // A 400 (rule violation) or 403 (not allowed — host only) returns null/default so the store
     // refreshes to the authoritative state instead of throwing.
     private static bool IsRejection(HttpResponseMessage r) =>
-        r.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Forbidden;
+        r.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Forbidden or HttpStatusCode.Locked; // 423 = game paused
 
     private async Task<T?> PostFor<T>(string url, object? body)
     {

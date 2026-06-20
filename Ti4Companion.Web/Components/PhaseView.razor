@@ -11,12 +11,21 @@
 }
 
 <div class="panel phase-bar">
-    <div class="phase-steps">
-        @foreach (var ph in new[] { GamePhase.Setup, GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda })
-        {
-            <span class="pstep @(s.Phase == ph ? "on" : "")">@Loc[$"phase.{ph}"]</span>
-        }
-    </div>
+    @* In-game phases as a connected leiste (Setup is intentionally not a segment). During setup the
+       leiste is hidden and the ready count is shown instead. *@
+    @if (s.Phase == GamePhase.Setup)
+    {
+        <div class="phase-ready">@Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong></div>
+    }
+    else
+    {
+        <div class="phase-leiste">
+            @foreach (var ph in new[] { GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda })
+            {
+                <div class="pseg @(s.Phase == ph ? "on" : (int)s.Phase > (int)ph ? "done" : "")">@Loc[$"phase.{ph}"]</div>
+            }
+        </div>
+    }
     <div class="spacer" style="flex:1"></div>
     <div class="row-wrap" style="gap:.4rem;align-items:center;">
         @* Phase transitions are reserved for the host. *@

@@ -1,0 +1,11 @@
+@* Statistics bar-chart glyph (single-colour, stylized). Inherits the surrounding text colour via
+   fill="currentColor". Source: Resources/statistic.svg. Size via SizeCss (defaults to 1.15em so it
+   scales with the button text). *@
+<svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"
+     style="width:@SizeCss;height:@SizeCss" aria-hidden="true" focusable="false">
+    <path d="M200-120q-33 0-56.5-23.5T120-200v-640h80v640h640v80H200Zm40-120v-360h160v360H240Zm200 0v-560h160v560H440Zm200 0v-200h160v200H640Z" />
+</svg>
+
+@code {
+    [Parameter] public string SizeCss { get; set; } = "1.15em";
+}

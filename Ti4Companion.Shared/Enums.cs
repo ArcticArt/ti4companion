@@ -112,7 +112,10 @@ public enum DisplayMode
 {
     Objectives = 0,
     Secondary = 1,   // strategy-card secondary abilities for un-exhausted cards
-    Tech = 2
+    Tech = 2,
+    /// <summary>Match statistics (timing). Set ONLY by the host "End game" action — it is deliberately
+    /// not offered in the display-control segments, so players can't switch the wall to it mid-game.</summary>
+    Statistics = 3
 }
 
 /// <summary>
@@ -143,6 +146,13 @@ public enum SessionLogKind
     AgendaStartVote = 16, // Detail = "hidden"/"open"
     AgendaCancel = 17,
     AgendaReveal2 = 18, // host flips hidden votes face-up
-    VoteLock = 19,      // TargetPlayerId = voter, Detail = "outcome:votes:choice"
-    InfluenceSet = 20   // TargetPlayerId = player, Detail = influence value
+    VoteLock = 19,      // TargetPlayerId = voter, Detail = "outcome:votes:choice" (no longer emitted)
+    InfluenceSet = 20,  // TargetPlayerId = player, Detail = influence value (no longer emitted)
+    /// <summary>One summary per concluded agenda: Detail = "agendaId|for|against|topChoiceKey|topVotes|runnerUpVotes".
+    /// The agenda-phase log shows only this + <see cref="AgendaReveal"/> (the per-change noise isn't logged).</summary>
+    AgendaResult = 21,
+    /// <summary>Host paused the game. <see cref="GameResumed"/> ends it. The interval between them is
+    /// subtracted from all statistics durations (a pause doesn't count as play time).</summary>
+    GamePaused = 22,
+    GameResumed = 23
 }

@@ -70,7 +70,7 @@
                         {
                             var scored = so.ScoredByPlayerIds.Contains(p.Id);
                             <button class="marker @(scored ? "on" : "")" @onclick="() => ToggleScore(so.Id, p.Id, scored)" title="@p.Name">
-                                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="2.4" Ring="@p.ColorHex" />
+                                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.5" Ring="@p.ColorHex" />
                             </button>
                         }
                     </div>

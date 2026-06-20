@@ -5,10 +5,12 @@
     {
         var taken = TakenBy(c.Hex);
         var mine = string.Equals(Current, c.Hex, StringComparison.OrdinalIgnoreCase);
-        <button class="swatch @(mine ? "sel" : "")" style="background:@c.Hex" title="@SwatchTitle(c.Name, taken)"
-                disabled="@Disabled" @onclick="() => OnPick.InvokeAsync(c.Hex)">
+        @* Hide colours taken by other players (your own stays; a freed colour reappears for everyone).
+           Clicking your OWN colour deselects it (frees it) — so two players can swap even when all are taken. *@
+        if (taken is not null && !mine) { continue; }
+        <button class="swatch @(mine ? "sel" : "")" style="background:@c.Hex" title="@(mine ? DeselectTitle : SwatchTitle(c.Name, taken))"
+                disabled="@Disabled" @onclick="() => Pick(mine, c.Hex)">
             @if (mine) { <span>✓</span> }
-            else if (taken is not null) { <span class="taken">•</span> }
         </button>
     }
 </div>
@@ -19,7 +21,11 @@
     [Parameter] public EventCallback<string> OnPick { get; set; }
     /// <summary>Optional: which player name currently holds each color, to hint at clashes.</summary>
     [Parameter] public Func<string, string?>? TakenByResolver { get; set; }
+    [Inject] private Loc Loc { get; set; } = default!;
 
+    private string DeselectTitle => Loc["setup.deselectColor"];
+    // Clicking your own colour deselects it (empty = unchosen, frees it for swapping).
+    private Task Pick(bool mine, string hex) => OnPick.InvokeAsync(mine ? "" : hex);
     private string? TakenBy(string hex) => TakenByResolver?.Invoke(hex);
 
     private static string SwatchTitle(string name, string? taken) => taken is null ? name : $"{name} ({taken})";

@@ -70,7 +70,7 @@
                 else
                 {
                     <div class="log-list">
-                        @foreach (var e in log.OrderByDescending(l => l.TimestampUtc))
+                        @foreach (var e in log.Where(e => !HideInLog(e.Kind)).OrderByDescending(l => l.TimestampUtc))
                         {
                             <div class="log-row">
                                 <span class="log-time">@e.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</span>
@@ -149,6 +149,36 @@
         SessionLogKind.AgendaReveal2 => Loc["log.agendaReveal2"],
         SessionLogKind.VoteLock => string.Format(Loc["log.voteLock"], Target(e.TargetPlayerId)),
         SessionLogKind.InfluenceSet => string.Format(Loc["log.influenceSet"], Target(e.TargetPlayerId), e.Detail),
+        SessionLogKind.AgendaResult => AgendaResultLine(e.Detail),
+        SessionLogKind.GamePaused => Loc["log.gamePaused"],
+        SessionLogKind.GameResumed => Loc["log.gameResumed"],
         _ => Loc["log.generic"],
     };
+
+    // Agenda-phase noise we no longer surface in the log (only reveal + the summarised result remain).
+    private static bool HideInLog(SessionLogKind k) => k is SessionLogKind.AgendaStartVote
+        or SessionLogKind.AgendaCancel or SessionLogKind.AgendaReveal2
+        or SessionLogKind.VoteLock or SessionLogKind.InfluenceSet;
+
+    // Render the packed agenda result ("agendaId|for|against|topChoiceKey|topVotes|runnerUpVotes").
+    private string AgendaResultLine(string? detail)
+    {
+        if (string.IsNullOrEmpty(detail)) return Loc["log.agendaResult"];
+        var parts = detail.Split('|');
+        var agenda = Store.Agenda(parts.ElementAtOrDefault(0));
+        var name = agenda is null ? (parts.ElementAtOrDefault(0) ?? "") : Loc.Pick(agenda.Name, agenda.NameDe);
+        var elect = agenda is null ? ElectType.ForAgainst : AgendaDisplay.ElectKind(agenda);
+        if (elect == ElectType.ForAgainst)
+        {
+            int.TryParse(parts.ElementAtOrDefault(1), out var f);
+            int.TryParse(parts.ElementAtOrDefault(2), out var a);
+            var res = f > a ? Loc["agenda.passed"] : a > f ? Loc["agenda.rejected"] : Loc["agenda.speakerDecides"];
+            return $"{name}: {Loc["agenda.for"]} {f} · {Loc["agenda.against"]} {a} — {res}";
+        }
+        int.TryParse(parts.ElementAtOrDefault(4), out var topV);
+        int.TryParse(parts.ElementAtOrDefault(5), out var secV);
+        if (topV == 0) return $"{name}: {Loc["agenda.noVotes"]}";
+        if (topV == secV) return $"{name}: {Loc["agenda.speakerDecides"]}";
+        return $"{name}: {Loc["agenda.elected"]} {AgendaDisplay.ChoiceLabel(Store, Loc, agenda, parts.ElementAtOrDefault(3))} ({topV})";
+    }
 }

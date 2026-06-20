@@ -1,0 +1,55 @@
+@using System.Globalization
+@* Simple SVG pie chart + legend. Items: (Label, ValueText, Weight, Color); slices are sized by Weight.
+   SVG path coordinates are formatted InvariantCulture (a comma decimal would break the path). *@
+<div class="pie-wrap">
+    <svg class="pie-svg" viewBox="-1.05 -1.05 2.1 2.1" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        @{
+            var total = Items.Sum(i => i.Weight);
+            var angle = -Math.PI / 2;   // start at the top
+        }
+        @if (total <= 0)
+        {
+            <circle cx="0" cy="0" r="1" fill="var(--panel)" stroke="var(--panel-border)" stroke-width="0.02" />
+        }
+        else
+        {
+            @foreach (var it in Items.Where(i => i.Weight > 0))
+            {
+                var frac = it.Weight / total;
+                var end = angle + frac * 2 * Math.PI;
+                var large = frac > 0.5 ? 1 : 0;
+                @* A single full slice (one non-zero item) → draw a circle instead of a degenerate arc. *@
+                @if (frac >= 0.999)
+                {
+                    <circle cx="0" cy="0" r="1" fill="@it.Color" />
+                }
+                else
+                {
+                    <path d="@Arc(angle, end, large)" fill="@it.Color" stroke="#0b1226" stroke-width="0.012" />
+                }
+                angle = end;
+            }
+        }
+    </svg>
+    <div class="pie-legend">
+        @foreach (var it in Items)
+        {
+            <div class="pie-leg-row">
+                <span class="pie-dot" style="background:@it.Color"></span>
+                <span class="pie-leg-label">@it.Label</span>
+                <span class="pie-leg-val">@it.ValueText</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<(string Label, string ValueText, double Weight, string Color)> Items { get; set; }
+        = Array.Empty<(string, string, double, string)>();
+
+    private static string Arc(double a, double b, int large)
+    {
+        double x1 = Math.Cos(a), y1 = Math.Sin(a), x2 = Math.Cos(b), y2 = Math.Sin(b);
+        return FormattableString.Invariant($"M 0 0 L {x1:0.####} {y1:0.####} A 1 1 0 {large} 1 {x2:0.####} {y2:0.####} Z");
+    }
+}

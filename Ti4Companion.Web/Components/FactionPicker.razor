@@ -23,6 +23,9 @@
     [Parameter] public IEnumerable<FactionDto> Factions { get; set; } = Enumerable.Empty<FactionDto>();
     [Parameter] public string? Current { get; set; }
     [Parameter] public EventCallback<string> OnPick { get; set; }
+    /// <summary>Faction ids already chosen by OTHER players — filtered out of the grid (your own stays
+    /// visible so you can re-click to deselect it; a freed faction reappears for everyone).</summary>
+    [Parameter] public IReadOnlySet<string>? Taken { get; set; }
     [Inject] private Loc Loc { get; set; } = default!;
 
     private string search = "";
@@ -32,6 +35,7 @@
     {
         var q = search?.Trim() ?? "";
         return Factions
+            .Where(f => Taken is null || !Taken.Contains(f.Id) || f.Id == Current)
             .Where(f => q.Length == 0 || Loc.Pick(f.Name, f.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase))
             .OrderBy(f => Loc.Pick(f.Name, f.NameDe));
     }

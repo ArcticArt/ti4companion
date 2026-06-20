@@ -28,28 +28,50 @@ public class MatchStats
 
         var start = phaseChanges[0].TimestampUtc;
 
-        // Time per phase type: each phase segment runs until the next phase change (or now).
+        // Pause intervals (GamePaused → GameResumed, or → now if still paused) — subtracted from every duration.
+        var pauses = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        DateTimeOffset? pauseStart = null;
+        foreach (var e in ordered)
+        {
+            if (e.Kind == SessionLogKind.GamePaused) pauseStart ??= e.TimestampUtc;
+            else if (e.Kind == SessionLogKind.GameResumed && pauseStart is { } ps) { pauses.Add((ps, e.TimestampUtc)); pauseStart = null; }
+        }
+        if (pauseStart is { } open) pauses.Add((open, now));
+
+        // Active (non-paused) duration of [from, to].
+        TimeSpan Active(DateTimeOffset from, DateTimeOffset to)
+        {
+            var d = to - from;
+            foreach (var (pf, pt) in pauses)
+            {
+                var ov = (pt < to ? pt : to) - (pf > from ? pf : from);
+                if (ov > TimeSpan.Zero) d -= ov;
+            }
+            return d < TimeSpan.Zero ? TimeSpan.Zero : d;
+        }
+
+        // Time per phase type: each phase segment runs until the next phase change (or now), minus pauses.
         var phaseTotals = new Dictionary<GamePhase, TimeSpan>();
         for (var i = 0; i < phaseChanges.Count; i++)
         {
             var from = phaseChanges[i].TimestampUtc;
             var to = i + 1 < phaseChanges.Count ? phaseChanges[i + 1].TimestampUtc : now;
             var ph = phaseChanges[i].Phase!.Value;
-            phaseTotals[ph] = Get(phaseTotals, ph) + (to - from);
+            phaseTotals[ph] = Get(phaseTotals, ph) + Active(from, to);
         }
 
-        // Round durations: each round runs until the next round starts (or now).
+        // Round durations: each round runs until the next round starts (or now), minus pauses.
         var roundChanges = ordered.Where(l => l.Kind == SessionLogKind.RoundChange && l.Round is not null).ToList();
         var rounds = new List<RoundDuration>();
         for (var i = 0; i < roundChanges.Count; i++)
         {
             var from = roundChanges[i].TimestampUtc;
             var to = i + 1 < roundChanges.Count ? roundChanges[i + 1].TimestampUtc : now;
-            rounds.Add(new RoundDuration(roundChanges[i].Round!.Value, to - from));
+            rounds.Add(new RoundDuration(roundChanges[i].Round!.Value, Active(from, to)));
         }
 
-        // Per-player time-on-turn: walk the timeline, crediting each action-phase interval to whoever
-        // is the active player at its start.
+        // Per-player time: action-phase intervals → the active player; strategy-phase intervals leading up
+        // to each pick → that picker (so the strategy phase is counted per player too). Pauses excluded.
         var perPlayer = new Dictionary<Guid, TimeSpan>();
         GamePhase? phase = null;
         Guid? active = null;
@@ -58,7 +80,9 @@ public class MatchStats
         {
             if (e.TimestampUtc < start) continue; // pre-game (setup joins)
             if (phase == GamePhase.Action && active is Guid a)
-                perPlayer[a] = Get(perPlayer, a) + (e.TimestampUtc - lastTs);
+                perPlayer[a] = Get(perPlayer, a) + Active(lastTs, e.TimestampUtc);
+            else if (phase == GamePhase.Strategy && e.Kind == SessionLogKind.StrategyPick && e.TargetPlayerId is Guid pk)
+                perPlayer[pk] = Get(perPlayer, pk) + Active(lastTs, e.TimestampUtc);
             switch (e.Kind)
             {
                 case SessionLogKind.PhaseChange:
@@ -72,12 +96,12 @@ public class MatchStats
             lastTs = e.TimestampUtc;
         }
         if (phase == GamePhase.Action && active is Guid last)
-            perPlayer[last] = Get(perPlayer, last) + (now - lastTs);
+            perPlayer[last] = Get(perPlayer, last) + Active(lastTs, now);
 
         return new MatchStats
         {
             StartedUtc = start,
-            Match = now - start,
+            Match = Active(start, now),
             Rounds = rounds,
             PhaseTotals = phaseTotals,
             PerPlayer = perPlayer,

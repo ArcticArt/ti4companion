@@ -5,7 +5,7 @@
    Keleres and the Thunder's Edge factions have no portrait → fall back to the faction badge. Sizing
    is driven by the parent (e.g. .vote-card in app.css). *@
 <div class="fac-portrait @(HasPortrait ? "" : "noimg") @(Speaker ? "is-speaker" : "")"
-     style="--player-color:@Player.ColorHex; --fac-color:@FacColor">
+     style="--player-color:@Player.ColorHex">
     @if (HasPortrait)
     {
         <img class="fac-portrait-img" src="portraits/@(Player.FactionId!.ToLowerInvariant()).jpg" alt="" loading="lazy" />
@@ -14,9 +14,12 @@
     {
         <div class="fac-portrait-badge"><FactionBadge Faction="Faction" SizeCss="@BadgeSize" Ring="@Player.ColorHex" /></div>
     }
+    @* Speaker token: a large overlay across the top of the portrait — outside the name bar, so it
+       never shifts the name. ~portrait width. *@
+    @if (Speaker) { <div class="fac-portrait-spk"><SpeakerIcon /></div> }
+    @* Name bar in the player's chosen colour. *@
     <div class="fac-portrait-bar">
         <span class="fac-portrait-name">@Player.Name</span>
-        @if (Speaker) { <span class="fac-portrait-spk"><SpeakerIcon SizeCss="1em" /></span> }
     </div>
 </div>
 
@@ -27,7 +30,6 @@
     /// <summary>Badge height for the no-portrait fallback.</summary>
     [Parameter] public string BadgeSize { get; set; } = "clamp(2.2rem, 5vh, 5rem)";
 
-    private string FacColor => Faction?.ColorHex ?? Player.ColorHex;
     private bool HasPortrait => Player.FactionId is not null && WithPortrait.Contains(Player.FactionId);
 
     // Slugs with a portrait asset (base 17 + PoK 7). Keleres + the Thunder's Edge factions have none.
