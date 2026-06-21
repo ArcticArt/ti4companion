@@ -31,6 +31,7 @@ public static class ContentEndpoints
             var relics = Latest(await db.Relics.AsNoTracking().ToListAsync(ct));
             var galacticEvents = Latest(await db.GalacticEvents.AsNoTracking().ToListAsync(ct));
             var factionCards = Latest(await db.FactionCards.AsNoTracking().ToListAsync(ct));
+            var systemTiles = await db.SystemTiles.AsNoTracking().ToListAsync(ct);   // not versioned
 
             return Results.Ok(new ContentBundleDto(
                 factions.OrderBy(f => f.Expansion).ThenBy(f => f.Name).Select(Mapping.ToDto).ToList(),
@@ -50,7 +51,8 @@ public static class ContentEndpoints
                 explorations.OrderBy(e => e.Deck).ThenBy(e => e.Name).Select(Mapping.ToDto).ToList(),
                 relics.OrderBy(r => r.Name).Select(Mapping.ToDto).ToList(),
                 galacticEvents.OrderBy(g => g.Name).Select(Mapping.ToDto).ToList(),
-                factionCards.OrderBy(f => f.FactionId).ThenBy(f => f.Name).Select(Mapping.ToDto).ToList()));
+                factionCards.OrderBy(f => f.FactionId).ThenBy(f => f.Name).Select(Mapping.ToDto).ToList(),
+                systemTiles.OrderBy(t => t.SortOrder).ThenBy(t => t.TileNumber).Select(Mapping.ToDto).ToList()));
         });
 
         return app;

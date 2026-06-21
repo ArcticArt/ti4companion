@@ -179,8 +179,9 @@ public class Planet : IMasterContent
     public bool IsStation { get; set; }
     /// <summary>True for a TE Fracture planet that grants a relic.</summary>
     public bool GrantsRelic { get; set; }
-    /// <summary>Reference to the system tile this planet sits on ("Systemtafel" number); null if unknown.</summary>
-    public int? SystemTileId { get; set; }
+    /// <summary>Reference to the system tile this planet sits on — the <see cref="SystemTile.TileNumber"/>
+    /// (a **string**, so it can reference the lettered tiles like "82A"/"96A"); null if unknown.</summary>
+    public string? SystemTileId { get; set; }
     public string FlavorText { get; set; } = "";
     public string FlavorTextDe { get; set; } = "";
 
@@ -432,4 +433,42 @@ public class FactionCard : IMasterContent
     public string TextDe { get; set; } = "";
 
     [NotMapped] public string LogicalKey => Slug;
+}
+
+/// <summary>A system tile ("Systemtafel"). Keyed by its printed <see cref="TileNumber"/> (the tile number,
+/// e.g. "01", "82A", "83a", "125") — these include letters for the double-sided / multi-system tiles, so the
+/// id is a string, not an int. Captures the tile's anomaly, wormhole and home-system info. A tile is its own
+/// identity with no reprints, so it is **not** versioned / <see cref="IMasterContent"/>; it still carries
+/// Source/Expansion for the client's expansion filtering. Loaded raw into the content bundle (no Latest()).</summary>
+public class SystemTile
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    /// <summary>The printed tile number = the logical id (e.g. "01", "17", "82A", "83a", "125").</summary>
+    public string TileNumber { get; set; } = "";
+    /// <summary>Numeric tile number for stable ordering; the letter suffix only breaks ties.</summary>
+    public int SortOrder { get; set; }
+    public ContentSource Source { get; set; }
+    public Expansion Expansion { get; set; }
+    /// <summary>The tile's back colour; None for Mecatol, hyperlane and fracture tiles.</summary>
+    public SystemTileColor Color { get; set; }
+    /// <summary>True for a faction home system (a green home tile). The Creuss Gate (17) and The Sorrow (94)
+    /// are green gate tiles but are NOT home systems.</summary>
+    public bool IsHomeSystem { get; set; }
+    /// <summary>The faction slug whose home system this is; null for non-home tiles.</summary>
+    public string? HomeFactionId { get; set; }
+    /// <summary>True if the tile carries any anomaly (mirrors <see cref="Anomalies"/> != None).</summary>
+    public bool IsAnomaly { get; set; }
+    /// <summary>Which anomaly/anomalies the tile carries (a tile may have several).</summary>
+    public AnomalyType Anomalies { get; set; }
+    /// <summary>Which wormhole(s) the tile carries.</summary>
+    public WormholeType Wormholes { get; set; }
+    /// <summary>True for a hyperlane tile (connectivity only — no planets/anomalies/wormholes).</summary>
+    public bool IsHyperlane { get; set; }
+    /// <summary>True for a Thunder's Edge Fracture tile (125-127).</summary>
+    public bool IsFracture { get; set; }
+    /// <summary>The wiki "Tile Description" (e.g. "Sol Home System", "Planet System", "Anomaly System").</summary>
+    public string Description { get; set; } = "";
+    /// <summary>Free-text planet/value summary from the source (e.g. "Maaluuk: 0/2, Druaa: 3/1"); the
+    /// structured planets live in <see cref="Planet"/> (linked by <see cref="Planet.SystemTileId"/>).</summary>
+    public string Planets { get; set; } = "";
 }

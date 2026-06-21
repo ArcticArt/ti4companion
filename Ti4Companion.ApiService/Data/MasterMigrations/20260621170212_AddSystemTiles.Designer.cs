@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ti4Companion.ApiService.Data;
 
@@ -10,9 +11,11 @@ using Ti4Companion.ApiService.Data;
 namespace Ti4Companion.ApiService.Data.MasterMigrations
 {
     [DbContext(typeof(MasterDbContext))]
-    partial class MasterDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260621170212_AddSystemTiles")]
+    partial class AddSystemTiles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -611,8 +614,8 @@ namespace Ti4Companion.ApiService.Data.MasterMigrations
                     b.Property<int>("Source")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("SystemTileId")
-                        .HasColumnType("TEXT");
+                    b.Property<int?>("SystemTileId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("TechSkip1")
                         .HasColumnType("INTEGER");
