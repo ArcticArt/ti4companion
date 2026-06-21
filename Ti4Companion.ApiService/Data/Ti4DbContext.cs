@@ -4,16 +4,7 @@ namespace Ti4Companion.ApiService.Data;
 
 public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(options)
 {
-    // Reference content
-    public DbSet<Faction> Factions => Set<Faction>();
-    public DbSet<StrategyCardDef> StrategyCards => Set<StrategyCardDef>();
-    public DbSet<ObjectiveDef> Objectives => Set<ObjectiveDef>();
-    public DbSet<TechnologyDef> Technologies => Set<TechnologyDef>();
-    public DbSet<AgendaDef> Agendas => Set<AgendaDef>();
-    public DbSet<Planet> Planets => Set<Planet>();
-    public DbSet<UnitDef> Units => Set<UnitDef>();
-
-    // Session state
+    // Session state (reference content lives in MasterDbContext / ti4master.db)
     public DbSet<GameSession> Sessions => Set<GameSession>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<PlayerStrategyCard> PlayerStrategyCards => Set<PlayerStrategyCard>();
@@ -27,28 +18,6 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
-
-        // ---- Reference content (explicit non-generated keys) ----
-        b.Entity<Faction>().HasKey(x => x.Id);
-        b.Entity<Faction>().Property(x => x.Id).ValueGeneratedNever();
-
-        b.Entity<StrategyCardDef>().HasKey(x => x.Id);
-        b.Entity<StrategyCardDef>().Property(x => x.Id).ValueGeneratedNever();
-
-        b.Entity<ObjectiveDef>().HasKey(x => x.Id);
-        b.Entity<ObjectiveDef>().Property(x => x.Id).ValueGeneratedNever();
-
-        b.Entity<TechnologyDef>().HasKey(x => x.Id);
-        b.Entity<TechnologyDef>().Property(x => x.Id).ValueGeneratedNever();
-
-        b.Entity<AgendaDef>().HasKey(x => x.Id);
-        b.Entity<AgendaDef>().Property(x => x.Id).ValueGeneratedNever();
-
-        b.Entity<Planet>().HasKey(x => x.Id);
-        b.Entity<Planet>().Property(x => x.Id).ValueGeneratedNever();
-
-        b.Entity<UnitDef>().HasKey(x => x.Id);
-        b.Entity<UnitDef>().Property(x => x.Id).ValueGeneratedNever();
 
         // ---- Sessions ----
         // Guid keys are assigned in the entity initializers, so treat them as app-generated.

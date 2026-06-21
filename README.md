@@ -26,7 +26,7 @@ English and German. No Docker required — all data lives in a single SQLite fil
 ```
 Ti4Companion.AppHost          .NET Aspire orchestration (runs the API) — local dev
 Ti4Companion.ServiceDefaults  shared telemetry / health / resilience
-Ti4Companion.ApiService       REST API + SignalR hub + EF Core + content seeding + auto-wipe worker
+Ti4Companion.ApiService       REST API + SignalR hub + EF Core (sessions + master content) + auto-wipe
                               (also hosts the published Blazor client)
 Ti4Companion.Web              Blazor WebAssembly client (PWA) — control views + beamer view
 Ti4Companion.Shared           DTOs / enums shared by API and client
@@ -35,7 +35,7 @@ Ti4Companion.Shared           DTOs / enums shared by API and client
 ## Run locally
 
 **Prerequisites:** the .NET 10 SDK. That's it — no Docker, no database server. SQLite is built in,
-and the database file (`ti4.db`) is created automatically on first run.
+the session database (`ti4.db`) is created automatically on first run, and the content database (`ti4master.db`) ships with the repo.
 
 ```bash
 dotnet run --project Ti4Companion.AppHost
@@ -54,8 +54,8 @@ The Aspire AppHost just launches the API, so you can also run the API directly:
 dotnet run --project Ti4Companion.ApiService
 ```
 
-It listens on `http://localhost:5116` and creates `ti4.db` in the project directory. Override the
-location with a connection string if you like:
+It listens on `http://localhost:5116` and creates `ti4.db` in the project directory (`ti4master.db` is
+already there, committed). Override either location with a connection string if you like (`ti4db` / `ti4masterdb`):
 
 ```bash
 ConnectionStrings__ti4db="Data Source=/path/to/ti4.db" \
@@ -64,23 +64,26 @@ ConnectionStrings__ti4db="Data Source=/path/to/ti4.db" \
 
 ### Resetting the dev database
 
-The SQLite database is the single file `ti4.db` (plus its `-wal`/`-shm` companions). To start fresh —
-stop the app, then delete it:
+There are two SQLite files: `ti4.db` (live sessions, gitignored) and `ti4master.db` (the reference
+content, **committed to git**). To discard local test sessions, stop the app and delete `ti4.db`:
 
 ```powershell
 Remove-Item ti4.db, ti4.db-wal, ti4.db-shm -ErrorAction SilentlyContinue
 ```
 
-The next run recreates the database from the current migration and re-seeds the content. (This only
-discards local test sessions; the game content lives in the JSON seed files.)
+The next run recreates `ti4.db` from its migrations. To discard **content** edits, restore the committed
+DB instead: `git checkout -- Ti4Companion.ApiService/ti4master.db`.
 
 ## Editing game content
 
-Strategy cards, factions, objectives and technologies are bilingual JSON seed files in
-`Ti4Companion.ApiService/Data/Seed/`. Edit them and restart — the content tables re-sync on startup
-(session data is left untouched). German text falls back to English where a translation is missing.
-Some Thunder's Edge details are seeded from the best available public info and are easy to correct
-there.
+All reference content (strategy cards, factions, objectives, technologies, planets, units — plus faction
+abilities, leaders, breakthroughs and starting units) lives in the **master content database**
+`Ti4Companion.ApiService/ti4master.db`, which is **committed to git**. Edit it directly with any SQLite tool
+(e.g. [DB Browser for SQLite](https://sqlitebrowser.org/)), then commit the changed `ti4master.db`. Each
+content row carries a version + source (Base/PoK/Codex/Thunder's Edge) and the app uses the newest revision.
+German text falls back to English where a translation is missing. (There are no JSON seed files anymore — the
+content was bootstrapped once and the seeds removed; some Thunder's Edge details are from the best available
+public info and are easy to correct in the DB.)
 
 ## Test on your phone (same Wi‑Fi)
 

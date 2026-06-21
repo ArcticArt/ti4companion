@@ -17,10 +17,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="Data\Seed\*.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Ti4Companion.ServiceDefaults\Ti4Companion.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Ti4Companion.Shared\Ti4Companion.Shared.csproj" />
     <ProjectReference Include="..\Ti4Companion.Web\Ti4Companion.Web.csproj" />

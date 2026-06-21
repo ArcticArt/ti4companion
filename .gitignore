@@ -16,10 +16,14 @@ publish/
 project.lock.json
 *.nupkg
 
-# SQLite database (created at runtime; back it up separately)
+# SQLite session DB (created at runtime; back it up separately)
 ti4.db
 ti4.db-shm
 ti4.db-wal
+# ti4master.db (the master content DB) is COMMITTED as the content artifact — its transient
+# WAL/shared-memory sidecars are not.
+ti4master.db-shm
+ti4master.db-wal
 
 # Environment / secrets
 .env

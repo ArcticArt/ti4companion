@@ -6,28 +6,72 @@ namespace Ti4Companion.ApiService;
 
 public static class Mapping
 {
+    // Content rows expose their LOGICAL id (slug / strategy-card number) as the DTO Id; the surrogate
+    // Guid PK stays internal to the master DB.
     public static FactionDto ToDto(this Faction f)
-        => new(f.Id, f.Name, f.NameDe, f.Expansion, f.ColorHex, f.InitiativeOverride, f.IconPath, f.StartingTechnologies);
+        => new(f.Slug, f.Name, f.NameDe, f.Expansion, f.ColorHex, f.InitiativeOverride, f.IconPath,
+               f.StartingTechnologies, f.PreferredColors, f.Complexity, f.Commodities, f.FlavorText, f.FlavorTextDe, f.Version, f.Source);
 
     public static StrategyCardDto ToDto(this StrategyCardDef s)
-        => new(s.Id, s.Name, s.NameDe, s.Initiative, s.ColorHex,
-               s.PrimaryText, s.PrimaryTextDe, s.SecondaryText, s.SecondaryTextDe, s.Version);
+        => new(s.Number, s.Name, s.NameDe, s.Initiative, s.ColorHex,
+               s.PrimaryText, s.PrimaryTextDe, s.SecondaryText, s.SecondaryTextDe,
+               s.RevisionLabel, s.Version, s.Source);
 
     public static ObjectiveDto ToDto(this ObjectiveDef o)
-        => new(o.Id, o.Name, o.NameDe, o.Requirement, o.RequirementDe, o.Points, o.Stage, o.Expansion, o.IsSecret);
+        => new(o.Slug, o.Name, o.NameDe, o.Requirement, o.RequirementDe, o.Points, o.Stage, o.Phase,
+               o.Expansion, o.Version, o.Source);
 
     public static TechnologyDto ToDto(this TechnologyDef t)
-        => new(t.Id, t.Name, t.NameDe, t.Color, t.Prerequisites, t.Text, t.TextDe, t.Expansion, t.FactionId, t.UnitType);
+        => new(t.Slug, t.Name, t.NameDe, t.Color, t.Prerequisites, t.Text, t.TextDe, t.Expansion,
+               t.FactionId, t.UnitType, t.Version, t.Source);
 
     public static AgendaDto ToDto(this AgendaDef a)
-        => new(a.Id, a.Name, a.NameDe, a.Type, a.Elect, a.Text, a.TextDe, a.Expansion, a.RemovedInPok);
+        => new(a.Slug, a.Name, a.NameDe, a.Type, a.Elect, a.Text, a.TextDe, a.Expansion, a.RemovedInPok,
+               a.Version, a.Source);
 
     public static PlanetDto ToDto(this Planet p)
-        => new(p.Id, p.Name, p.NameDe, p.Trait, p.Resources, p.Influence, p.HomeFactionId, p.Legendary, p.Expansion);
+        => new(p.Slug, p.Name, p.Trait, p.Trait2, p.Resources, p.Influence, p.TechSkip1, p.TechSkip2,
+               p.HomeFactionId, p.Legendary, p.LegendaryEffect, p.LegendaryEffectDe, p.IsStation, p.GrantsRelic,
+               p.SystemTileId, p.FlavorText, p.FlavorTextDe, p.Expansion, p.Version, p.Source);
 
     public static UnitDto ToDto(this UnitDef u)
-        => new(u.Id, u.Name, u.NameDe, u.UnitType, u.FactionId, u.Cost, u.ProducedCount,
-               u.Combat, u.CombatDice, u.Move, u.Capacity, u.Text, u.TextDe, u.UnitAbilities, u.Expansion);
+        => new(u.Slug, u.Name, u.NameDe, u.UnitType, u.FactionId, u.Cost, u.ProducedCount,
+               u.Combat, u.CombatDice, u.Move, u.Capacity, u.Text, u.TextDe, u.UnitAbilities, u.Expansion,
+               u.Version, u.Source);
+
+    public static FactionAbilityDto ToDto(this FactionAbility a)
+        => new(a.Slug, a.FactionId, a.Name, a.NameDe, a.Text, a.TextDe, a.Order, a.Expansion, a.Version, a.Source);
+
+    public static LeaderDto ToDto(this Leader l)
+        => new(l.Slug, l.FactionId, l.LeaderType, l.Name, l.NameDe, l.Text, l.TextDe,
+               l.UnlockCondition, l.UnlockConditionDe, l.FlavorText, l.FlavorTextDe, l.Expansion, l.Version, l.Source);
+
+    public static BreakthroughDto ToDto(this Breakthrough b)
+        => new(b.Slug, b.FactionId, b.Name, b.NameDe, b.Text, b.TextDe, b.ConnectedColor1, b.ConnectedColor2);
+
+    public static TypeValueDto ToDto(this TypeValue t)
+        => new(t.Type, t.Value, t.Name, t.NameDe);
+
+    public static PromissoryNoteDto ToDto(this PromissoryNote p)
+        => new(p.Slug, p.FactionId, p.Name, p.NameDe, p.Text, p.TextDe, p.Expansion, p.Version, p.Source);
+
+    public static ActionCardDto ToDto(this ActionCard a)
+        => new(a.Slug, a.Name, a.NameDe, a.Text, a.TextDe, a.FlavorText, a.FlavorTextDe, a.Expansion, a.Version, a.Source);
+
+    public static ExplorationDto ToDto(this Exploration e)
+        => new(e.Slug, e.Deck, e.Name, e.NameDe, e.Text, e.TextDe, e.Expansion, e.Version, e.Source);
+
+    public static RelicDto ToDto(this Relic r)
+        => new(r.Slug, r.Name, r.NameDe, r.Text, r.TextDe, r.FlavorText, r.FlavorTextDe, r.Expansion, r.Version, r.Source);
+
+    public static GalacticEventDto ToDto(this GalacticEvent g)
+        => new(g.Slug, g.Name, g.NameDe, g.Text, g.TextDe, g.Expansion, g.Version, g.Source);
+
+    public static FactionCardDto ToDto(this FactionCard f)
+        => new(f.Slug, f.FactionId, f.Name, f.NameDe, f.Text, f.TextDe, f.Expansion, f.Version, f.Source);
+
+    public static FactionStartingUnitDto ToDto(this FactionStartingUnit s)
+        => new(s.FactionId, s.UnitId, s.Count);
 
     public static SessionLogEntryDto ToDto(this SessionLogEntry l)
         => new(l.Id, l.TimestampUtc, l.Kind, l.ActorPlayerId, l.TargetPlayerId, l.Phase, l.Round, l.Detail);

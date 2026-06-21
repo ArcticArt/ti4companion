@@ -54,12 +54,12 @@ public static class AgendaDisplay
             case ElectType.HazardousPlanet:
             case ElectType.IndustrialPlanet:
             case ElectType.NonHomePlanet:
-                return store.PlanetsFor(kind).OrderBy(p => loc.Pick(p.Name, p.NameDe))
-                    .Select(p => new Candidate(p.Id, loc.Pick(p.Name, p.NameDe))).ToList();
+                return store.PlanetsFor(kind).OrderBy(p => p.Name)
+                    .Select(p => new Candidate(p.Id, p.Name)).ToList();   // planet names aren't translated
             case ElectType.ScoredSecret:
                 // Offer the secret objectives (e.g. Classified Document Leaks elects the secret to make
                 // public); free text is also allowed for anything not listed.
-                return store.ActiveObjectives().Where(o => o.IsSecret).OrderBy(o => loc.Pick(o.Name, o.NameDe))
+                return store.ActiveObjectives().Where(o => o.Stage == ObjectiveStage.Secret).OrderBy(o => loc.Pick(o.Name, o.NameDe))
                     .Select(o => new Candidate(o.Id, loc.Pick(o.Name, o.NameDe))).ToList();
             default:
                 return new List<Candidate>();
@@ -83,7 +83,7 @@ public static class AgendaDisplay
             case ElectType.HazardousPlanet:
             case ElectType.IndustrialPlanet:
             case ElectType.NonHomePlanet:
-                return store.Planet(choice) is { } pl ? loc.Pick(pl.Name, pl.NameDe) : choice;
+                return store.Planet(choice) is { } pl ? pl.Name : choice;   // planet names aren't translated
             case ElectType.ScoredSecret:
                 return store.Objective(choice) is { } o ? loc.Pick(o.Name, o.NameDe) : choice;
             default:

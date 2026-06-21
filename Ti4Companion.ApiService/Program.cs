@@ -9,9 +9,14 @@ var builder = WebApplication.CreateBuilder(args);
 // Aspire service defaults (OpenTelemetry, health checks, resilience, service discovery).
 builder.AddServiceDefaults();
 
-// SQLite — a single local file, no external database process (and no Docker).
+// SQLite — local files, no external database process (and no Docker). Two databases:
+//  • ti4.db        — runtime session state (Ti4DbContext).
+//  • ti4master.db  — the master reference content (MasterDbContext), bootstrapped once from the JSON.
 var connectionString = builder.Configuration.GetConnectionString("ti4db") ?? "Data Source=ti4.db";
 builder.Services.AddDbContext<Ti4DbContext>(options => options.UseSqlite(connectionString));
+
+var masterConnectionString = builder.Configuration.GetConnectionString("ti4masterdb") ?? "Data Source=ti4master.db";
+builder.Services.AddDbContext<MasterDbContext>(options => options.UseSqlite(masterConnectionString));
 
 builder.Services.AddSignalR();
 builder.Services.AddOpenApi();
@@ -21,14 +26,27 @@ builder.Services.AddHostedService<SessionCleanupWorker>();
 
 var app = builder.Build();
 
-// Apply migrations and (re-)seed the bilingual TI4 content on startup.
+// Apply migrations to both databases on startup. The master content DB is bootstrapped from the JSON
+// only when it is empty (first run); thereafter it is canonical and never re-seeded.
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<Ti4DbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    var db = scope.ServiceProvider.GetRequiredService<Ti4DbContext>();
     await db.Database.MigrateAsync();
     await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;"); // better concurrency for SQLite
-    await ContentSeeder.SeedAsync(db, logger);
+
+    var master = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    await master.Database.MigrateAsync();
+    await master.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
+
+    // The master content DB (ti4master.db) is a committed artifact, edited directly — there is no JSON
+    // bootstrap anymore. Warn loudly if it somehow came up empty (e.g. the file was lost/not restored).
+    if (!await master.Factions.AnyAsync())
+        logger.LogWarning("Master content DB has no content. ti4master.db is a committed artifact — restore it from source control (the JSON bootstrap has been removed).");
+
+    // Cache the static faction initiative overrides so the session-mutation path doesn't hit the master DB.
+    await FactionInitiative.LoadAsync(master);
 }
 
 app.MapDefaultEndpoints();

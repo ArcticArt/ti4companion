@@ -122,7 +122,7 @@ public static class SessionEndpoints
         Log(db, session, SessionLogKind.PlayerJoin, host.Id, host.Id, detail: "host");
         await db.SaveChangesAsync(ct);
 
-        var overrides = await GetFactionOverridesAsync(db, ct);
+        var overrides = FactionInitiative.Overrides;
         var state = (await LoadGraphAsync(db, session.Id, ct))!.ToDto(overrides);
         return Results.Ok(new JoinResultDto(state, host.Id, deviceToken));
     }
@@ -131,7 +131,7 @@ public static class SessionEndpoints
     {
         var session = await LoadGraphByCodeAsync(db, SessionHub.Normalize(code), ct);
         if (session is null) return Results.NotFound();
-        var overrides = await GetFactionOverridesAsync(db, ct);
+        var overrides = FactionInitiative.Overrides;
         return Results.Ok(session.ToDto(overrides));
     }
 
@@ -268,7 +268,7 @@ public static class SessionEndpoints
             foreach (var c in p.StrategyCards) c.IsExhausted = false;
         }
 
-        var overrides = await GetFactionOverridesAsync(db, ct);
+        var overrides = FactionInitiative.Overrides;
         session.Phase = GamePhase.Action;
         session.ActiveStrategyCardId = null;
         session.ActivePlayerId = TurnService.FirstActive(session, overrides);
@@ -363,7 +363,7 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
-        var overrides = await GetFactionOverridesAsync(db, ct);
+        var overrides = FactionInitiative.Overrides;
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
         if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
@@ -375,7 +375,7 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
-        var overrides = await GetFactionOverridesAsync(db, ct);
+        var overrides = FactionInitiative.Overrides;
         session.ActivePlayerId = TurnService.PreviousActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
         if (session.ActivePlayerId is Guid prev) Log(db, session, http, SessionLogKind.TurnChange, target: prev);
@@ -441,11 +441,11 @@ public static class SessionEndpoints
         await db.SaveChangesAsync(ct);
         await hub.NotifySessionChanged(session.JoinCode);
 
-        var overrides = await GetFactionOverridesAsync(db, ct);
+        var overrides = FactionInitiative.Overrides;
         return Results.Ok(new JoinResultDto(session.ToDto(overrides), target.Id, deviceToken));
     }
 
-    private static async Task<IResult> UpdatePlayer(Guid id, Guid playerId, UpdatePlayerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> UpdatePlayer(Guid id, Guid playerId, UpdatePlayerRequest req, Ti4DbContext db, MasterDbContext master, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
@@ -465,7 +465,7 @@ public static class SessionEndpoints
             {
                 var oldFaction = player.FactionId;
                 player.FactionId = newFaction;
-                await UpdateStartingTechnologiesAsync(db, session, player, oldFaction, newFaction, ct);
+                await UpdateStartingTechnologiesAsync(master, session, player, oldFaction, newFaction, ct);
             }
         }
 
@@ -502,7 +502,7 @@ public static class SessionEndpoints
 
             player.HasPassed = true;
             Log(db, session, http, SessionLogKind.Pass, target: playerId);
-            var overrides = await GetFactionOverridesAsync(db, ct);
+            var overrides = FactionInitiative.Overrides;
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
             if (session.ActivePlayerId is Guid nxt) Log(db, session, http, SessionLogKind.TurnChange, target: nxt);
@@ -848,9 +848,6 @@ public static class SessionEndpoints
     private static Task<GameSession?> LoadGraphByCodeAsync(Ti4DbContext db, string code, CancellationToken ct) =>
         db.WithGraph().FirstOrDefaultAsync(s => s.JoinCode == code, ct);
 
-    private static async Task<Dictionary<string, int?>> GetFactionOverridesAsync(Ti4DbContext db, CancellationToken ct) =>
-        await db.Factions.AsNoTracking().ToDictionaryAsync(f => f.Id, f => f.InitiativeOverride, ct);
-
     private static StrategyCardState GetOrCreateCardState(GameSession session, int cardId)
     {
         var state = session.StrategyCardStates.FirstOrDefault(s => s.StrategyCardId == cardId);
@@ -867,30 +864,36 @@ public static class SessionEndpoints
     /// faction's fixed starting techs (so switching factions doesn't accumulate extras — e.g. picking
     /// the Titans then another faction) and adds the new faction's. Techs shared by both are re-added.
     /// </summary>
-    private static async Task UpdateStartingTechnologiesAsync(Ti4DbContext db, GameSession session, Player player, string? oldFactionId, string? newFactionId, CancellationToken ct)
+    private static async Task UpdateStartingTechnologiesAsync(MasterDbContext master, GameSession session, Player player, string? oldFactionId, string? newFactionId, CancellationToken ct)
     {
         if (oldFactionId is not null)
         {
-            var oldFaction = await db.Factions.AsNoTracking().FirstOrDefaultAsync(f => f.Id == oldFactionId, ct);
+            var oldFaction = await LatestFactionAsync(master, oldFactionId, ct);
             if (oldFaction is not null)
                 foreach (var techId in oldFaction.StartingTechnologies)
                     player.Technologies.RemoveAll(t => t.TechnologyId == techId);
         }
 
         if (newFactionId is null) return;
-        var newFaction = await db.Factions.AsNoTracking().FirstOrDefaultAsync(f => f.Id == newFactionId, ct);
+        var newFaction = await LatestFactionAsync(master, newFactionId, ct);
         if (newFaction is null) return;
         foreach (var techId in newFaction.StartingTechnologies)
             if (!player.Technologies.Any(t => t.TechnologyId == techId))
                 player.Technologies.Add(new PlayerTechnology { SessionId = session.Id, PlayerId = player.Id, TechnologyId = techId });
     }
 
-    private static async Task<IResult> SaveAndReturn(Ti4DbContext db, IHubContext<SessionHub> hub, GameSession session, CancellationToken ct, Dictionary<string, int?>? overrides = null)
+    /// <summary>The newest revision of a faction by its logical slug (factions are keyed by a surrogate
+    /// Guid in the master DB and may carry historical revisions).</summary>
+    private static async Task<Faction?> LatestFactionAsync(MasterDbContext master, string slug, CancellationToken ct) =>
+        (await master.Factions.AsNoTracking().Where(f => f.Slug == slug).ToListAsync(ct))
+            .OrderByDescending(f => f.Version).FirstOrDefault();
+
+    private static async Task<IResult> SaveAndReturn(Ti4DbContext db, IHubContext<SessionHub> hub, GameSession session, CancellationToken ct, IReadOnlyDictionary<string, int?>? overrides = null)
     {
         session.LastActivityUtc = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         await hub.NotifySessionChanged(session.JoinCode);
-        overrides ??= await GetFactionOverridesAsync(db, ct);
+        overrides ??= FactionInitiative.Overrides;
         return Results.Ok(session.ToDto(overrides));
     }
 
