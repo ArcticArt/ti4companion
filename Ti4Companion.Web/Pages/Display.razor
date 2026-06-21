@@ -390,7 +390,13 @@ else
         // each fits (re-evaluated fresh each render, so removing techs re-expands the cards).
         if (s.DisplayMode == DisplayMode.Tech && s.Phase != GamePhase.Agenda)
         {
-            try { await JS.InvokeVoidAsync("ti4.fitTechCols"); }
+            // First decide which cards collapse to a name (column pressure), then grow each survivor's font
+            // to the largest scale that keeps its name on one line and its description from overflowing.
+            try
+            {
+                await JS.InvokeVoidAsync("ti4.fitTechCols");
+                await JS.InvokeVoidAsync("ti4.fitTechCardFonts");
+            }
             catch { /* JS not available yet (e.g. prerender) */ }
         }
     }
