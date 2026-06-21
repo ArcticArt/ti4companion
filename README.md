@@ -98,9 +98,9 @@ New-NetFirewallRule -DisplayName "TI4 Companion" -Direction Inbound -Protocol TC
 
 Find your PC's IPv4 address with `ipconfig`, then on the phone open `http://<PC-IP>:5116`. Create a
 session on the PC and join with the code from the phone. (Plain HTTP over the LAN is fine for use;
-iOS "Add to Home Screen" works best over HTTPS, e.g. via the Caddy setup in deployment.)
+iOS "Add to Home Screen" works best over HTTPS, e.g. via the reverse-proxy setup in deployment.)
 
 ## Deployment
 
-See [DEPLOY.md](DEPLOY.md) for the Docker-free Linux host setup (a `dotnet publish` build run as a
-systemd service behind Caddy, with automatic HTTPS and SQLite backups).
+See [DEPLOY.md](DEPLOY.md) for the Docker-free Linux host setup (a `publish.ps1` build run as a
+systemd service behind Apache, with Let's Encrypt HTTPS and SQLite backups).
