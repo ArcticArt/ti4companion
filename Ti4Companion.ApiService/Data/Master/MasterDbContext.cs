@@ -29,6 +29,7 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
     public DbSet<Relic> Relics => Set<Relic>();
     public DbSet<GalacticEvent> GalacticEvents => Set<GalacticEvent>();
     public DbSet<FactionCard> FactionCards => Set<FactionCard>();
+    public DbSet<SystemTile> SystemTiles => Set<SystemTile>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -41,7 +42,7 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
                      typeof(AgendaDef), typeof(Planet), typeof(UnitDef), typeof(FactionAbility),
                      typeof(Leader), typeof(Breakthrough), typeof(FactionStartingUnit),
                      typeof(PromissoryNote), typeof(ActionCard), typeof(Exploration), typeof(Relic),
-                     typeof(GalacticEvent), typeof(FactionCard),
+                     typeof(GalacticEvent), typeof(FactionCard), typeof(SystemTile),
                  })
         {
             b.Entity(type).Property<Guid>("Id").ValueGeneratedNever();
@@ -64,6 +65,8 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
         b.Entity<Relic>().HasIndex(x => new { x.Slug, x.Version }).IsUnique();
         b.Entity<GalacticEvent>().HasIndex(x => new { x.Slug, x.Version }).IsUnique();
         b.Entity<FactionCard>().HasIndex(x => new { x.Slug, x.Version }).IsUnique();
+        // System tiles are keyed by the printed tile number (string); not versioned.
+        b.Entity<SystemTile>().HasIndex(x => x.TileNumber).IsUnique();
 
         // Bilingual enum-value labels: composite key (Type, Value), no surrogate Guid.
         b.Entity<TypeValue>().HasKey(x => new { x.Type, x.Value });

@@ -73,6 +73,11 @@ public static class Mapping
     public static FactionStartingUnitDto ToDto(this FactionStartingUnit s)
         => new(s.FactionId, s.UnitId, s.Count);
 
+    public static SystemTileDto ToDto(this SystemTile t)
+        => new(t.TileNumber, t.SortOrder, t.Color, t.IsHomeSystem, t.HomeFactionId,
+               t.IsAnomaly, t.Anomalies, t.Wormholes, t.IsHyperlane, t.IsFracture,
+               t.Description, t.Planets, t.Expansion, t.Source);
+
     public static SessionLogEntryDto ToDto(this SessionLogEntry l)
         => new(l.Id, l.TimestampUtc, l.Kind, l.ActorPlayerId, l.TargetPlayerId, l.Phase, l.Round, l.Detail);
 

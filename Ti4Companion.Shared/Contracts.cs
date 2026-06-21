@@ -44,12 +44,12 @@ public record AgendaDto(
 /// <summary>Planet names aren't translated (no NameDe). <paramref name="Trait2"/> is the second trait of a
 /// dual-trait planet (or None); <paramref name="TechSkip1"/>/<paramref name="TechSkip2"/> are tech-specialty
 /// colours (TE planets can have two); <paramref name="IsStation"/> marks a TE space station;
-/// <paramref name="SystemTileId"/> references the system tile.</summary>
+/// <paramref name="SystemTileId"/> references the system tile by its <c>TileNumber</c> (a string, e.g. "82A").</summary>
 public record PlanetDto(
     string Id, string Name, PlanetTrait Trait, PlanetTrait Trait2,
     int Resources, int Influence, TechColor? TechSkip1, TechColor? TechSkip2,
     string? HomeFactionId, bool Legendary, string LegendaryEffect, string LegendaryEffectDe,
-    bool IsStation, bool GrantsRelic, int? SystemTileId,
+    bool IsStation, bool GrantsRelic, string? SystemTileId,
     string FlavorText, string FlavorTextDe, Expansion Expansion,
     int Version = 1, ContentSource Source = ContentSource.Base);
 
@@ -123,6 +123,15 @@ public record FactionCardDto(
 /// <summary>One line of a faction's starting fleet: how many of a unit (by unit slug) it begins with.</summary>
 public record FactionStartingUnitDto(string FactionId, string UnitId, int Count);
 
+/// <summary>A system tile ("Systemtafel"). <paramref name="Id"/> is the printed tile number as a string
+/// (e.g. "01", "82A", "125") — the double-sided / multi-system tiles use letters. Carries the tile's
+/// anomaly (<paramref name="IsAnomaly"/> / <paramref name="Anomalies"/>), wormhole (<paramref name="Wormholes"/>)
+/// and home-system (<paramref name="IsHomeSystem"/> / <paramref name="HomeFactionId"/>) info.</summary>
+public record SystemTileDto(
+    string Id, int SortOrder, SystemTileColor Color, bool IsHomeSystem, string? HomeFactionId,
+    bool IsAnomaly, AnomalyType Anomalies, WormholeType Wormholes, bool IsHyperlane, bool IsFracture,
+    string Description, string Planets, Expansion Expansion, ContentSource Source);
+
 public record ContentBundleDto(
     IReadOnlyList<FactionDto> Factions,
     IReadOnlyList<StrategyCardDto> StrategyCards,
@@ -141,7 +150,8 @@ public record ContentBundleDto(
     IReadOnlyList<ExplorationDto> Explorations,
     IReadOnlyList<RelicDto> Relics,
     IReadOnlyList<GalacticEventDto> GalacticEvents,
-    IReadOnlyList<FactionCardDto> FactionCards);
+    IReadOnlyList<FactionCardDto> FactionCards,
+    IReadOnlyList<SystemTileDto> SystemTiles);
 
 // ---------------------------------------------------------------------------
 // Session / runtime state DTOs.

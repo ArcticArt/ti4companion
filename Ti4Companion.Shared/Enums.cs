@@ -85,14 +85,17 @@ public enum ObjectiveStage
     Secret = 3
 }
 
-/// <summary>TI4 technology colors. <see cref="Unit"/> covers colorless unit upgrades.</summary>
+/// <summary>TI4 technology colors. <see cref="Unit"/> covers colorless unit upgrades; <see cref="None"/> is
+/// for the few faction technologies that have NO colour at all (the Nekro Valefar Assimilators X/Y) — distinct
+/// from <see cref="Unit"/> so they don't render as unit cards.</summary>
 public enum TechColor
 {
     Biotic = 0,
     Propulsion = 1,
     Cybernetic = 2,
     Warfare = 3,
-    Unit = 4
+    Unit = 4,
+    None = 5
 }
 
 /// <summary>
@@ -154,6 +157,46 @@ public enum PlanetTrait
     Cultural = 1,
     Hazardous = 2,
     Industrial = 3
+}
+
+/// <summary>Wormhole types on a system tile ("Systemtafel"). <see cref="Flags"/> because a tile can carry
+/// several at once (the flipped Mallice tile has Alpha+Beta+Gamma). Delta = the Ghosts of Creuss,
+/// Epsilon = the Crimson Rebellion (both Thunder's Edge era for Epsilon).</summary>
+[Flags]
+public enum WormholeType
+{
+    None = 0,
+    Alpha = 1,
+    Beta = 2,
+    Gamma = 4,
+    Delta = 8,
+    Epsilon = 16
+}
+
+/// <summary>Anomaly types on a system tile. <see cref="Flags"/> because a tile may carry more than one
+/// (the Thunder's Edge Watchtower is a Gravity Rift + Asteroid Field). <see cref="MuaatSupernova"/> and
+/// <see cref="EntropicScar"/> are distinct named anomalies; <see cref="Egress"/> is a Fracture-tile anomaly.</summary>
+[Flags]
+public enum AnomalyType
+{
+    None = 0,
+    GravityRift = 1,
+    Nebula = 2,
+    Supernova = 4,
+    AsteroidField = 8,
+    MuaatSupernova = 16,
+    EntropicScar = 32,
+    Egress = 64
+}
+
+/// <summary>The printed colour of a system tile's back: Green = home system, Blue = planet system,
+/// Red = anomaly/empty system. <see cref="None"/> for special tiles (Mecatol, hyperlanes, fracture).</summary>
+public enum SystemTileColor
+{
+    None = 0,
+    Green = 1,
+    Blue = 2,
+    Red = 3
 }
 
 public enum Language
