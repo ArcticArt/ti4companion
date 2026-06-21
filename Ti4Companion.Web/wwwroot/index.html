@@ -55,6 +55,38 @@
                 }
             });
         };
+        // Wall-display helper: per visible tech card, grow the font (CSS var --tcfs) to the largest scale
+        // that keeps the NAME on one line and the DESCRIPTION from overflowing the fixed-aspect card.
+        // Binary-searched per card; runs after fitTechCols so it only sizes the still-shown (un-collapsed) cards.
+        window.ti4.fitTechCardFonts = function () {
+            var MIN = 0.7, MAX = 1.9, STEPS = 8;
+            var apply = function () {
+                document.querySelectorAll('.beamer .tech-item:not(.collapsed)').forEach(function (item) {
+                    var card = item.querySelector('.techcard');
+                    if (!card) return;
+                    var name = item.querySelector('.tc-name');
+                    var desc = item.querySelector('.tc-desc');
+                    var fits = function (scale) {
+                        item.style.setProperty('--tcfs', scale);
+                        if (name && name.scrollWidth > name.clientWidth + 1) return false;       // name wrapped → too big
+                        if (card.scrollHeight > card.clientHeight + 1) return false;              // card overflowed
+                        if (desc && desc.scrollHeight > desc.clientHeight + 1) return false;      // desc overflowed its box (unit cards)
+                        return true;
+                    };
+                    if (!fits(MIN)) { item.style.setProperty('--tcfs', MIN); return; }            // even smallest overflows → clip
+                    var lo = MIN, hi = MAX;
+                    for (var i = 0; i < STEPS; i++) {
+                        var mid = (lo + hi) / 2;
+                        if (fits(mid)) lo = mid; else hi = mid;
+                    }
+                    item.style.setProperty('--tcfs', lo);
+                });
+            };
+            apply();
+            // Re-fit once the web fonts (Orbitron name font) are ready — measuring against the fallback font
+            // mis-sizes the one-line name check, letting a long name overflow once the real glyphs load in.
+            if (document.fonts && document.fonts.status !== 'loaded') { document.fonts.ready.then(apply); }
+        };
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>

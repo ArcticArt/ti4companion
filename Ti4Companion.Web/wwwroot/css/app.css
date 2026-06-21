@@ -597,11 +597,18 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Unit cards match the colour-column width exactly (--tech-cols = number of colour columns). */
 .beamer .tech-unit-row .tech-item { flex: 0 0 calc((100% - (var(--tech-cols, 4) - 1) * 1vw) / var(--tech-cols, 4)); }
 .beamer .tech-item { margin: 0; }
-.beamer .tech-item .techcard { width: 100%; aspect-ratio: 5 / 3; height: auto; }   /* fixed proportions, scaled by column width */
+/* overflow:hidden keeps the card at its aspect-ratio height (content can't push it taller) and clips any
+   residual text, so the column layout / ti4.fitTechCols stay font-independent. */
+.beamer .tech-item .techcard { width: 100%; aspect-ratio: 5 / 3; height: auto; overflow: hidden; }  /* fixed proportions, scaled by column width */
 .beamer .tech-unit-row .tech-item .techcard { aspect-ratio: 4 / 3; }               /* units a bit taller, same width */
-.beamer .tech-item .tc-name { font-size: clamp(.72rem, .92vw, 1.4rem); }
-.beamer .tech-item .tc-desc { font-size: clamp(.64rem, .82vw, 1.15rem); line-height: 1.18; }
-.beamer .tech-item .tc-abil { font-size: clamp(.58rem, .72vw, .95rem); }
+/* Per-card DYNAMIC font scaling: ti4.fitTechCardFonts sets --tcfs per card to the largest scale that keeps
+   the NAME on one line (nowrap) and the DESCRIPTION from overflowing the fixed-aspect card. Base (scale 1)
+   = the player-view tech card sizes (.9/.8/.72rem); the JS fitter searches a scale in [.7, 1.9] per card,
+   so a card with spare room grows its text and a text-heavy one shrinks just enough not to overlap. */
+.beamer .tech-item { --tcfs: 1; }
+.beamer .tech-item .tc-name { font-size: calc(.9rem * var(--tcfs)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beamer .tech-item .tc-desc { font-size: calc(.8rem * var(--tcfs)); line-height: 1.18; }
+.beamer .tech-item .tc-abil { font-size: calc(.72rem * var(--tcfs)); }
 /* Collapsed: name only (card hidden); the researcher markers stay. */
 .beamer .tech-item .ti-name { display: none; align-items: center; gap: .35vw; padding: .25vh .5vw; border-radius: 6px;
     background: var(--panel-2); border: 1px solid var(--panel-border); font-weight: 700; font-size: clamp(.72rem, .95vw, 1.35rem); }
@@ -671,7 +678,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
    Columns shrink to fit ONE row (capped at 14vw) so a tech-rich player never wraps/clips horizontally;
    the per-card font auto-shrink keeps the narrowed cards legible. */
 .beamer .p-content.tech { justify-content: flex-start; align-items: flex-start; gap: .7vw; flex-wrap: nowrap; }
-.beamer .tech-col { display: flex; flex-direction: column; gap: .5vh; flex: 1 1 0; min-width: 0; max-width: 14vw; min-height: 0; }
+/* Scoped to the OLD per-player tech layout only — a bare `.beamer .tech-col` here has the same specificity
+   as the Bereich-2 rule above and (being later) overrode its width formula with flex:1 1 0 / max-width:14vw,
+   so the colour columns were capped at 14vw while the unit cards kept the full calc width → mismatched. */
+.beamer .p-content.tech .tech-col { display: flex; flex-direction: column; gap: .5vh; flex: 1 1 0; min-width: 0; max-width: 14vw; min-height: 0; }
 /* Names fill the whole column width; the label is kept to ONE line (ellipsised) so a names column's height
    stays predictable (NamesPerCol fits the row) instead of blowing up when narrow columns wrap a long name. */
 .beamer .tech-col.names { align-items: stretch; }
