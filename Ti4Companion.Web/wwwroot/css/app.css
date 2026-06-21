@@ -434,8 +434,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* 3 dice (war sun): bow the middle one out to the right so they arc around the number */
 .techcard .tc-stat .statmult.dice.n3 img:nth-child(2) { transform: translateX(3px); }
 
-/* tech cards on the wall display: compact, in a fixed grid */
-.beamer .techgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13vw, 1fr)); gap: .5vh .6vw; align-content: start; overflow: hidden; }
+/* tech cards on the wall display — base overrides (the tech-mode cards add more specific sizing below). */
 .beamer .techcard { min-height: 0; background: var(--panel-2); }
 .beamer .techcard .tc-name { font-size: clamp(.65rem, .92vw, 1.15rem); }
 /* keep unit cards inside the narrow wall column (the silhouette is % so it scales already) */
@@ -443,7 +442,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .tc-stat .v { font-size: clamp(.7rem, 1vw, 1.1rem); }
 .beamer .tc-stat .statmult.cost img { width: clamp(8px, .9vw, 13px); height: auto; }
 .beamer .tc-stat .statmult.dice img { width: clamp(6px, .65vw, 9px); height: auto; }
-.beamer .tech-player { color: var(--gold); font-weight: 700; font-size: clamp(.8rem, 1.1vw, 1.4rem); margin: .4vh 0 .1vh; }
 
 /* agenda */
 .agenda-card { background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 10px; padding: .7rem .9rem; }
@@ -627,94 +625,20 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .panel > h3 { font-size: clamp(1rem, 1.5vw, 1.9rem); margin: 0 0 .6vh; flex: 0 0 auto; }
 .beamer .panel-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: .5vh; overflow: hidden; }
 
-/* ---- Player blocks: each shares the column height equally (objectives mode) ---- */
-.beamer .p-block {
-    flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: .4vh;
-    padding: .4vh .8vw; border-radius: 10px;
-    background: var(--panel-2); border: 1px solid var(--panel-border);
-    border-left: .5vw solid var(--player-color, #888);
-}
-/* Wide blocks (secondary/tech mode): grow to content, share leftover space. */
-.beamer .p-block.wide { flex: 1 1 auto; }
-/* Tech mode: share the height equally and clip, so per-colour columns never overlap the next player. */
-.beamer .p-block.tech { flex: 1 1 0; overflow: hidden; }
-.beamer .p-row { display: flex; align-items: center; gap: .8vw; min-height: 0; }
-.beamer .p-block.wide .p-row { align-items: flex-start; }
-/* Active player: bold tinted background so it's obvious from across the room. */
-.beamer .p-block.active {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--player-color) 38%, var(--panel)), color-mix(in srgb, var(--player-color) 14%, var(--panel)));
-    border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 2.5vh rgba(217,176,74,.35);
-}
-/* Passed players: only the identity (initiative, badge, name, faction) recedes — the "PASSED" flag and
-   the player's content (techs / strategy cards / secondary boxes) stay bright. */
-.beamer .p-block.passed .p-init,
-.beamer .p-block.passed .faction-badge,
-.beamer .p-block.passed .p-name,
-.beamer .p-block.passed .p-fac { opacity: .45; filter: saturate(.5); }
-
-.beamer .p-init { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: clamp(1rem, 1.9vw, 2.4rem); min-width: 1.6em; text-align: center; flex: 0 0 auto; }
-.beamer .p-id { flex: 0 1 auto; min-width: 7em; }
+/* Player name / faction / status flags — shared by the wall player table (`.ptr-id`, see `.ptable` below). */
 .beamer .p-name { font-weight: 700; font-size: clamp(1rem, 1.7vw, 2.2rem); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beamer .p-fac { color: var(--text-dim); font-size: clamp(.7rem, 1vw, 1.3rem); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Per-player content (cards / secondary boxes / techs) — left-aligned (flush) beside the name so they
-   line up across all players. */
-.beamer .p-content { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; gap: .5vh .6vw; justify-content: flex-start; align-items: flex-start; align-content: flex-start; }
-/* Objectives mode: stack the strategy-card pills vertically so the row stays narrow (esp. 2 cards each). */
-.beamer .p-content.obj { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; gap: .5vh; }
 .beamer .p-flags { display: flex; flex-flow: row wrap; gap: .3vh .4vw; align-items: flex-start; margin-top: .3vh; }
 .beamer .p-flags:empty { display: none; }
 
-/* Secondary-ability boxes: ALL the same width (no grow) and left-aligned, so they line up flush. */
-.beamer .p-content.sec { align-items: stretch; align-content: flex-start; justify-content: flex-start; }
+/* Secondary-ability boxes (DisplayMode.Secondary, inside `.sec-cards-panel`): the panel grid sizes them
+   equally; this gives the border / accent / bullet styling. */
 .beamer .sec-card { --c: #888; flex: 0 0 30vw; max-width: 30vw; border: 1px solid var(--panel-border); border-left: .3vw solid var(--c);
     padding: .3vh .9vw; background: color-mix(in srgb, var(--c) 10%, var(--panel)); border-radius: 6px; }
 .beamer .sec-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: clamp(.85rem, 1.2vw, 1.6rem); }
 .beamer .sec-name .pn { color: var(--c); }
 .beamer .sec-card .ability-bullets li { font-size: clamp(.75rem, 1.05vw, 1.45rem); line-height: 1.2; }
 .beamer .sec-card .ability-bullets li::before { color: var(--text); }
-/* Tech cards in the enlarged player area (with description). */
-.beamer .p-content .my-tech { font-size: clamp(.7rem, 1vw, 1.3rem); }
-/* Tech view: one right-aligned column per colour (a colour with many techs spills into extra columns).
-   Columns shrink to fit ONE row (capped at 14vw) so a tech-rich player never wraps/clips horizontally;
-   the per-card font auto-shrink keeps the narrowed cards legible. */
-.beamer .p-content.tech { justify-content: flex-start; align-items: flex-start; gap: .7vw; flex-wrap: nowrap; }
-/* Scoped to the OLD per-player tech layout only — a bare `.beamer .tech-col` here has the same specificity
-   as the Bereich-2 rule above and (being later) overrode its width formula with flex:1 1 0 / max-width:14vw,
-   so the colour columns were capped at 14vw while the unit cards kept the full calc width → mismatched. */
-.beamer .p-content.tech .tech-col { display: flex; flex-direction: column; gap: .5vh; flex: 1 1 0; min-width: 0; max-width: 14vw; min-height: 0; }
-/* Names fill the whole column width; the label is kept to ONE line (ellipsised) so a names column's height
-   stays predictable (NamesPerCol fits the row) instead of blowing up when narrow columns wrap a long name. */
-.beamer .tech-col.names { align-items: stretch; }
-.beamer .p-content.tech .my-tech { width: 100%; justify-content: flex-start; padding: .15rem .5rem; line-height: 1.15; }
-.beamer .p-content.tech .my-tech .tech-icon { flex: 0 0 auto; }
-.beamer .p-content.tech .my-tech .mt-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Cards: as small as still legible; a definite height so the bottom-corner symbol spacers resolve, and the
-   foot symbols stay pinned at the bottom. The description font is auto-shrunk to fit by ti4.fitTechCards(). */
-.beamer .tech-col.cards .techcard { width: 100%; flex: 0 0 auto; height: 9vh; overflow: hidden; }
-/* Compact fallback card (name + prereq pips + tech-point, no prose) — shorter, so it fits even at 8 players. */
-.beamer .tech-col.cards .techcard.compact { height: 6vh; }
-.beamer .tech-col.cards .techcard.compact .tc-name { font-size: clamp(.7rem, 1vw, 1.35rem); }
-.beamer .tech-col.cards .techcard.nonunit { --pre-icon: .8vw; --pre-gap: .1vh; --pt-h: 1.5vw; }
-/* Bigger card text, closer to the objectives view (the fit script auto-shrinks any card that overflows). */
-.beamer .tech-col.cards .tc-name { font-size: clamp(.66rem, .98vw, 1.35rem); }
-.beamer .tech-col.cards .tc-desc { font-size: clamp(.62rem, .9vw, 1.25rem); line-height: 1.16; }
-/* Unit-upgrade cards on the wall are tiny — drop the prose (it overlapped the silhouette + stats) and
-   keep the legible bits: name, silhouette, ✦ ability keywords and the stat boxes. Everything is scaled
-   down further (and the silhouette dimmed) so the attributes + text stop overlapping. */
-.beamer .tech-col.cards .techcard.unitcard .tc-desc { display: none; }
-.beamer .tech-col.cards .techcard.unitcard .tc-name { font-size: clamp(.52rem, .72vw, .95rem); }
-.beamer .tech-col.cards .techcard.unitcard .tc-abils { gap: 0 .35vw; margin-top: .1vh; }
-.beamer .tech-col.cards .techcard.unitcard .tc-abil { font-size: clamp(.44rem, .56vw, .72rem); }
-.beamer .tech-col.cards .techcard.unitcard .tc-unitart { opacity: .5; }
-.beamer .tech-col.cards .techcard.unitcard .tc-stats { gap: .15vw; margin-top: .12vh; }
-.beamer .tech-col.cards .techcard.unitcard .tc-stat { padding: .04vh .04vw; }
-.beamer .tech-col.cards .techcard.unitcard .tc-stat .v { font-size: clamp(.55rem, .76vw, 1rem); }
-.beamer .tech-col.cards .techcard.unitcard .tc-stat .l { font-size: clamp(.4rem, .5vw, .68rem); }
-.beamer .tech-col.cards .tc-pre .tech-icon { width: .8vw !important; height: .8vw !important; }
-.beamer .tech-col.cards .tc-point .tech-icon { width: 1.5vw !important; height: 1.5vw !important; }
-/* Tech view: the player's strategy cards (title + exhausted), stacked compactly beside the name. */
-.beamer .p-strats { display: flex; flex-direction: column; gap: .5vh; flex: 0 0 auto; align-self: flex-start; }
-.beamer .p-strats .s-pill { min-width: 7.5em; font-size: clamp(.7rem, .92vw, 1.25rem); padding: .3em .55em; }
 
 /* Strategy-card pill (names only on the wall display). */
 .s-pill {
