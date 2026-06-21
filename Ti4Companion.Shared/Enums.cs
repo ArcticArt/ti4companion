@@ -14,6 +14,58 @@ public enum Expansion
     ThundersEdge = 8
 }
 
+/// <summary>
+/// Granular provenance of a single piece of content — the exact printing it comes from. This is distinct
+/// from the coarse <see cref="Expansion"/> [Flags] set used to filter content by a session's active
+/// expansions: every content item carries BOTH a single <c>ContentSource</c> (its origin, so e.g. the
+/// three printings of Construction can be told apart) and an <see cref="Expansion"/> (derived from the
+/// source) for the "is this active in the session" checks. Codex 4 is reserved per request — only
+/// Codex I–III have shipped so far. Keep the numeric values stable (persisted in the master DB).
+/// </summary>
+public enum ContentSource
+{
+    Base = 0,
+    ProphecyOfKings = 1,
+    Codex1 = 2,
+    Codex2 = 3,
+    Codex3 = 4,
+    Codex4 = 5,
+    ThundersEdge = 6
+}
+
+/// <summary>
+/// A Prophecy of Kings leader slot. Each faction has one of each (Agent, Commander, Hero); the Council
+/// Keleres and Thunder's Edge faction leaders still fit these three slots.
+/// </summary>
+public enum LeaderType
+{
+    Agent = 0,
+    Commander = 1,
+    Hero = 2
+}
+
+/// <summary>The 8 TI4 player colours. Used for a faction's preferred-colour ranking (players still pick a
+/// hex from the palette; this is the named colour). Labelled bilingually in the <c>TypeValues</c> table.</summary>
+public enum PlayerColor
+{
+    Purple = 0,
+    Pink = 1,
+    Red = 2,
+    Black = 3,
+    Blue = 4,
+    Green = 5,
+    Yellow = 6,
+    Orange = 7
+}
+
+/// <summary>A faction's complexity / difficulty rating.</summary>
+public enum FactionComplexity
+{
+    Low = 0,
+    Moderate = 1,
+    High = 2
+}
+
 /// <summary>The phases of a TI4 game round, in order.</summary>
 public enum GamePhase
 {
@@ -27,7 +79,10 @@ public enum GamePhase
 public enum ObjectiveStage
 {
     StageI = 1,
-    StageII = 2
+    StageII = 2,
+    /// <summary>Secret objective (scored privately). Folds in the old separate <c>IsSecret</c> flag —
+    /// "secret" is just a third stage.</summary>
+    Secret = 3
 }
 
 /// <summary>TI4 technology colors. <see cref="Unit"/> covers colorless unit upgrades.</summary>

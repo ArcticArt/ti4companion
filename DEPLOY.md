@@ -8,7 +8,8 @@ certificate.
 | Piece            | Role                                                                          |
 |------------------|-------------------------------------------------------------------------------|
 | `ti4companion`   | the published ASP.NET Core API **+** Blazor client + SignalR hub (Kestrel)    |
-| `ti4.db`         | the SQLite database (sessions) — one file, lives under `/var/lib/ti4companion` |
+| `ti4.db`         | SQLite sessions DB — lives under `/var/lib/ti4companion`                       |
+| `ti4master.db`   | SQLite master content DB — committed to git, copied into the data dir          |
 | `caddy`          | reverse proxy with automatic HTTPS (Let's Encrypt)                            |
 
 > The `.NET Aspire AppHost` is for local development only. In production you run the published
@@ -112,6 +113,7 @@ Environment=HOME=/var/lib/ti4companion
 # NOTE the quotes: systemd splits Environment= on spaces, and "Data Source=" contains one — without
 # quotes only "Data" reaches the app → "Format of the initialization string..." crash.
 Environment="ConnectionStrings__ti4db=Data Source=/var/lib/ti4companion/ti4.db"
+Environment="ConnectionStrings__ti4masterdb=Data Source=/var/lib/ti4companion/ti4master.db"
 # Auto-wipe inactive sessions (hours). Lower this for a public URL.
 Environment=Ti4__DefaultRetentionHours=168
 # Hardening (runs as the unprivileged ti4 user)
@@ -128,11 +130,13 @@ WantedBy=multi-user.target
 systemctl daemon-reload
 systemctl enable --now ti4companion
 systemctl status ti4companion          # should be active (running)
-journalctl -u ti4companion -f          # watch migrations + content seeding on first start
+journalctl -u ti4companion -f          # watch migrations (both DBs) + content bootstrap on first start
 ```
 
-On first start the API creates `ti4.db`, applies the EF Core migration and seeds the TI4 content, so
-the database is ready automatically.
+On first start the API creates `ti4.db` and applies the EF Core migrations to both DBs. **`ti4master.db` is
+NOT auto-created** — it is a committed content artifact, so copy it into the data dir before first start:
+`scp Ti4Companion.ApiService/ti4master.db SERVER:/var/lib/ti4companion/` (then `chown ti4:ti4` it). If it is
+missing the app logs a warning and serves no content.
 
 ## 4. Put Caddy in front
 
@@ -160,24 +164,27 @@ scp -r publish/* root@SERVER:/opt/ti4companion/
 ssh root@SERVER 'systemctl restart ti4companion'
 ```
 
-The database in `/var/lib/ti4companion/ti4.db` is untouched by the redeploy; migrations apply on
-restart and the content re-seeds from the JSON files.
+The databases in `/var/lib/ti4companion/` (`ti4.db` sessions, `ti4master.db` content) are untouched by the
+redeploy; migrations apply on restart. To ship **updated content**, stop the service, copy the new committed
+`ti4master.db` into `/var/lib/ti4companion/` (overwriting it, and delete any stale `-wal`/`-shm`), then start it.
 
 ## 6. Backups
 
-All durable data is the single SQLite file (sessions). Game content is re-seeded from JSON on every
-start, so the `.db` is the only thing to back up. Use SQLite's online backup so you get a consistent
-copy even while the app is running:
+Durable data is two SQLite files: `ti4.db` (sessions) and `ti4master.db` (the master content — a committed
+artifact you edit directly, so back it up too, especially after content edits). Back up **both** with
+SQLite's online backup, for a consistent copy even while the app is running:
 
 ```bash
-# One-off / cron — a consistent snapshot copied to a dated file:
-sqlite3 /var/lib/ti4companion/ti4.db ".backup '/var/backups/ti4-$(date +%F).db'"
+# One-off / cron — a consistent snapshot of each DB to a dated file:
+sqlite3 /var/lib/ti4companion/ti4.db       ".backup '/var/backups/ti4-$(date +%F).db'"
+sqlite3 /var/lib/ti4companion/ti4master.db ".backup '/var/backups/ti4master-$(date +%F).db'"
 ```
 
 A daily cron entry (`crontab -e`):
 
 ```cron
 0 4 * * * sqlite3 /var/lib/ti4companion/ti4.db ".backup '/var/backups/ti4-$(date +\%F).db'"
+5 4 * * * sqlite3 /var/lib/ti4companion/ti4master.db ".backup '/var/backups/ti4master-$(date +\%F).db'"
 ```
 
 To restore: stop the service, drop the backup file in place as `ti4.db` (delete any stale

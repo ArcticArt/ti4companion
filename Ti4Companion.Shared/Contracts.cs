@@ -4,31 +4,54 @@ namespace Ti4Companion.Shared;
 // Content DTOs (carry both languages so the client can switch instantly).
 // ---------------------------------------------------------------------------
 
+// Every content DTO carries the coarse Expansion flag (for the client's active-expansion filtering)
+// PLUS the granular provenance: Version (counts up across reprints) and Source (Base/PoK/Codex I-IV/TE).
+// The API serves the newest revision per logical id, so the client still sees one row per item.
+
 public record FactionDto(
     string Id, string Name, string NameDe, Expansion Expansion,
     string ColorHex, int? InitiativeOverride, string? IconPath,
-    IReadOnlyList<string> StartingTechnologies);
+    IReadOnlyList<string> StartingTechnologies, IReadOnlyList<PlayerColor> PreferredColors,
+    FactionComplexity Complexity, int Commodities, string FlavorText, string FlavorTextDe,
+    int Version = 1, ContentSource Source = ContentSource.Base);
 
+/// <summary><paramref name="RevisionLabel"/> is the printed Ω marking, if any ("Ω" Codex, "ΩΩ" Thunder's
+/// Edge), empty for the original printing.</summary>
 public record StrategyCardDto(
     int Id, string Name, string NameDe, int Initiative, string ColorHex,
     string PrimaryText, string PrimaryTextDe,
-    string SecondaryText, string SecondaryTextDe, string Version);
+    string SecondaryText, string SecondaryTextDe,
+    string RevisionLabel = "", int Version = 1, ContentSource Source = ContentSource.Base);
 
+/// <summary><paramref name="Stage"/> is <c>StageI</c>/<c>StageII</c> for public objectives or
+/// <c>Secret</c> for secret ones (the old IsSecret flag is folded in). <paramref name="Phase"/> is the
+/// scoring phase — usually <c>Status</c>, but a secret may score in another phase.</summary>
 public record ObjectiveDto(
     string Id, string Name, string NameDe, string Requirement, string RequirementDe,
-    int Points, ObjectiveStage Stage, Expansion Expansion, bool IsSecret);
+    int Points, ObjectiveStage Stage, GamePhase Phase, Expansion Expansion,
+    int Version = 1, ContentSource Source = ContentSource.Base);
 
 public record TechnologyDto(
     string Id, string Name, string NameDe, TechColor Color, string Prerequisites,
-    string Text, string TextDe, Expansion Expansion, string? FactionId, UnitType UnitType);
+    string Text, string TextDe, Expansion Expansion, string? FactionId, UnitType UnitType,
+    int Version = 1, ContentSource Source = ContentSource.Base);
 
 public record AgendaDto(
     string Id, string Name, string NameDe, AgendaType Type, string Elect,
-    string Text, string TextDe, Expansion Expansion, bool RemovedInPok);
+    string Text, string TextDe, Expansion Expansion, bool RemovedInPok,
+    int Version = 1, ContentSource Source = ContentSource.Base);
 
+/// <summary>Planet names aren't translated (no NameDe). <paramref name="Trait2"/> is the second trait of a
+/// dual-trait planet (or None); <paramref name="TechSkip1"/>/<paramref name="TechSkip2"/> are tech-specialty
+/// colours (TE planets can have two); <paramref name="IsStation"/> marks a TE space station;
+/// <paramref name="SystemTileId"/> references the system tile.</summary>
 public record PlanetDto(
-    string Id, string Name, string NameDe, PlanetTrait Trait,
-    int Resources, int Influence, string? HomeFactionId, bool Legendary, Expansion Expansion);
+    string Id, string Name, PlanetTrait Trait, PlanetTrait Trait2,
+    int Resources, int Influence, TechColor? TechSkip1, TechColor? TechSkip2,
+    string? HomeFactionId, bool Legendary, string LegendaryEffect, string LegendaryEffectDe,
+    bool IsStation, bool GrantsRelic, int? SystemTileId,
+    string FlavorText, string FlavorTextDe, Expansion Expansion,
+    int Version = 1, ContentSource Source = ContentSource.Base);
 
 /// <summary>A buildable unit at its base level (standard units + faction "Stufe I" units, flagships and
 /// mechs). Stats are structured for a future production planner; the level-II upgrades live as
@@ -40,7 +63,65 @@ public record PlanetDto(
 public record UnitDto(
     string Id, string Name, string NameDe, UnitType UnitType, string? FactionId,
     int? Cost, int ProducedCount, int? Combat, int CombatDice, int? Move, int? Capacity,
-    string Text, string TextDe, string UnitAbilities, Expansion Expansion);
+    string Text, string TextDe, string UnitAbilities, Expansion Expansion,
+    int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>A named faction ability (e.g. Sol's "Orbital Drop"); a faction has one or more, ordered.</summary>
+public record FactionAbilityDto(
+    string Id, string FactionId, string Name, string NameDe, string Text, string TextDe, int Order,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>A Prophecy of Kings faction leader. <paramref name="UnlockCondition"/> is empty for Agents
+/// (always unlocked); <paramref name="FlavorText"/> is the lore blurb.</summary>
+public record LeaderDto(
+    string Id, string FactionId, LeaderType LeaderType, string Name, string NameDe,
+    string Text, string TextDe, string UnlockCondition, string UnlockConditionDe,
+    string FlavorText, string FlavorTextDe,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>A Thunder's Edge faction Breakthrough (one per faction, TE-only so no version/source).
+/// <paramref name="ConnectedColor1"/>/<paramref name="ConnectedColor2"/> are the two tech colours it
+/// connects — both null for the Nekro Virus breakthrough.</summary>
+public record BreakthroughDto(
+    string Id, string FactionId, string Name, string NameDe, string Text, string TextDe,
+    TechColor? ConnectedColor1, TechColor? ConnectedColor2);
+
+/// <summary>A bilingual label for one value of a content enum (UnitType, TechColor, …) so the client can
+/// show localized type names.</summary>
+public record TypeValueDto(string Type, int Value, string Name, string NameDe);
+
+/// <summary>A promissory note (faction-specific, or generic when <paramref name="FactionId"/> is null).</summary>
+public record PromissoryNoteDto(
+    string Id, string? FactionId, string Name, string NameDe, string Text, string TextDe,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>An action card.</summary>
+public record ActionCardDto(
+    string Id, string Name, string NameDe, string Text, string TextDe, string FlavorText, string FlavorTextDe,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>An exploration card. <paramref name="Deck"/> = Cultural / Hazardous / Industrial / Frontier.</summary>
+public record ExplorationDto(
+    string Id, string Deck, string Name, string NameDe, string Text, string TextDe,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>A relic.</summary>
+public record RelicDto(
+    string Id, string Name, string NameDe, string Text, string TextDe, string FlavorText, string FlavorTextDe,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>A Thunder's Edge Galactic Event.</summary>
+public record GalacticEventDto(
+    string Id, string Name, string NameDe, string Text, string TextDe,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>A faction-specific extra card (e.g. the Nekro Valefar Assimilators, or TE faction components).</summary>
+public record FactionCardDto(
+    string Id, string FactionId, string Name, string NameDe, string Text, string TextDe,
+    Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>One line of a faction's starting fleet: how many of a unit (by unit slug) it begins with.</summary>
+public record FactionStartingUnitDto(string FactionId, string UnitId, int Count);
 
 public record ContentBundleDto(
     IReadOnlyList<FactionDto> Factions,
@@ -49,7 +130,18 @@ public record ContentBundleDto(
     IReadOnlyList<TechnologyDto> Technologies,
     IReadOnlyList<AgendaDto> Agendas,
     IReadOnlyList<PlanetDto> Planets,
-    IReadOnlyList<UnitDto> Units);
+    IReadOnlyList<UnitDto> Units,
+    IReadOnlyList<FactionAbilityDto> FactionAbilities,
+    IReadOnlyList<LeaderDto> Leaders,
+    IReadOnlyList<BreakthroughDto> Breakthroughs,
+    IReadOnlyList<FactionStartingUnitDto> StartingUnits,
+    IReadOnlyList<TypeValueDto> TypeValues,
+    IReadOnlyList<PromissoryNoteDto> PromissoryNotes,
+    IReadOnlyList<ActionCardDto> ActionCards,
+    IReadOnlyList<ExplorationDto> Explorations,
+    IReadOnlyList<RelicDto> Relics,
+    IReadOnlyList<GalacticEventDto> GalacticEvents,
+    IReadOnlyList<FactionCardDto> FactionCards);
 
 // ---------------------------------------------------------------------------
 // Session / runtime state DTOs.
