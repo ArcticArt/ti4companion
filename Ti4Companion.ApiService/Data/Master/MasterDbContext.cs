@@ -30,6 +30,7 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
     public DbSet<GalacticEvent> GalacticEvents => Set<GalacticEvent>();
     public DbSet<FactionCard> FactionCards => Set<FactionCard>();
     public DbSet<SystemTile> SystemTiles => Set<SystemTile>();
+    public DbSet<UnitAbilityEntry> UnitAbilities => Set<UnitAbilityEntry>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -43,10 +44,19 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
                      typeof(Leader), typeof(Breakthrough), typeof(FactionStartingUnit),
                      typeof(PromissoryNote), typeof(ActionCard), typeof(Exploration), typeof(Relic),
                      typeof(GalacticEvent), typeof(FactionCard), typeof(SystemTile),
+                     typeof(UnitAbilityEntry),
                  })
         {
             b.Entity(type).Property<Guid>("Id").ValueGeneratedNever();
         }
+
+        // Atomic unit abilities: a child of EITHER a UnitDef or a unit-upgrade TechnologyDef (one FK set).
+        b.Entity<UnitDef>().HasMany(u => u.Abilities).WithOne()
+            .HasForeignKey(a => a.UnitId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<TechnologyDef>().HasMany(t => t.Abilities).WithOne()
+            .HasForeignKey(a => a.TechnologyId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<UnitAbilityEntry>().HasIndex(x => x.UnitId);
+        b.Entity<UnitAbilityEntry>().HasIndex(x => x.TechnologyId);
 
         // One row per (logical id, version); the API serves the highest version per logical id.
         b.Entity<Faction>().HasIndex(x => new { x.Slug, x.Version }).IsUnique();

@@ -51,7 +51,10 @@ else
 
     private UnitCardVM BuildUnitVm()
     {
-        var (stats, abilities, desc) = UnitText.ParseTechText(Loc.Pick(Tech.Text, Tech.TextDe), Tech.UnitType, StatLabel);
+        var stats = UnitText.StructuredStats(
+            Tech.UnitType, Tech.Cost, Tech.ProducedCount, Tech.Combat, Tech.CombatDice, Tech.Move, Tech.Capacity, StatLabel);
+        var abilities = Tech.Abilities.Select(AbilityVm).ToList();
+        var desc = Loc.Pick(Tech.Text, Tech.TextDe);
         return new UnitCardVM(
             Loc.Pick(Tech.Name, Tech.NameDe),
             ColorHex(Tech.Color),
@@ -61,6 +64,12 @@ else
             string.IsNullOrWhiteSpace(desc) ? null : desc,
             abilities,
             stats);
+    }
+
+    private UnitAbilityVM AbilityVm(UnitAbilityDto a)
+    {
+        var (en, de) = UnitText.KeywordNames(a.Ability);
+        return new UnitAbilityVM(Loc.Pick(en, de), UnitText.FormatAbilityValue(a.Value, a.Dice));
     }
 
     private string StatLabel(string key) => key.ToLowerInvariant() switch

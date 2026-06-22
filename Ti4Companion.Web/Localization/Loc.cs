@@ -316,7 +316,7 @@ public class Loc
         ["tech.faction"] = ("Faction technology", "Fraktionstechnologie"),
         ["unit.cost"] = ("Cost", "Kosten"),
         ["unit.combat"] = ("Combat", "Kampf"),
-        ["unit.move"] = ("Move", "Bewegung"),
+        ["unit.move"] = ("Move", "BEWEG."),
         ["unit.capacity"] = ("Capacity", "Kapazität"),
 
         ["settings.title"] = ("Settings", "Einstellungen"),
