@@ -287,12 +287,15 @@ public class Leader : IMasterContent
     /// <summary>The leader's proper name (e.g. "Evelyn DeLouis").</summary>
     public string Name { get; set; } = "";
     public string NameDe { get; set; } = "";
+    /// <summary>The leader's epithet / subtitle shown under the name (e.g. "The Hungry Shadow").</summary>
+    public string Subtitle { get; set; } = "";
+    public string SubtitleDe { get; set; } = "";
     public string Text { get; set; } = "";
     public string TextDe { get; set; } = "";
     /// <summary>Unlock condition (Commanders/Heroes); empty for Agents (always unlocked).</summary>
     public string UnlockCondition { get; set; } = "";
     public string UnlockConditionDe { get; set; } = "";
-    /// <summary>Lore / flavour text (the italic blurb on the leader card).</summary>
+    /// <summary>Lore / flavour text (the italic story blurb on the leader card).</summary>
     public string FlavorText { get; set; } = "";
     public string FlavorTextDe { get; set; } = "";
 
