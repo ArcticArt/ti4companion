@@ -48,7 +48,7 @@ public static class Mapping
         => new(a.Slug, a.FactionId, a.Name, a.NameDe, a.Text, a.TextDe, a.Order, a.Expansion, a.Version, a.Source);
 
     public static LeaderDto ToDto(this Leader l)
-        => new(l.Slug, l.FactionId, l.LeaderType, l.Name, l.NameDe, l.Text, l.TextDe,
+        => new(l.Slug, l.FactionId, l.LeaderType, l.Name, l.NameDe, l.Subtitle, l.SubtitleDe, l.Text, l.TextDe,
                l.UnlockCondition, l.UnlockConditionDe, l.FlavorText, l.FlavorTextDe, l.Expansion, l.Version, l.Source);
 
     public static BreakthroughDto ToDto(this Breakthrough b)

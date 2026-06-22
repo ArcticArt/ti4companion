@@ -84,9 +84,11 @@ public record FactionAbilityDto(
     Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
 
 /// <summary>A Prophecy of Kings faction leader. <paramref name="UnlockCondition"/> is empty for Agents
-/// (always unlocked); <paramref name="FlavorText"/> is the lore blurb.</summary>
+/// (always unlocked); <paramref name="Subtitle"/> is the epithet shown under the name; <paramref
+/// name="FlavorText"/> is the lore blurb.</summary>
 public record LeaderDto(
     string Id, string FactionId, LeaderType LeaderType, string Name, string NameDe,
+    string Subtitle, string SubtitleDe,
     string Text, string TextDe, string UnlockCondition, string UnlockConditionDe,
     string FlavorText, string FlavorTextDe,
     Expansion Expansion, int Version = 1, ContentSource Source = ContentSource.Base);
