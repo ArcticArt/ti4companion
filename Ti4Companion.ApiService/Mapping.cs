@@ -23,7 +23,11 @@ public static class Mapping
 
     public static TechnologyDto ToDto(this TechnologyDef t)
         => new(t.Slug, t.Name, t.NameDe, t.Color, t.Prerequisites, t.Text, t.TextDe, t.Expansion,
-               t.FactionId, t.UnitType, t.Version, t.Source);
+               t.FactionId, t.UnitType, t.Cost, t.ProducedCount, t.Combat, t.CombatDice, t.Move, t.Capacity,
+               t.Abilities.OrderBy(a => a.SortOrder).Select(ToDto).ToList(), t.Version, t.Source);
+
+    public static UnitAbilityDto ToDto(this UnitAbilityEntry a)
+        => new(a.Ability, a.Value, a.Dice);
 
     public static AgendaDto ToDto(this AgendaDef a)
         => new(a.Slug, a.Name, a.NameDe, a.Type, a.Elect, a.Text, a.TextDe, a.Expansion, a.RemovedInPok,
@@ -36,7 +40,8 @@ public static class Mapping
 
     public static UnitDto ToDto(this UnitDef u)
         => new(u.Slug, u.Name, u.NameDe, u.UnitType, u.FactionId, u.Cost, u.ProducedCount,
-               u.Combat, u.CombatDice, u.Move, u.Capacity, u.Text, u.TextDe, u.UnitAbilities, u.Expansion,
+               u.Combat, u.CombatDice, u.Move, u.Capacity, u.Text, u.TextDe,
+               u.Abilities.OrderBy(a => a.SortOrder).Select(ToDto).ToList(), u.Expansion,
                u.Version, u.Source);
 
     public static FactionAbilityDto ToDto(this FactionAbility a)

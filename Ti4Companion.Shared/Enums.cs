@@ -119,6 +119,22 @@ public enum UnitType
     Mech = 11
 }
 
+/// <summary>An atomic unit ability keyword (the ★ bullets on a unit / unit-upgrade card), stored
+/// relationally (see <c>UnitAbilityEntry</c>) instead of parsed from free text, so it can be localized
+/// for display. The keyword's printed value (BOMBARDMENT <b>5</b>) and "(xN)" multiplier live on the
+/// entry, not here. Keep the numeric values stable (persisted in the master DB).</summary>
+public enum UnitAbility
+{
+    None = 0,
+    SustainDamage = 1,
+    AntiFighterBarrage = 2,
+    Bombardment = 3,
+    SpaceCannon = 4,
+    PlanetaryShield = 5,
+    Production = 6,
+    Deploy = 7
+}
+
 public enum AgendaType
 {
     Law = 0,

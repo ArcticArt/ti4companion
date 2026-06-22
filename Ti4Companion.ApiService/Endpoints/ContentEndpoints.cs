@@ -16,10 +16,10 @@ public static class ContentEndpoints
             var factions = Latest(await db.Factions.AsNoTracking().ToListAsync(ct));
             var cards = Latest(await db.StrategyCards.AsNoTracking().ToListAsync(ct));
             var objectives = Latest(await db.Objectives.AsNoTracking().ToListAsync(ct));
-            var techs = Latest(await db.Technologies.AsNoTracking().ToListAsync(ct));
+            var techs = Latest(await db.Technologies.AsNoTracking().Include(t => t.Abilities).ToListAsync(ct));
             var agendas = Latest(await db.Agendas.AsNoTracking().ToListAsync(ct));
             var planets = Latest(await db.Planets.AsNoTracking().ToListAsync(ct));
-            var units = Latest(await db.Units.AsNoTracking().ToListAsync(ct));
+            var units = Latest(await db.Units.AsNoTracking().Include(u => u.Abilities).ToListAsync(ct));
             var abilities = Latest(await db.FactionAbilities.AsNoTracking().ToListAsync(ct));
             var leaders = Latest(await db.Leaders.AsNoTracking().ToListAsync(ct));
             var breakthroughs = await db.Breakthroughs.AsNoTracking().ToListAsync(ct);   // TE-only, no revisions

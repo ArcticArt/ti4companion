@@ -22,8 +22,14 @@
             Unit.FactionId,
             "",   // base units have no research prerequisites
             string.IsNullOrWhiteSpace(desc) ? null : desc,
-            UnitText.SplitAbilities(Unit.UnitAbilities),
+            Unit.Abilities.Select(AbilityVm).ToList(),
             stats);
+    }
+
+    private UnitAbilityVM AbilityVm(UnitAbilityDto a)
+    {
+        var (en, de) = UnitText.KeywordNames(a.Ability);
+        return new UnitAbilityVM(Loc.Pick(en, de), UnitText.FormatAbilityValue(a.Value, a.Dice));
     }
 
     private string Accent =>

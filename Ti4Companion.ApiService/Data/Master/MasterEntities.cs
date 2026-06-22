@@ -125,6 +125,16 @@ public class TechnologyDef : IMasterContent
     /// <summary>For unit-upgrade techs (<see cref="TechColor.Unit"/>), which unit it represents.</summary>
     public UnitType UnitType { get; set; }
 
+    // --- Unit-upgrade stats (null for non-unit techs; mirror UnitDef so the card renders without parsing) ---
+    public int? Cost { get; set; }
+    public int ProducedCount { get; set; } = 1;
+    public int? Combat { get; set; }
+    public int CombatDice { get; set; } = 1;
+    public int? Move { get; set; }
+    public int? Capacity { get; set; }
+    /// <summary>Atomic ★ keyword abilities for a unit-upgrade tech (empty for non-unit techs).</summary>
+    public List<UnitAbilityEntry> Abilities { get; set; } = new();
+
     [NotMapped] public string LogicalKey => Slug;
 }
 
@@ -215,10 +225,28 @@ public class UnitDef : IMasterContent
     public int? Capacity { get; set; }
     public string Text { get; set; } = "";
     public string TextDe { get; set; } = "";
-    /// <summary>Period-separated keyword abilities, e.g. "SUSTAIN DAMAGE. BOMBARDMENT 5.".</summary>
-    public string UnitAbilities { get; set; } = "";
+    /// <summary>Atomic ★ keyword abilities (e.g. SUSTAIN DAMAGE, BOMBARDMENT 5), stored relationally.</summary>
+    public List<UnitAbilityEntry> Abilities { get; set; } = new();
 
     [NotMapped] public string LogicalKey => Slug;
+}
+
+/// <summary>One atomic unit ability (a ★ keyword bullet), stored relationally instead of parsed from
+/// text so it can be localized. Belongs to EITHER a <see cref="UnitDef"/> or a unit-upgrade
+/// <see cref="TechnologyDef"/> (exactly one of the two FKs is set). Not <c>IMasterContent</c> — it has no
+/// reprints of its own; it lives and dies with its owner row (cascade delete).</summary>
+public class UnitAbilityEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? UnitId { get; set; }
+    public Guid? TechnologyId { get; set; }
+    public UnitAbility Ability { get; set; }
+    /// <summary>Printed value: "5" (BOMBARDMENT 5), "X" (PRODUCTION X); null for valueless keywords.</summary>
+    public string? Value { get; set; }
+    /// <summary>The "(xN)" multiplier (ANTI-FIGHTER BARRAGE 6(x3) → 3); 1 when none.</summary>
+    public int Dice { get; set; } = 1;
+    /// <summary>Print order on the card.</summary>
+    public int SortOrder { get; set; }
 }
 
 // ---- New content types ----------------------------------------------------

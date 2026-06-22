@@ -31,10 +31,22 @@ public record ObjectiveDto(
     int Points, ObjectiveStage Stage, GamePhase Phase, Expansion Expansion,
     int Version = 1, ContentSource Source = ContentSource.Base);
 
+/// <summary>A technology. For unit-upgrade techs (<see cref="TechColor.Unit"/>) the stat boxes and ★
+/// keyword <paramref name="Abilities"/> are structured (not parsed from <paramref name="Text"/>), so
+/// <paramref name="Text"/>/<paramref name="TextDe"/> hold only the bilingual prose. Non-unit techs leave
+/// the stats null and carry their full effect in <paramref name="Text"/>.</summary>
 public record TechnologyDto(
     string Id, string Name, string NameDe, TechColor Color, string Prerequisites,
     string Text, string TextDe, Expansion Expansion, string? FactionId, UnitType UnitType,
+    int? Cost, int ProducedCount, int? Combat, int CombatDice, int? Move, int? Capacity,
+    IReadOnlyList<UnitAbilityDto> Abilities,
     int Version = 1, ContentSource Source = ContentSource.Base);
+
+/// <summary>One atomic unit ability (a ★ keyword bullet on a unit / unit-upgrade card). The keyword name
+/// is localized at render time from <see cref="UnitAbility"/>; <paramref name="Value"/> is the printed
+/// value ("5" for BOMBARDMENT 5, "X" for PRODUCTION X; null for valueless keywords like SUSTAIN DAMAGE)
+/// and <paramref name="Dice"/> is the "(xN)" multiplier (ANTI-FIGHTER BARRAGE 6(x3) → 3), else 1.</summary>
+public record UnitAbilityDto(UnitAbility Ability, string? Value, int Dice = 1);
 
 public record AgendaDto(
     string Id, string Name, string NameDe, AgendaType Type, string Elect,
@@ -58,12 +70,12 @@ public record PlanetDto(
 /// <see cref="TechnologyDto"/> unit-colour techs. <paramref name="ProducedCount"/> is how many units one
 /// build yields (2 for fighters/infantry, else 1); <paramref name="Cost"/> is the printed card cost for
 /// that build (null for structures placed via Construction). <paramref name="Combat"/>/<paramref name="CombatDice"/>
-/// split a "5(x2)" combat value; <paramref name="UnitAbilities"/> is the period-separated keyword list
-/// (e.g. "SUSTAIN DAMAGE. BOMBARDMENT 5."). Null Move/Capacity = not applicable (ground forces, structures).</summary>
+/// split a "5(x2)" combat value; <paramref name="Abilities"/> is the atomic ★ keyword list (e.g.
+/// SUSTAIN DAMAGE, BOMBARDMENT 5). Null Move/Capacity = not applicable (ground forces, structures).</summary>
 public record UnitDto(
     string Id, string Name, string NameDe, UnitType UnitType, string? FactionId,
     int? Cost, int ProducedCount, int? Combat, int CombatDice, int? Move, int? Capacity,
-    string Text, string TextDe, string UnitAbilities, Expansion Expansion,
+    string Text, string TextDe, IReadOnlyList<UnitAbilityDto> Abilities, Expansion Expansion,
     int Version = 1, ContentSource Source = ContentSource.Base);
 
 /// <summary>A named faction ability (e.g. Sol's "Orbital Drop"); a faction has one or more, ordered.</summary>
