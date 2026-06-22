@@ -168,6 +168,14 @@ The databases in `/var/lib/ti4companion/` (`ti4.db` sessions, `ti4master.db` con
 redeploy; migrations apply on restart. To ship **updated content**, stop the service, copy the new committed
 `ti4master.db` into `/var/lib/ti4companion/` (overwriting it, and delete any stale `-wal`/`-shm`), then start it.
 
+> **GOTCHA (burned 2026-06-22): keep the live systemd unit in sync with §3.** A box deployed before the
+> MasterDB split had a unit with only `ConnectionStrings__ti4db` — no `ti4masterdb` line. The new code then fell
+> back to the relative default `Data Source=ti4master.db`, tried to create it in the root-owned `/opt`
+> working dir, and crashed on startup with **`SQLite Error 14: 'unable to open database file'`**. When deploying
+> code that adds a new DbContext/connection string to an existing server, **add the matching `Environment=` line
+> to `/etc/systemd/system/ti4companion.service` + `systemctl daemon-reload`** before starting. Always
+> `tar` the old `/opt/ti4companion` and back up `ti4.db` first so you can roll back.
+
 ## 6. Backups
 
 Durable data is two SQLite files: `ti4.db` (sessions) and `ti4master.db` (the master content — a committed
