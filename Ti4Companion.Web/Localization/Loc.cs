@@ -136,6 +136,13 @@ public class Loc
         ["setup.searchFaction"] = ("Search faction…", "Fraktion suchen…"),
         ["setup.needFactionColor"] = ("Choose a faction and a colour to ready up.", "Wähle Fraktion und Farbe, um bereit zu sein."),
         ["setup.needSpeaker"] = ("Set the speaker first.", "Lege zuerst den Sprecher fest."),
+        // Seat-order confirmation dialog shown before the game actually starts.
+        ["setup.confirmSeatTitle"] = ("Is the seating order right?", "Passt die Sitzreihenfolge?"),
+        ["setup.confirmSeatHint"] = (
+            "This is the order around the table (speaker marked). You can change it with the ▲▼ arrows in the player list.",
+            "So sitzt ihr am Tisch (Sprecher markiert). Ändern kannst du die Reihenfolge mit den ▲▼-Pfeilen in der Spielerliste."),
+        ["setup.confirmSeatOk"] = ("Looks good — start", "Passt — Spiel starten"),
+        ["setup.confirmSeatChange"] = ("Change it", "Noch ändern"),
         ["setup.maxPlayers"] = ("Maximum of 8 players reached.", "Maximal 8 Spieler erreicht."),
         ["setup.deselectColor"] = ("Click to deselect (frees the colour)", "Klicken zum Abwählen (gibt die Farbe frei)"),
         ["setup.seatOrder"] = ("Seat order", "Sitzreihenfolge"),
