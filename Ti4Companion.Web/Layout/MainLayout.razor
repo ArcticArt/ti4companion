@@ -106,17 +106,25 @@
 
     private bool codeCopied, inviteCopied;
 
-    private async Task CopyCode()
+    // Copy must run SYNCHRONOUSLY inside the click gesture: Safari (iPad!) rejects clipboard writes
+    // once the gesture has expired, which the normal awaited interop roundtrip triggers — the old
+    // async version silently did nothing there. In Blazor WASM the runtime is in-process, so the
+    // cast to IJSInProcessRuntime always succeeds; ti4.copyText also falls back to the legacy
+    // execCommand path where navigator.clipboard doesn't exist (plain-HTTP LAN play).
+    private bool CopySync(string text)
     {
-        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", Store.Session!.JoinCode); codeCopied = true; inviteCopied = false; }
-        catch { }
+        try { return ((IJSInProcessRuntime)JS).Invoke<bool>("ti4.copyText", text); }
+        catch { return false; }
     }
 
-    private async Task CopyInvite()
+    private void CopyCode()
     {
-        var url = $"{Nav.BaseUri}join/{Store.Session!.JoinCode}";
-        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", url); inviteCopied = true; codeCopied = false; }
-        catch { }
+        if (CopySync(Store.Session!.JoinCode)) { codeCopied = true; inviteCopied = false; }
+    }
+
+    private void CopyInvite()
+    {
+        if (CopySync($"{Nav.BaseUri}join/{Store.Session!.JoinCode}")) { inviteCopied = true; codeCopied = false; }
     }
 
     private async Task Leave()

@@ -43,6 +43,31 @@
         // height, collapse the lowest-prerequisite tech to just its name (top-down, one at a time) until it
         // fits. Reset (uncollapse) first so removing techs re-expands the cards. Purely visual (CSS classes).
         window.ti4 = window.ti4 || {};
+        // Copy text to the clipboard SYNCHRONOUSLY within the user gesture. Called via Blazor's
+        // in-process (synchronous) JS interop — Safari/iPad discards async clipboard calls once the
+        // click gesture has "expired", which the normal awaited interop roundtrip triggers. Falls back
+        // to the legacy textarea+execCommand trick where navigator.clipboard is unavailable (e.g.
+        // plain-HTTP LAN play) or throws. Returns true when a copy was performed.
+        window.ti4.copyText = function (text) {
+            try {
+                if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+                    // Called inside the gesture, so Safari accepts it; result promise is fire-and-forget.
+                    navigator.clipboard.writeText(text).catch(function () { });
+                    return true;
+                }
+            } catch (e) { /* fall through to the legacy path */ }
+            try {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select(); ta.setSelectionRange(0, text.length);
+                var ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                return ok;
+            } catch (e) { return false; }
+        };
         window.ti4.fitTechCols = function () {
             document.querySelectorAll('.beamer .tech-col, .beamer .tech-unit-row').forEach(function (col) {
                 col.querySelectorAll('.tech-item.collapsed').forEach(function (it) { it.classList.remove('collapsed'); });
