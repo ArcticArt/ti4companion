@@ -39,7 +39,7 @@
             {
                 case GamePhase.Setup:
                     @if (!speakerSet) { <span class="faint">@Loc["setup.needSpeaker"]</span> }
-                    <button class="btn btn-gold" disabled="@(!allReady || !speakerSet)" @onclick="StartGame">@Loc["turn.startGame"] ▸</button>
+                    <button class="btn btn-gold" disabled="@(!allReady || !speakerSet)" @onclick="() => showSeatConfirm = true">@Loc["turn.startGame"] ▸</button>
                     break;
                 case GamePhase.Strategy:
                     @if (!allPicked) { <span class="faint">@Loc["strategy.needAllPicks"]</span> }
@@ -59,6 +59,40 @@
         }
     </div>
 </div>
+
+@* Seat-order confirmation before the game actually starts: shows the order around the table so the
+   host double-checks it. "Change it" just closes the dialog (nothing is started); the order is
+   edited with the ▲▼ arrows in the setup player list. *@
+@if (showSeatConfirm && s.Phase == GamePhase.Setup)
+{
+    <div class="modal-backdrop" @onclick="() => showSeatConfirm = false">
+        <div class="modal seat-confirm" @onclick:stopPropagation>
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["setup.confirmSeatTitle"]</h3>
+            </div>
+            <div class="modal-body">
+                <div class="grid" style="gap:.35rem;margin:.6rem 0;">
+                    @{ var seatOrdered = s.Players.OrderBy(p => p.SeatOrder).ToList(); }
+                    @for (var i = 0; i < seatOrdered.Count; i++)
+                    {
+                        var p = seatOrdered[i];
+                        <div class="player-card seat-confirm-row" style="--player-color:@p.ColorHex;">
+                            <span class="seat-no">@(i + 1)</span>
+                            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
+                            <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">@p.Name</strong>
+                            @if (s.SpeakerPlayerId == p.Id) { <SpeakerIcon SizeCss="1.3em" /> }
+                        </div>
+                    }
+                </div>
+                <p class="faint" style="font-size:.78rem;margin:.2rem 0 .8rem;">@Loc["setup.confirmSeatHint"]</p>
+                <div class="row-wrap" style="gap:.5rem;justify-content:flex-end;">
+                    <button class="btn" @onclick="() => showSeatConfirm = false">◂ @Loc["setup.confirmSeatChange"]</button>
+                    <button class="btn btn-gold" @onclick="ConfirmStart">@Loc["setup.confirmSeatOk"] ▸</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @switch (s.Phase)
 {
@@ -81,6 +115,8 @@
 
 @code {
     private Guid Sid => Store.Session!.Id;
+    private bool showSeatConfirm;
+    private async Task ConfirmStart() { showSeatConfirm = false; await StartGame(); }
     private Task StartGame() => Store.Mutate(Store.Api.StartGameAsync(Sid));
     private Task ToAction() => Store.Mutate(Store.Api.StartActionPhaseAsync(Sid));
     private Task EndAction() => Store.Mutate(Store.Api.EndActionPhaseAsync(Sid));
