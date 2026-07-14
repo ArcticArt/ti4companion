@@ -10,6 +10,10 @@ All you need is the **.NET 10 SDK** — no Docker, no database server. See the
 `Ti4Companion.slnx` (the new XML solution format; open it with Visual Studio 2026 / a current IDE,
 or just use the `dotnet` CLI).
 
+For a tour of the codebase — the two databases, the content versioning model, the session domain
+rules, and the known implementation gotchas — read the
+[architecture & developer guide](docs/ARCHITECTURE.md) first.
+
 ## Project layout
 
 ```
