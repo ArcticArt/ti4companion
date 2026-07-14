@@ -17,9 +17,11 @@ public static class SessionEndpoints
         var g = app.MapGroup("/api/sessions");
 
         // ---- Session lifecycle ----
-        g.MapPost("/", CreateSession);
-        g.MapGet("/{code}", GetByCode);
-        g.MapGet("/{code}/log", GetLog);                          // match log (read-only; client shows it host-side)
+        g.MapPost("/", CreateSession).RequireRateLimiting("session-create");
+        g.MapGet("/{code}", GetByCode).RequireRateLimiting("session-read");
+        // Same per-IP read limit as GET /{code}: /log is the other unauthenticated by-code lookup, so it
+        // must be throttled too or it becomes an unmetered join-code enumeration oracle (404 vs 200).
+        g.MapGet("/{code}/log", GetLog).RequireRateLimiting("session-read"); // match log (read-only; client shows it host-side)
         g.MapPatch("/{id:guid}", UpdateSession);
         g.MapDelete("/{id:guid}", DeleteSession);
         g.MapPost("/{id:guid}/display", SetDisplayMode);          // wall-display view switch (any player)
@@ -93,13 +95,35 @@ public static class SessionEndpoints
     // Lifecycle
     // -----------------------------------------------------------------------
 
+    // Public-hosting hardening: user-supplied free text (names, custom objectives, elect free-text)
+    // is trimmed and length-capped server-side so it can't bloat the DB or the wall display.
+    private static string Clamp(string s, int max = 60)
+    {
+        s = s.Trim();
+        return s.Length <= max ? s : s[..max];
+    }
+
+    // Loose content-reference ids (faction/objective/tech/agenda slugs). Legit slugs are short; cap
+    // the length so a rogue client can't persist a giant string that then ships in every state DTO.
+    // Preserves null (= "no reference") — only a present value is trimmed/capped.
+    private static string? ClampId(string? s) => string.IsNullOrWhiteSpace(s) ? s : Clamp(s!, 60);
+
+    // A player colour must be a plain CSS hex (#rgb / #rrggbb / #rrggbbaa). ColorHex is interpolated
+    // straight into inline style attributes on the wall + control views, so anything else would let a
+    // joined client inject arbitrary CSS declarations onto every viewer's screen — reject it to the
+    // fallback. Also bounds the stored length. See DEPLOY.md "Security review".
+    private static readonly System.Text.RegularExpressions.Regex HexColor =
+        new("^#[0-9a-fA-F]{3,8}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static string SanitizeColor(string? hex, string fallback = "#cccccc")
+        => hex is not null && HexColor.IsMatch(hex.Trim()) ? hex.Trim() : fallback;
+
     private static async Task<IResult> CreateSession(CreateSessionRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, IConfiguration config, CancellationToken ct)
     {
         var deviceToken = string.IsNullOrWhiteSpace(req.DeviceToken) ? Guid.NewGuid().ToString("N") : req.DeviceToken;
         var session = new GameSession
         {
             JoinCode = await UniqueCodeAsync(db, ct),
-            Name = string.IsNullOrWhiteSpace(req.Name) ? "Twilight Imperium" : req.Name.Trim(),
+            Name = string.IsNullOrWhiteSpace(req.Name) ? "Twilight Imperium" : Clamp(req.Name),
             DefaultLanguage = req.Language,
             ActiveExpansions = (req.ActiveExpansions ?? AllExpansions) | Expansion.Base,
             RetentionHours = config.GetValue("Ti4:DefaultRetentionHours", 168),
@@ -109,9 +133,9 @@ public static class SessionEndpoints
         var host = new Player
         {
             SessionId = session.Id,
-            Name = string.IsNullOrWhiteSpace(req.HostName) ? "Host" : req.HostName.Trim(),
-            FactionId = req.FactionId,
-            ColorHex = req.ColorHex ?? "#cccccc",
+            Name = string.IsNullOrWhiteSpace(req.HostName) ? "Host" : Clamp(req.HostName),
+            FactionId = ClampId(req.FactionId),
+            ColorHex = SanitizeColor(req.ColorHex),
             SeatOrder = 0,
             IsHost = true,
             DeviceToken = deviceToken,
@@ -153,7 +177,7 @@ public static class SessionEndpoints
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden(); // settings, phase, speaker → host only
 
-        if (req.Name is not null) session.Name = req.Name.Trim();
+        if (req.Name is not null) session.Name = Clamp(req.Name);
         if (req.Language is not null) session.DefaultLanguage = req.Language.Value;
         if (req.ActiveExpansions is not null) session.ActiveExpansions = req.ActiveExpansions.Value | Expansion.Base;
         if (req.ShowTechOverview is not null) session.ShowTechOverview = req.ShowTechOverview.Value;
@@ -404,7 +428,7 @@ public static class SessionEndpoints
             foreach (var other in session.Players.Where(p => p.Id != claimed.Id && p.DeviceToken == deviceToken))
                 other.DeviceToken = Guid.NewGuid().ToString("N");
             claimed.DeviceToken = deviceToken;
-            if (!string.IsNullOrWhiteSpace(req.Name)) claimed.Name = req.Name.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Name)) claimed.Name = Clamp(req.Name);
             target = claimed;
         }
         else
@@ -412,9 +436,9 @@ public static class SessionEndpoints
             var existing = session.Players.FirstOrDefault(p => p.DeviceToken == deviceToken);
             if (existing is not null)
             {
-                if (!string.IsNullOrWhiteSpace(req.Name)) existing.Name = req.Name.Trim();
-                if (req.FactionId is not null) existing.FactionId = req.FactionId;
-                if (req.ColorHex is not null) existing.ColorHex = req.ColorHex;
+                if (!string.IsNullOrWhiteSpace(req.Name)) existing.Name = Clamp(req.Name);
+                if (req.FactionId is not null) existing.FactionId = ClampId(req.FactionId);
+                if (req.ColorHex is not null) existing.ColorHex = SanitizeColor(req.ColorHex, existing.ColorHex);
                 target = existing;
             }
             else
@@ -426,9 +450,9 @@ public static class SessionEndpoints
                 target = new Player
                 {
                     SessionId = session.Id,
-                    Name = string.IsNullOrWhiteSpace(req.Name) ? "Player" : req.Name.Trim(),
-                    FactionId = req.FactionId,
-                    ColorHex = req.ColorHex ?? "#cccccc",
+                    Name = string.IsNullOrWhiteSpace(req.Name) ? "Player" : Clamp(req.Name),
+                    FactionId = ClampId(req.FactionId),
+                    ColorHex = SanitizeColor(req.ColorHex),
                     SeatOrder = session.Players.Count == 0 ? 0 : session.Players.Max(p => p.SeatOrder) + 1,
                     DeviceToken = deviceToken,
                 };
@@ -453,14 +477,14 @@ public static class SessionEndpoints
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();           // edit own profile, or host edits anyone
         if (req.SeatOrder is not null && !CallerIsHost(session, http)) return Forbidden(); // seat order = host only
 
-        if (req.Name is not null) player.Name = req.Name.Trim();
-        if (req.ColorHex is not null) player.ColorHex = req.ColorHex;
+        if (req.Name is not null) player.Name = Clamp(req.Name);
+        if (req.ColorHex is not null) player.ColorHex = SanitizeColor(req.ColorHex, player.ColorHex);
         if (req.HasPassed is not null) player.HasPassed = req.HasPassed.Value;
         if (req.IsReady is not null) player.IsReady = req.IsReady.Value;
         if (req.SeatOrder is not null) player.SeatOrder = req.SeatOrder.Value;
         if (req.FactionId is not null)
         {
-            var newFaction = string.IsNullOrWhiteSpace(req.FactionId) ? null : req.FactionId;
+            var newFaction = string.IsNullOrWhiteSpace(req.FactionId) ? null : ClampId(req.FactionId);
             if (newFaction != player.FactionId)
             {
                 var oldFaction = player.FactionId;
@@ -578,10 +602,11 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
-        if (!session.Objectives.Any(o => o.ObjectiveId == req.ObjectiveId))
+        var objectiveId = ClampId(req.ObjectiveId) ?? "";
+        if (!session.Objectives.Any(o => o.ObjectiveId == objectiveId))
         {
-            session.Objectives.Add(new SessionObjective { SessionId = session.Id, ObjectiveId = req.ObjectiveId });
-            Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: req.ObjectiveId);
+            session.Objectives.Add(new SessionObjective { SessionId = session.Id, ObjectiveId = objectiveId });
+            Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: objectiveId);
         }
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -597,10 +622,10 @@ public static class SessionEndpoints
         {
             SessionId = session.Id,
             ObjectiveId = "",
-            CustomName = req.Name.Trim(),
+            CustomName = Clamp(req.Name, 100),
             CustomPoints = Math.Clamp(req.Points, 0, 10),
         });
-        Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: req.Name.Trim());
+        Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: Clamp(req.Name, 100));
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -619,6 +644,9 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
         if (session is null || obj is null) return Results.NotFound();
+        // Scoring is open to any device, but the scorer must be a real player in THIS session —
+        // otherwise an anonymous caller could insert unbounded score rows with random GUIDs.
+        if (session.Players.All(p => p.Id != req.PlayerId)) return Results.NotFound();
         if (!obj.Scores.Any(s => s.PlayerId == req.PlayerId))
         {
             obj.Scores.Add(new ObjectiveScore { SessionObjectiveId = obj.Id, PlayerId = req.PlayerId });
@@ -647,10 +675,11 @@ public static class SessionEndpoints
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
         if (session is null || player is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();
-        if (!player.Technologies.Any(t => t.TechnologyId == req.TechnologyId))
+        var techId = ClampId(req.TechnologyId);
+        if (!string.IsNullOrEmpty(techId) && !player.Technologies.Any(t => t.TechnologyId == techId))
         {
-            player.Technologies.Add(new PlayerTechnology { SessionId = session.Id, PlayerId = player.Id, TechnologyId = req.TechnologyId });
-            Log(db, session, http, SessionLogKind.TechAdd, target: playerId, detail: req.TechnologyId);
+            player.Technologies.Add(new PlayerTechnology { SessionId = session.Id, PlayerId = player.Id, TechnologyId = techId });
+            Log(db, session, http, SessionLogKind.TechAdd, target: playerId, detail: techId);
         }
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -684,7 +713,7 @@ public static class SessionEndpoints
             if (p is not null) p.Influence = Math.Max(0, p.Influence - v.Votes);
         }
         LogAgendaResult(db, session);   // summarise the concluding agenda before its votes are cleared
-        session.CurrentAgendaId = string.IsNullOrWhiteSpace(req.AgendaId) ? null : req.AgendaId;
+        session.CurrentAgendaId = ClampId(req.AgendaId);
         session.AgendaVotes.Clear();
         session.VotingStarted = false;     // back to influence entry until the host starts the vote
         session.AgendaVotesHidden = false;
@@ -725,6 +754,10 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
+        // Same gate the client UI applies: a face-down vote is only flipped once EVERY player has
+        // locked — otherwise late voters would cast into an already-open vote (secrecy broken).
+        if (session.Players.Count == 0 || !session.Players.All(p => session.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked)))
+            return Results.BadRequest(new { error = "All players must lock their vote first." });
         session.AgendaVotesHidden = false;
         Log(db, session, http, SessionLogKind.AgendaReveal2);
         return await SaveAndReturn(db, hub, session, ct);
@@ -748,7 +781,7 @@ public static class SessionEndpoints
         }
         vote.Outcome = req.Outcome;
         vote.Votes = Math.Max(0, req.Votes);
-        vote.Choice = req.Outcome == VoteOutcome.Abstain ? null : (string.IsNullOrWhiteSpace(req.Choice) ? null : req.Choice.Trim());
+        vote.Choice = req.Outcome == VoteOutcome.Abstain ? null : (string.IsNullOrWhiteSpace(req.Choice) ? null : Clamp(req.Choice, 100));
         vote.Locked = true;
         // Individual vote inputs are intentionally NOT logged — the agenda log shows only the reveal and a
         // single summarised result (see LogAgendaResult, emitted when the agenda concludes).

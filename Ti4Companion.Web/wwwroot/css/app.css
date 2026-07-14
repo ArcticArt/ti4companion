@@ -162,12 +162,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .seg-btn:hover { color: var(--text); }
 .seg-btn.on { background: linear-gradient(180deg, var(--gold), var(--gold-dim)); color: #20160a; }
 
-/* Production planner placeholder (WIP). */
-.production-wip { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .4rem; padding: 2.5rem 1rem; }
-.production-wip .wip-ship { width: clamp(7rem, 30vw, 12rem); height: auto; opacity: .35; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
-.production-wip h3 { margin: .4rem 0 0; }
-.production-wip .wip-badge { font-size: .8rem; letter-spacing: .15em; }
-
 /* ---- Faction icon badge ---- */
 .faction-badge {
     position: relative; overflow: hidden;

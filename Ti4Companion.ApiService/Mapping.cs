@@ -113,8 +113,16 @@ public static class Mapping
             .Select(c => new StrategyCardStateDto(c.StrategyCardId, c.TradeGoods))
             .ToList();
 
+        // Face-down voting guarantee: while a hidden vote is running, nobody — not even the host —
+        // may see a committed vote's outcome/weight/choice until the host reveals. The client hides
+        // it visually, but the DTO goes to every device (and any spectator with the join code), so we
+        // must redact it server-side too: keep only PlayerId + Locked (drives "voted / waiting"),
+        // and blank the rest. Once revealed (AgendaVotesHidden=false) the full votes flow.
+        var redactVotes = s.VotingStarted && s.AgendaVotesHidden;
         var votes = s.AgendaVotes
-            .Select(v => new AgendaVoteDto(v.PlayerId, v.Outcome, v.Votes, v.Choice, v.Locked))
+            .Select(v => redactVotes
+                ? new AgendaVoteDto(v.PlayerId, VoteOutcome.Abstain, 0, null, v.Locked)
+                : new AgendaVoteDto(v.PlayerId, v.Outcome, v.Votes, v.Choice, v.Locked))
             .ToList();
 
         return new SessionStateDto(

@@ -59,8 +59,6 @@ public class Loc
         ["display.secondaryShort"] = ("Secondary", "Sekundär"),
         ["display.tech"] = ("Technologies", "Technologien"),
         ["display.techShort"] = ("Tech", "Tech"),
-        ["nav.production"] = ("Production", "Produktion"),
-        ["production.wip"] = ("Production planner — work in progress.", "Produktionsplaner — in Arbeit."),
         ["nav.phase"] = ("Phase", "Phase"),
         ["nav.objectives"] = ("Objectives", "Aufträge"),
         ["nav.techs"] = ("Technologies", "Technologien"),
@@ -260,13 +258,16 @@ public class Loc
             "Twilight Imperium, Prophecy of Kings, Thunder's Edge sowie alle zugehörigen Namen, Marken, Texte und Grafiken sind © & ™ "),
         ["legal.copyrightPost"] = (". All rights reserved.", ". Alle Rechte vorbehalten."),
         ["legal.noncommercial"] = (
-            "Free, non-commercial fan project based on Twilight Imperium 4th Edition — provided free of charge; the author takes no money (no sale, advertising, donations, or paywall).",
-            "Kostenloses, nicht-kommerzielles Fan-Projekt auf Basis von Twilight Imperium 4. Edition – kostenlos bereitgestellt; der Autor nimmt kein Geld (kein Verkauf, keine Werbung, keine Spenden, keine Paywall)."),
+            "Free, non-commercial fan project based on Twilight Imperium 4th Edition — no sale, no advertising, no paywall. Voluntary donations to help cover the server costs are welcome.",
+            "Kostenloses, nicht-kommerzielles Fan-Projekt auf Basis von Twilight Imperium 4. Edition – kein Verkauf, keine Werbung, keine Paywall. Freiwillige Spenden zur Deckung der Serverkosten sind willkommen."),
         ["legal.thanks"] = ("Special thanks to", "Besonderer Dank an"),
-        ["legal.createdBy"] = ("Created by ArcticArt", "Erstellt von ArcticArt"),
+        // The studio name itself is rendered as a link in MainLayout (frostforge.studio), so the
+        // key holds only the localized "created by" prefix.
+        ["legal.createdBy"] = ("Created by", "Erstellt von"),
         ["legal.contact"] = (
             "Bugs, suggestions, feedback, questions, thanks via",
             "Bugs, Vorschläge, Kritik, Fragen, Danke via"),
+        ["legal.donate"] = ("Support the server costs:", "Unterstütze die Serverkosten:"),
 
         ["players.title"] = ("Players", "Spieler"),
         ["players.faction"] = ("Faction", "Fraktion"),
@@ -337,6 +338,7 @@ public class Loc
         ["common.cancel"] = ("Cancel", "Abbrechen"),
         ["common.close"] = ("Close", "Schließen"),
         ["common.loading"] = ("Loading…", "Lädt…"),
+        ["common.connecting"] = ("Connecting…", "Verbinde…"),
         ["common.code"] = ("Code", "Code"),
         ["common.copy"] = ("Copy", "Kopieren"),
         ["common.copied"] = ("Copied!", "Kopiert!"),

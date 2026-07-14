@@ -47,9 +47,6 @@ else
             case TabId.Techs:
                 <TechsTab />
                 break;
-            case TabId.Production:
-                <ProductionTab />
-                break;
         }
     </div>
 }
@@ -57,7 +54,7 @@ else
 @code {
     [Parameter] public string Code { get; set; } = "";
 
-    private enum TabId { Phase, Players, Objectives, Techs, Production }
+    private enum TabId { Phase, Players, Objectives, Techs }
     private static readonly TabId[] Tabs = Enum.GetValues<TabId>();
     private TabId tab = TabId.Phase;
     private bool notFound;
@@ -68,7 +65,6 @@ else
         TabId.Players => "nav.players",
         TabId.Objectives => "nav.objectives",
         TabId.Techs => "nav.techs",
-        TabId.Production => "nav.production",
         _ => "",
     };
 
