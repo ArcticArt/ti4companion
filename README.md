@@ -11,7 +11,8 @@ English and German. No Docker required — all data lives in a single SQLite fil
 A hosted instance runs at **[ti4companion.com](https://ti4companion.com)** — free to use, no
 account needed. This repository is the full source, licensed under the [MIT license](LICENSE)
 (code only — see [Legal](#legal--credits) below for the game content). Contributions are welcome:
-see [CONTRIBUTING.md](CONTRIBUTING.md).
+see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[architecture & developer guide](docs/ARCHITECTURE.md).
 
 ## Highlights
 

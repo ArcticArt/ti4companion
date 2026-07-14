@@ -30,9 +30,8 @@ ti4master.db-wal
 .env.local
 *.env.local
 
-# Claude local settings + throwaway preview config
-.claude/settings.local.json
-.claude/launch.json
+# Local tool config
+.claude/
 
 # OS / editor cruft
 Thumbs.db
