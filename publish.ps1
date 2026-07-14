@@ -18,6 +18,10 @@
 param([string]$OutDir = "publish")
 
 $ErrorActionPreference = "Stop"
+# Anchor a relative OutDir to the repo root. The .NET static IO APIs below ([IO.File]::ReadAllText)
+# resolve relative paths against the PROCESS working directory — which in an elevated PowerShell is
+# C:\WINDOWS\system32, NOT the shell's cd location (Set-Location doesn't move the process CWD).
+if (-not [IO.Path]::IsPathRooted($OutDir)) { $OutDir = Join-Path $PSScriptRoot $OutDir }
 $proj = Join-Path $PSScriptRoot "Ti4Companion.ApiService/Ti4Companion.ApiService.csproj"
 
 dotnet publish $proj -c Release -r linux-x64 --self-contained true -o $OutDir
