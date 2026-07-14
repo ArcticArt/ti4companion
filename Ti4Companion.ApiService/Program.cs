@@ -1,3 +1,6 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Ti4Companion.ApiService.Data;
 using Ti4Companion.ApiService.Endpoints;
@@ -20,6 +23,23 @@ builder.Services.AddDbContext<MasterDbContext>(options => options.UseSqlite(mast
 
 builder.Services.AddSignalR();
 builder.Services.AddOpenApi();
+
+// Public-hosting hardening (see DEPLOY.md "Security review"): per-IP rate limits so session
+// creation can't be spammed and join codes can't be enumerated in bulk. Limits are generous —
+// a whole game night behind one NAT IP stays far below them.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // Creating sessions: 20 per 10 minutes per IP.
+    options.AddPolicy("session-create", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(10) }));
+    // Looking a session up by code (unauthenticated; every client refresh uses it): 600/min per IP —
+    // plenty for 8 devices refreshing on every SignalR event, useless for scanning the code space.
+    options.AddPolicy("session-read", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 600, Window = TimeSpan.FromMinutes(1) }));
+});
 
 // Background worker that wipes inactive sessions after their retention window.
 builder.Services.AddHostedService<SessionCleanupWorker>();
@@ -48,6 +68,15 @@ using (var scope = app.Services.CreateScope())
     // Cache the static faction initiative overrides so the session-mutation path doesn't hit the master DB.
     await FactionInitiative.LoadAsync(master);
 }
+
+// Behind the reverse proxy (Apache/Caddy on the same box) the client address arrives in
+// X-Forwarded-For; honour it so the per-IP rate limits see real clients, not 127.0.0.1.
+// The defaults only trust loopback proxies, which matches the deployment.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
+app.UseRateLimiter();
 
 app.MapDefaultEndpoints();
 

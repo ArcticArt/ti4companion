@@ -214,9 +214,9 @@ second systemd service pointed at `/var/lib/ti4companion/ti4.db`.
 - **Auto-wipe:** inactive sessions are deleted automatically after their `RetentionHours`
   (default 7 days = `Ti4__DefaultRetentionHours=168`, also configurable per session in **Settings**).
   The cleanup worker runs every 15 min.
-- **Editing game content:** the strategy cards, factions, objectives, technologies, planets and units
-  live in `Ti4Companion.ApiService/Data/Seed/*.json`. Edit them and redeploy; the content tables
-  re-sync on startup (session data is untouched).
+- **Editing game content:** all reference content lives in the committed
+  `Ti4Companion.ApiService/ti4master.db`. Edit it directly with a SQLite tool, commit it, and copy it
+  to `/var/lib/ti4companion/` on the next deploy (see §5 — session data is untouched).
 - **Faction icons:** drop `*.png` files into `Ti4Companion.Web/wwwroot/factions/` — see the README
   there. Until then a generated colour-and-initials badge is shown. (Rebuild/republish after adding.)
 
@@ -243,18 +243,28 @@ session; host / self / active-player / current-picker rules are enforced server-
 A device with no token is a read-only spectator. Scoring objectives, casting votes and switching the
 wall display are intentionally open to **any joined device**.
 
-**Risks for a fully public URL (prioritised)**
-1. **Open join + short codes (MEDIUM).** `GET /api/sessions/{code}` is unauthenticated (the wall display
-   needs it) and join codes are 5 chars from a 30-symbol alphabet (~24M combinations) — enumerable. A
-   determined griefer could scan for live sessions and, after joining, disrupt votes/scores/the display.
-   *Mitigate:* keep the URL unlisted; and/or rate-limit `GET /{code}`; and/or lengthen codes; and/or put
-   the whole site behind Caddy basic-auth; and/or make display/score/vote host-or-self-only.
-2. **No rate limiting / DoS (MEDIUM).** `POST /api/sessions` is uncapped, so sessions (and their players
-   /votes) can be spam-created until auto-wipe reclaims them (default 7 days). *Mitigate:* add ASP.NET
-   rate-limiting (per-IP token bucket) on create + mutations; cap sessions per IP; shorten the public
-   default `Ti4:DefaultRetentionHours`.
-3. **No input length caps (LOW).** Session/player names are trimmed but unbounded. *Mitigate:* clamp
-   lengths (~60 chars) in the create/join/update endpoints.
+**Risks for a fully public URL (prioritised) — mitigations shipped with the public release**
+1. **Open join + short codes (MEDIUM — mitigated).** `GET /api/sessions/{code}` is unauthenticated (the
+   wall display needs it) and join codes are 5 chars from a 30-symbol alphabet (~24M combinations). Bulk
+   scanning is now impractical: the endpoint is **rate-limited to 600/min per client IP** (generous for a
+   game night, useless for enumerating 24M codes). Residual risk: a griefer who *watches the wall* in
+   person can still join and disrupt — acceptable for this app's threat model.
+2. **No rate limiting / DoS (MEDIUM — mitigated).** `POST /api/sessions` is **rate-limited to 20 per
+   10 min per client IP** (`Program.cs` rate limiter + `UseForwardedHeaders` so the real client IP is
+   seen behind the local reverse proxy). Consider also shortening the public default
+   `Ti4:DefaultRetentionHours`.
+3. **No input length caps (LOW — mitigated).** All user-supplied strings are bounded server-side in
+   `SessionEndpoints`: free text (session/player names, custom objectives, elect free-text) via `Clamp`
+   (60–100 chars); the loose content refs (faction/objective/tech/agenda ids) via `ClampId` (60 chars);
+   and `ColorHex` via `SanitizeColor`, which requires a plain CSS hex (`#rgb`/`#rrggbb`/`#rrggbbaa`) and
+   otherwise falls back — this also closes a **CSS-injection** vector (ColorHex is interpolated into inline
+   `style` attributes on the wall/control views).
+4. **Anonymous row growth via scoring (mitigated).** `POST …/objectives/{soid}/scores` is open to any
+   device (by design), but now **validates that the scorer is a real player in the session** (404
+   otherwise) so an anonymous caller can't insert unbounded score rows with random GUIDs.
+5. **Face-down vote secrecy (mitigated).** While a hidden vote is running the server **redacts** each
+   vote's outcome/weight/choice in the session DTO (keeping only "locked"), so a peek at
+   `GET /{code}` or devtools can't reveal committed votes before the host reveals them.
 
 **SQLite note.** SQLite is a single-writer database; with WAL mode (enabled at startup) concurrent
 reads are fine and writes are serialised. For a friends-only game-night companion this is a non-issue

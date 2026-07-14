@@ -23,6 +23,9 @@ public class Ti4ApiClient(HttpClient http)
     {
         var resp = await http.GetAsync($"api/sessions/{code}");
         if (resp.StatusCode == HttpStatusCode.NotFound) return null;
+        // 429 (per-IP read rate limit): degrade gracefully — keep the current state, the next
+        // SignalR event retries. Never throw into the hub callback / UI event handler.
+        if (resp.StatusCode == HttpStatusCode.TooManyRequests) return null;
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadFromJsonAsync<SessionStateDto>();
     }
@@ -111,16 +114,18 @@ public class Ti4ApiClient(HttpClient http)
     public async Task<IReadOnlyList<SessionLogEntryDto>> GetLogAsync(string code)
     {
         var resp = await http.GetAsync($"api/sessions/{code}/log");
-        if (resp.StatusCode == HttpStatusCode.NotFound) return Array.Empty<SessionLogEntryDto>();
+        if (resp.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.TooManyRequests) return Array.Empty<SessionLogEntryDto>();
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadFromJsonAsync<List<SessionLogEntryDto>>() ?? new();
     }
 
     // ---- helpers ----
-    // A 400 (rule violation) or 403 (not allowed — host only) returns null/default so the store
-    // refreshes to the authoritative state instead of throwing.
+    // A rule violation (400), a not-allowed call (403 — host only), a paused game (423), or a
+    // rate-limit hit (429) returns null/default so the store refreshes to the authoritative state
+    // instead of throwing an unhandled exception into the UI / SignalR callback.
     private static bool IsRejection(HttpResponseMessage r) =>
-        r.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Forbidden or HttpStatusCode.Locked; // 423 = game paused
+        r.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Forbidden
+            or HttpStatusCode.Locked or HttpStatusCode.TooManyRequests; // 423 = paused, 429 = rate-limited
 
     private async Task<T?> PostFor<T>(string url, object? body)
     {
