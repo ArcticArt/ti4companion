@@ -220,10 +220,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .picker-banner .pb-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); }
 .picker-banner .pb-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.3rem; }
 
-/* Turn-timer setup option */
-.timer-option { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.timer-option label { font-size: .82rem; color: var(--text-faint); }
-.timer-option select { max-width: 12rem; }
+/* Host game options (setup): label, control, and a wrapping hint that never squeezes the select. */
+.game-option { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .7rem; }
+.game-option:last-child { margin-bottom: 0; }
+.game-option label { font-size: .82rem; color: var(--text-faint); }
+.game-option select { max-width: 22rem; }
+.game-option .go-hint { flex: 1 1 16rem; font-size: .74rem; line-height: 1.35; }
 
 /* phase bar */
 .phase-bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }

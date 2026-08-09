@@ -200,7 +200,7 @@ public record SessionStateDto(
     Guid? SpeakerPlayerId, Guid? ActivePlayerId, int? ActiveStrategyCardId,
     string? CurrentAgendaId, bool AllowEditAllPlayers,
     bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, bool Paused, int RetentionHours,
-    int TurnTimerSeconds,
+    int TurnTimerSeconds, int StrategyCardsPerPlayer,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
@@ -235,7 +235,9 @@ public record UpdateSessionRequest(
     GamePhase? Phase, int? CurrentRound, Guid? SpeakerPlayerId,
     bool? AgendaVotesHidden = null,
     /// <summary>Per-player time budget per round in seconds; 0 turns the turn timer off.</summary>
-    int? TurnTimerSeconds = null);
+    int? TurnTimerSeconds = null,
+    /// <summary>Strategy cards per player: 0 = automatic, 1 or 2 to pin it.</summary>
+    int? StrategyCardsPerPlayer = null);
 
 public record SetDisplayModeRequest(DisplayMode Mode);
 

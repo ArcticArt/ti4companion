@@ -85,6 +85,11 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         Log = await api.GetLogAsync(Session.JoinCode);
     }
 
+    /// <summary>Host is steering other players' turns from this device (the action phase "take over"
+    /// toggle). Lives here rather than in the view so switching tabs — Phase → Players → Phase — doesn't
+    /// silently drop it, which meant re-tapping it constantly when one person runs the whole table.</summary>
+    public bool HostTakeover { get; set; }
+
     /// <summary>This device controls the host player (the session creator).</summary>
     public bool IsHost => Me?.IsHost == true
         // Legacy sessions created before the host flag: fall back to lowest seat.
@@ -112,7 +117,10 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public bool CanEdit(Guid playerId)
         => Session is not null && (IsHost || Session.AllowEditAllPlayers || playerId == MyPlayerId);
 
-    public int MaxStrategyCards => (Session?.Players.Count ?? 0) <= 4 ? 2 : 1;
+    /// <summary>Strategy cards each player takes this round — the printed rule unless the table pinned a
+    /// count. Same helper the server enforces with, so the two can't drift.</summary>
+    public int MaxStrategyCards =>
+        GameRules.StrategyCardsPerPlayer(Session?.Players.Count ?? 0, Session?.StrategyCardsPerPlayer ?? 0);
 
     /// <summary>Argent Flight's faction slug — it always votes first in the agenda phase.</summary>
     public const string ArgentFactionId = "argent";
@@ -247,6 +255,8 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         _joinedCode = null;
         Session = null;
         MyPlayerId = null;
+        HostTakeover = false;
+        Log = Array.Empty<SessionLogEntryDto>();
         await storage.RemoveAsync(KeyCode);
         await storage.RemoveAsync(KeyPlayer);
         OnChange?.Invoke();

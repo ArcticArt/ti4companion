@@ -99,14 +99,24 @@
     }
 </div>
 
-@* Optional per-player time budget. Table decision, so it lives with the other setup choices. *@
+@* Table decisions (host only): both are options, never forced defaults. *@
 @if (host)
 {
     <div class="panel">
-        <h3 style="margin:0 0 .2rem;">@Loc["timer.title"]</h3>
-        <p class="faint" style="margin:0 0 .6rem;">@Loc["timer.hint"]</p>
-        <div class="timer-option">
-            <label for="turnTimer">@Loc["timer.perRound"]</label>
+        <h3 style="margin:0 0 .6rem;">@Loc["options.title"]</h3>
+
+        <div class="game-option">
+            <label for="cardsPerPlayer">@Loc["cards.perPlayer"]</label>
+            <select id="cardsPerPlayer" value="@Store.Session!.StrategyCardsPerPlayer" @onchange="SetCardsPerPlayer">
+                <option value="0">@Loc["cards.auto"]</option>
+                <option value="1">@string.Format(Loc["cards.fixed"], 1)</option>
+                <option value="2">@string.Format(Loc["cards.fixed"], 2)</option>
+            </select>
+            <span class="faint go-hint">@Loc["cards.hint"]</span>
+        </div>
+
+        <div class="game-option">
+            <label for="turnTimer">@Loc["timer.title"] — @Loc["timer.perRound"]</label>
             <select id="turnTimer" value="@Store.Session!.TurnTimerSeconds" @onchange="SetTurnTimer">
                 <option value="0">@Loc["timer.off"]</option>
                 @foreach (var min in new[] { 5, 8, 10, 12, 15, 20, 30 })
@@ -114,6 +124,7 @@
                     <option value="@(min * 60)">@min min</option>
                 }
             </select>
+            <span class="faint go-hint">@Loc["timer.hint"]</span>
         </div>
     </div>
 }
@@ -147,6 +158,13 @@
         var seconds = int.TryParse(e.Value?.ToString(), out var s) ? s : 0;
         return Store.Mutate(Store.Api.UpdateSessionAsync(
             Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, seconds)));
+    }
+
+    private Task SetCardsPerPlayer(ChangeEventArgs e)
+    {
+        var count = int.TryParse(e.Value?.ToString(), out var c) ? c : 0;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(
+            Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, null, count)));
     }
 
     private Task SetName(Guid id, ChangeEventArgs e)

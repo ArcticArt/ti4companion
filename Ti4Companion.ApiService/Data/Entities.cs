@@ -52,6 +52,10 @@ public class GameSession
     /// Purely informational — running out is signalled, never enforced.</summary>
     public int TurnTimerSeconds { get; set; }
 
+    /// <summary>Strategy cards per player per round: <c>0</c> (default) follows the printed rule, <c>1</c>
+    /// or <c>2</c> pin it. See <see cref="GameRules.StrategyCardsPerPlayer"/>.</summary>
+    public int StrategyCardsPerPlayer { get; set; }
+
     public List<Player> Players { get; set; } = new();
     public List<SessionObjective> Objectives { get; set; } = new();
     public List<StrategyCardState> StrategyCardStates { get; set; } = new();

@@ -99,6 +99,15 @@ public class Loc
         ["turn.takeOver"] = ("Take over", "Übernehmen"),
         ["turn.takeOverEnd"] = ("End takeover", "Übernahme beenden"),
         ["turn.endGame"] = ("End game", "Spiel beenden"),
+        // Host-only game options (setup).
+        ["options.title"] = ("Game options", "Spieloptionen"),
+        ["cards.perPlayer"] = ("Strategy cards per player", "Strategiekarten pro Spieler"),
+        ["cards.auto"] = ("Automatic (2 with up to 4 players, otherwise 1)",
+                          "Automatisch (2 bei bis zu 4 Spielern, sonst 1)"),
+        ["cards.fixed"] = ("{0} per player", "{0} pro Spieler"),
+        ["cards.hint"] = (
+            "Pin this to play variants like Feast or Famine, where a four-player table takes a single card each.",
+            "Feste Zahl für Varianten wie Feast or Famine, bei denen eine Vierer-Runde nur eine Karte pro Spieler nimmt."),
         // Per-player turn timer (informational only — never enforced).
         ["timer.remaining"] = ("Time left this round", "Restzeit diese Runde"),
         ["timer.over"] = ("Time budget used up", "Zeitbudget aufgebraucht"),

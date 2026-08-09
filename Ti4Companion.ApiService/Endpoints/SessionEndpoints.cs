@@ -193,6 +193,9 @@ public static class SessionEndpoints
         // Turn timer: 0 = off, otherwise clamped to a sane 10 s … 2 h budget per player per round.
         if (req.TurnTimerSeconds is { } tt)
             session.TurnTimerSeconds = tt <= 0 ? 0 : Math.Clamp(tt, 10, 7200);
+        // Strategy cards per player: only 0 (automatic), 1 or 2 are meaningful.
+        if (req.StrategyCardsPerPlayer is { } cpp)
+            session.StrategyCardsPerPlayer = cpp is 1 or 2 ? cpp : 0;
 
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -267,8 +270,9 @@ public static class SessionEndpoints
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
 
-        // Every player must have taken their full strategy-card allotment first (≤4 players → 2 each, else 1).
-        var perPlayer = session.Players.Count <= 4 ? 2 : 1;
+        // Every player must have taken their full strategy-card allotment first (printed rule unless the
+        // table pinned a count — see GameRules).
+        var perPlayer = GameRules.StrategyCardsPerPlayer(session.Players.Count, session.StrategyCardsPerPlayer);
         if (session.Players.Count == 0 || session.Players.Any(p => p.StrategyCards.Count < perPlayer))
             return Results.BadRequest(new { error = "All players must pick their strategy card(s) first." });
 
@@ -550,7 +554,7 @@ public static class SessionEndpoints
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
         if (session is null || player is null) return Results.NotFound();
 
-        var maxCards = session.Players.Count <= 4 ? 2 : 1;
+        var maxCards = GameRules.StrategyCardsPerPlayer(session.Players.Count, session.StrategyCardsPerPlayer);
         // Pick order: speaker first, then clockwise by seat. A non-host may only take their own card
         // and only when it's their turn to pick; the host may pick for anyone.
         if (!CallerIsHost(session, http))
