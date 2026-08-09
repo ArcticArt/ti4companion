@@ -114,10 +114,6 @@ Find your PC's IPv4 address with `ipconfig`, then on the phone open `http://<PC-
 session on the PC and join with the code from the phone. (Plain HTTP over the LAN is fine for use;
 iOS "Add to Home Screen" works best over HTTPS, e.g. via the reverse-proxy setup in deployment.)
 
-## What's new
-
-[CHANGELOG.md](CHANGELOG.md) lists the player-facing changes, one line each.
-
 ## Deployment
 
 See [DEPLOY.md](DEPLOY.md) for the Docker-free Linux host setup (a `publish.ps1` build run as a
