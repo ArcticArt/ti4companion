@@ -30,8 +30,10 @@ public class GameSession
     public string? CurrentAgendaId { get; set; }
     /// <summary>When false (default), a device may only edit its own player; when true, anyone may edit anyone.</summary>
     public bool AllowEditAllPlayers { get; set; }
-    /// <summary>Inactivity window after which the auto-wipe worker may delete this session. Server-set only.</summary>
-    public int RetentionHours { get; set; } = 168;
+    /// <summary>Inactivity window after which the auto-wipe worker may delete this session (0 = keep
+    /// forever). Server-set only, from <c>Ti4:DefaultRetentionHours</c>. A <see cref="Paused"/> session
+    /// gets the longer <c>Ti4:PausedRetentionHours</c> window instead — see SessionCleanupWorker.</summary>
+    public int RetentionHours { get; set; } = 2160;
     public bool ShowTechOverview { get; set; }
     /// <summary>What the wall display currently shows (any player may switch it).</summary>
     public DisplayMode DisplayMode { get; set; } = DisplayMode.Objectives;
