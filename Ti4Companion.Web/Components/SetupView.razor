@@ -126,6 +126,22 @@
             </select>
             <span class="faint go-hint">@Loc["timer.hint"]</span>
         </div>
+
+        <div class="game-option">
+            <label class="go-check">
+                <input type="checkbox" id="redTape" checked="@Store.Session!.RedTapeLite" @onchange="SetRedTape" />
+                @Loc["redtape.title"]: @Loc["redtape.option"]
+            </label>
+            <span class="faint go-hint">@Loc["redtape.hint"]</span>
+        </div>
+
+        <div class="game-option">
+            <label class="go-check">
+                <input type="checkbox" id="promptTech" checked="@Store.Session!.PromptTechOnAction" @onchange="SetPromptTech" />
+                @Loc["tech.promptOption"]
+            </label>
+            <span class="faint go-hint">@Loc["tech.promptHint"]</span>
+        </div>
     </div>
 }
 
@@ -166,6 +182,14 @@
         return Store.Mutate(Store.Api.UpdateSessionAsync(
             Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, null, count)));
     }
+
+    private Task SetRedTape(ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, null, RedTapeLite: e.Value as bool? ?? false)));
+
+    private Task SetPromptTech(ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, null, PromptTechOnAction: e.Value as bool? ?? false)));
 
     private Task SetName(Guid id, ChangeEventArgs e)
         => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(e.Value?.ToString(), null, null, null, null, null)));

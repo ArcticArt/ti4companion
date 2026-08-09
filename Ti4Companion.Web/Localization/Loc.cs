@@ -108,6 +108,23 @@ public class Loc
         ["cards.hint"] = (
             "Pin this to play variants like Feast or Famine, where a four-player table takes a single card each.",
             "Feste Zahl für Varianten wie Feast or Famine, bei denen eine Vierer-Runde nur eine Karte pro Spieler nimmt."),
+        // Red Tape variant: a removable marker per objective.
+        ["redtape.title"] = ("Red Tape variant", "Red-Tape-Variante"),
+        ["redtape.option"] = ("Marker on every objective", "Marker auf jedem Auftrag"),
+        ["redtape.hint"] = (
+            "Puts a removable token on each revealed objective. Any player can take it off or put it back — the app only tracks the token.",
+            "Legt auf jeden aufgedeckten Auftrag einen Marker. Jeder Spieler kann ihn abnehmen oder zurücklegen — die App verwaltet nur den Marker."),
+        ["redtape.takeOff"] = ("Take the marker off", "Marker abnehmen"),
+        ["redtape.putBack"] = ("Put the marker back", "Marker zurücklegen"),
+        // Optional technology prompt after the Technology strategy action.
+        ["tech.promptOption"] = ("Ask for the technology after the Technology action",
+                                 "Nach der Technologie-Aktion zur Techeingabe auffordern"),
+        ["tech.promptHint"] = (
+            "Shows a shortcut to the technology tab after that action is played. A reminder, not a requirement.",
+            "Zeigt nach dieser Aktion eine Verknüpfung zum Technologie-Reiter. Eine Erinnerung, keine Pflicht."),
+        ["tech.promptText"] = ("Technology action played — record the researched technology?",
+                               "Technologie-Aktion gespielt — erforschte Technologie erfassen?"),
+        ["tech.promptOpen"] = ("Open technologies", "Technologien öffnen"),
         // Per-player turn timer (informational only — never enforced).
         ["timer.remaining"] = ("Time left this round", "Restzeit diese Runde"),
         ["timer.over"] = ("Time budget used up", "Zeitbudget aufgebraucht"),

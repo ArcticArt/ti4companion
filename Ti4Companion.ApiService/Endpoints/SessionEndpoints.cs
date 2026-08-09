@@ -74,6 +74,7 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/objectives", RevealObjective);
         g.MapPost("/{id:guid}/objectives/custom", RevealCustomObjective); // secret made public / hand-added
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}", RemoveObjective);
+        g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/marker", SetObjectiveMarker); // Red Tape variant
         g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores", ScoreObjective);
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores/{playerId:guid}", UnscoreObjective);
 
@@ -196,6 +197,8 @@ public static class SessionEndpoints
         // Strategy cards per player: only 0 (automatic), 1 or 2 are meaningful.
         if (req.StrategyCardsPerPlayer is { } cpp)
             session.StrategyCardsPerPlayer = cpp is 1 or 2 ? cpp : 0;
+        if (req.RedTapeLite is not null) session.RedTapeLite = req.RedTapeLite.Value;
+        if (req.PromptTechOnAction is not null) session.PromptTechOnAction = req.PromptTechOnAction.Value;
 
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -643,6 +646,17 @@ public static class SessionEndpoints
         if (session is null || obj is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
         session.Objectives.Remove(obj);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Red Tape variant: take the marker off an objective, or put it back. Open to any device like
+    // scoring — it's a token on the table, not a privileged action.
+    private static async Task<IResult> SetObjectiveMarker(Guid id, Guid sessionObjectiveId, SetObjectiveMarkerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
+        if (session is null || obj is null) return Results.NotFound();
+        obj.MarkerRemoved = req.Removed;
         return await SaveAndReturn(db, hub, session, ct);
     }
 

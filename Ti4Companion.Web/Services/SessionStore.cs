@@ -85,6 +85,12 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         Log = await api.GetLogAsync(Session.JoinCode);
     }
 
+    /// <summary>A view asked the shell to open the technology tab (the optional prompt after playing the
+    /// Technology strategy card). An event rather than a flag, so nothing has to be reset afterwards.</summary>
+    public event Action? OnShowTechTab;
+
+    public void ShowTechTab() => OnShowTechTab?.Invoke();
+
     /// <summary>Host is steering other players' turns from this device (the action phase "take over"
     /// toggle). Lives here rather than in the view so switching tabs — Phase → Players → Phase — doesn't
     /// silently drop it, which meant re-tapping it constantly when one person runs the whole table.</summary>

@@ -68,6 +68,25 @@ else
         _ => "",
     };
 
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Store.OnShowTechTab += ShowTechs;
+    }
+
+    // The action view's optional "record your technology" prompt asks the shell to switch tabs.
+    private void ShowTechs() => InvokeAsync(() =>
+    {
+        tab = TabId.Techs;
+        StateHasChanged();
+    });
+
+    public override void Dispose()
+    {
+        Store.OnShowTechTab -= ShowTechs;
+        base.Dispose();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (Store.Session?.JoinCode == Code.ToUpperInvariant()) return;

@@ -39,6 +39,17 @@
     </div>
 }
 
+@* Optional nudge after the Technology action: offer the tech entry instead of demanding it. Off by
+   default — a table that keeps its tech list loosely never sees this. *@
+@if (s.PromptTechOnAction && s.ActiveStrategyCardId == GameRules.TechnologyStrategyCard && canControl)
+{
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text">@Loc["tech.promptText"]</span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowTechTab()">@Loc["tech.promptOpen"] ▸</button>
+    </div>
+}
+
 @if (activeCard is not null && canControl)
 {
     <div class="panel" style="margin-top:.6rem;">

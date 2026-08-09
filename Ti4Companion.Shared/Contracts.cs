@@ -184,7 +184,9 @@ public record PlayerDto(
 /// by hand (e.g. a secret made public via "Classified Document Leaks") rather than from the content set.</summary>
 public record SessionObjectiveDto(
     Guid Id, string ObjectiveId, IReadOnlyList<Guid> ScoredByPlayerIds,
-    string? CustomName, int? CustomPoints);
+    string? CustomName, int? CustomPoints,
+    /// <summary>Red Tape variant: the marker on this objective has been taken off.</summary>
+    bool MarkerRemoved = false);
 
 public record StrategyCardStateDto(int StrategyCardId, int TradeGoods);
 
@@ -200,7 +202,7 @@ public record SessionStateDto(
     Guid? SpeakerPlayerId, Guid? ActivePlayerId, int? ActiveStrategyCardId,
     string? CurrentAgendaId, bool AllowEditAllPlayers,
     bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, bool Paused, int RetentionHours,
-    int TurnTimerSeconds, int StrategyCardsPerPlayer,
+    int TurnTimerSeconds, int StrategyCardsPerPlayer, bool RedTapeLite, bool PromptTechOnAction,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
@@ -237,7 +239,14 @@ public record UpdateSessionRequest(
     /// <summary>Per-player time budget per round in seconds; 0 turns the turn timer off.</summary>
     int? TurnTimerSeconds = null,
     /// <summary>Strategy cards per player: 0 = automatic, 1 or 2 to pin it.</summary>
-    int? StrategyCardsPerPlayer = null);
+    int? StrategyCardsPerPlayer = null,
+    /// <summary>Red Tape variant: removable marker on every revealed objective.</summary>
+    bool? RedTapeLite = null,
+    /// <summary>Offer a technology entry after the Technology strategy action.</summary>
+    bool? PromptTechOnAction = null);
+
+/// <summary>Red Tape variant: take the marker off an objective (or put it back).</summary>
+public record SetObjectiveMarkerRequest(bool Removed);
 
 public record SetDisplayModeRequest(DisplayMode Mode);
 

@@ -14,4 +14,8 @@ public static class GameRules
     /// </summary>
     public static int StrategyCardsPerPlayer(int playerCount, int option)
         => option is 1 or 2 ? option : playerCount <= 4 ? 2 : 1;
+
+    /// <summary>The Technology strategy card's number (cards are keyed by their printed initiative 1–8).
+    /// Used for the optional "record your technology" prompt after that action is played.</summary>
+    public const int TechnologyStrategyCard = 7;
 }

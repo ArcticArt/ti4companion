@@ -3,6 +3,12 @@
 
 <div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1")">
     <div class="obj-head">
+        @* Red Tape variant: show whether the token is still on this objective. Read-only here — the
+           wall is a display, taken off on someone's device. *@
+        @if (Store.Session is { RedTapeLite: true })
+        {
+            <span class="rt-marker @(So.MarkerRemoved ? "off" : "on")">@(So.MarkerRemoved ? "○" : "●")</span>
+        }
         <span class="obj-name">@Name</span>
         <span class="obj-vp">@Pts</span>
     </div>

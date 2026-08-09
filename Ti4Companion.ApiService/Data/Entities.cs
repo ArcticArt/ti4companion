@@ -56,6 +56,13 @@ public class GameSession
     /// or <c>2</c> pin it. See <see cref="GameRules.StrategyCardsPerPlayer"/>.</summary>
     public int StrategyCardsPerPlayer { get; set; }
 
+    /// <summary>Red Tape variant: show a removable marker on every revealed objective.</summary>
+    public bool RedTapeLite { get; set; }
+
+    /// <summary>Offer to record a technology right after the Technology strategy action was played.
+    /// A table decision — the app never forces the entry.</summary>
+    public bool PromptTechOnAction { get; set; }
+
     public List<Player> Players { get; set; } = new();
     public List<SessionObjective> Objectives { get; set; } = new();
     public List<StrategyCardState> StrategyCardStates { get; set; } = new();
@@ -117,6 +124,9 @@ public class SessionObjective
     public string? CustomName { get; set; }
     public int? CustomPoints { get; set; }
     public DateTimeOffset RevealedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>Red Tape variant: the marker that sits on this objective has been taken off. Only shown
+    /// when <see cref="GameSession.RedTapeLite"/> is on; the app just tracks the token, it enforces no rule.</summary>
+    public bool MarkerRemoved { get; set; }
     public List<ObjectiveScore> Scores { get; set; } = new();
 }
 

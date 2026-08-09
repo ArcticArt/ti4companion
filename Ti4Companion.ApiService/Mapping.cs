@@ -105,7 +105,7 @@ public static class Mapping
             .OrderBy(o => o.RevealedAtUtc)
             .Select(o => new SessionObjectiveDto(
                 o.Id, o.ObjectiveId, o.Scores.Select(x => x.PlayerId).ToList(),
-                o.CustomName, o.CustomPoints))
+                o.CustomName, o.CustomPoints, o.MarkerRemoved))
             .ToList();
 
         var cardStates = s.StrategyCardStates
@@ -129,7 +129,7 @@ public static class Mapping
             s.Id, s.JoinCode, s.Name, s.DefaultLanguage, s.ActiveExpansions,
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
             s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.Paused, s.RetentionHours,
-            s.TurnTimerSeconds, s.StrategyCardsPerPlayer,
+            s.TurnTimerSeconds, s.StrategyCardsPerPlayer, s.RedTapeLite, s.PromptTechOnAction,
             s.CreatedAtUtc, s.LastActivityUtc,
             players, objectives, cardStates, votes);
     }
