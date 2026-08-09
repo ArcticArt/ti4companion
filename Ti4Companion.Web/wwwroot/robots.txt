@@ -1,0 +1,13 @@
+# TI4 Companion - https://ti4companion.com
+# Unofficial fan companion for Twilight Imperium 4 (source: github.com/ArcticArt/ti4companion).
+#
+# Session URLs are per-game and short-lived (sessions are auto-wiped after a retention window), so
+# there is nothing worth indexing behind them - and /display/{code} is a live view of someone's
+# running game. The landing page and its assets stay crawlable.
+
+User-agent: *
+Disallow: /api/
+Disallow: /s/
+Disallow: /join/
+Disallow: /display/
+Crawl-delay: 10
