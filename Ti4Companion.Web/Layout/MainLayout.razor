@@ -169,6 +169,9 @@
         if (Store.Session is null) return;
         var ok = await JS.InvokeAsync<bool>("confirm", Loc["turn.endGameConfirm"]);
         if (!ok) return;
+        // Keep a permanent record of the match before anything else — the session itself is wiped once
+        // its retention window passes, and this is the moment the host declares the game finished.
+        try { await Store.Api.RecordSummaryAsync(Store.Session.Id); } catch { }
         await Store.Mutate(Store.Api.SetDisplayModeAsync(Store.Session.Id, DisplayMode.Statistics));
         showStats = true;
         StateHasChanged();

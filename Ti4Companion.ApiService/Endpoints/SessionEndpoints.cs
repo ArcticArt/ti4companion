@@ -71,6 +71,7 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/players/{playerId:guid}/strategy-cards/{cardId:int}/used", SetStrategyCardUsed);
 
         g.MapPost("/{id:guid}/seat-order", SetSeatOrder);   // whole table order in one call (host)
+        g.MapPost("/{id:guid}/summary", RecordSummary);     // permanent record of a finished game (host)
 
         // ---- Status phase (scoring order + shared checklist) ----
         g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
@@ -661,6 +662,19 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
         session.Objectives.Remove(obj);
         return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Record the permanent summary of a finished game (host). Idempotent, and a no-op for a session that
+    // never became a real game — the response says which it was, so the UI can stay quiet either way.
+    private static async Task<IResult> RecordSummary(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+
+        var recorded = await SessionSummaryService.TryRecordAsync(db, session, ct);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { recorded });
     }
 
     // Set the whole seat order at once (host). Players missing from the list keep their relative order

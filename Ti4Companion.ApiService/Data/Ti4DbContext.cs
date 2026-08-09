@@ -15,6 +15,10 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
     public DbSet<AgendaVote> AgendaVotes => Set<AgendaVote>();
     public DbSet<SessionLogEntry> SessionLog => Set<SessionLogEntry>();
 
+    // Outlives the sessions themselves (no FK, no cascade) — see SessionSummary.
+    public DbSet<SessionSummary> SessionSummaries => Set<SessionSummary>();
+    public DbSet<SessionSummaryPlayer> SessionSummaryPlayers => Set<SessionSummaryPlayer>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -26,6 +30,7 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
                      typeof(GameSession), typeof(Player), typeof(PlayerStrategyCard),
                      typeof(StrategyCardState), typeof(SessionObjective), typeof(ObjectiveScore),
                      typeof(PlayerTechnology), typeof(AgendaVote), typeof(SessionLogEntry),
+                     typeof(SessionSummary), typeof(SessionSummaryPlayer),
                  })
         {
             b.Entity(entity).Property<Guid>("Id").ValueGeneratedNever();
@@ -74,5 +79,12 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
         b.Entity<StrategyCardState>().HasIndex(x => new { x.SessionId, x.StrategyCardId }).IsUnique();
         b.Entity<AgendaVote>().HasIndex(x => new { x.SessionId, x.PlayerId }).IsUnique();
         b.Entity<SessionLogEntry>().HasIndex(x => new { x.SessionId, x.TimestampUtc });
+
+        // ---- Session summaries (survive the session's auto-wipe: no relationship to Sessions) ----
+        b.Entity<SessionSummary>().HasIndex(x => x.SessionId).IsUnique();  // re-recording updates in place
+        b.Entity<SessionSummary>().HasIndex(x => x.CreatedAtUtc);
+        b.Entity<SessionSummary>()
+            .HasMany(x => x.Players).WithOne(p => p.Summary)
+            .HasForeignKey(p => p.SessionSummaryId).OnDelete(DeleteBehavior.Cascade);
     }
 }

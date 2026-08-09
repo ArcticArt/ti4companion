@@ -67,6 +67,8 @@ using (var scope = app.Services.CreateScope())
 
     // Cache the static faction initiative overrides so the session-mutation path doesn't hit the master DB.
     await FactionInitiative.LoadAsync(master);
+    // Same for objective points — needed when a finished game is summarised.
+    await ObjectivePoints.LoadAsync(master);
 }
 
 // Behind the reverse proxy (Apache/Caddy on the same box) the client address arrives in

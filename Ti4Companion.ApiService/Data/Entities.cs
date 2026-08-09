@@ -150,6 +150,71 @@ public class ObjectiveScore
     public DateTimeOffset ScoredAtUtc { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Permanent record of a finished game. Deliberately **not** related to <see cref="GameSession"/> by a
+/// foreign key: the session itself is auto-wiped after its retention window, and this row has to outlive
+/// it so long-term statistics stay possible. It holds aggregates only — never the individual steps, so it
+/// is not a copy of the match log.
+/// <para>
+/// No IP addresses and no device identifiers are stored. A MAC address cannot be collected at all (it
+/// never leaves the visitor's own network segment); <see cref="DeviceCount"/> counts distinct device
+/// tokens, which answers "how many devices were at the table" without keeping the tokens themselves.
+/// </para>
+/// </summary>
+public class SessionSummary
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>Id of the session this summarises. Unique, so a re-record updates instead of duplicating.</summary>
+    public Guid SessionId { get; set; }
+    public string JoinCode { get; set; } = "";
+    public string Name { get; set; } = "";
+
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    /// <summary>When the game itself began (first phase change), or null if it never started.</summary>
+    public DateTimeOffset? StartedAtUtc { get; set; }
+    public DateTimeOffset LastActivityUtc { get; set; }
+    /// <summary>Net play time: start → last activity, with paused intervals removed.</summary>
+    public int DurationSeconds { get; set; }
+    /// <summary>How much of that span the game spent paused (already excluded from the duration).</summary>
+    public int PausedSeconds { get; set; }
+
+    public int RoundsReached { get; set; }
+    public GamePhase EndPhase { get; set; }
+    public int PlayerCount { get; set; }
+    /// <summary>Distinct device tokens seen on this session — the closest honest answer to "how many devices".</summary>
+    public int DeviceCount { get; set; }
+    public int ObjectivesRevealed { get; set; }
+
+    public Expansion ActiveExpansions { get; set; }
+    public Language DefaultLanguage { get; set; }
+    public int TurnTimerSeconds { get; set; }
+    public int StrategyCardsPerPlayer { get; set; }
+    public bool RedTapeLite { get; set; }
+
+    /// <summary>Highest score; null when nobody scored or the top score is shared.</summary>
+    public string? WinnerName { get; set; }
+    public string? WinnerFactionId { get; set; }
+    public int TopPoints { get; set; }
+
+    public DateTimeOffset RecordedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public List<SessionSummaryPlayer> Players { get; set; } = new();
+}
+
+/// <summary>One player's outcome inside a <see cref="SessionSummary"/>.</summary>
+public class SessionSummaryPlayer
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionSummaryId { get; set; }
+    public SessionSummary? Summary { get; set; }
+    public string Name { get; set; } = "";
+    public string? FactionId { get; set; }
+    public string ColorHex { get; set; } = "";
+    public int SeatOrder { get; set; }
+    public int Points { get; set; }
+    public int TechnologyCount { get; set; }
+}
+
 public class PlayerTechnology
 {
     public Guid Id { get; set; } = Guid.NewGuid();

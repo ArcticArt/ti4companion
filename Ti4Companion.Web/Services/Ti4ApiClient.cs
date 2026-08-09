@@ -85,6 +85,10 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/objectives/custom", new RevealCustomObjectiveRequest(name, points));
     public Task RemoveObjectiveAsync(Guid id, Guid sessionObjectiveId)
         => http.DeleteAsync($"api/sessions/{id}/objectives/{sessionObjectiveId}");
+    /// <summary>Record the permanent summary of a finished game. Fire-and-forget from the UI's point of
+    /// view: it returns no session state, and a session that never became a game is simply not recorded.</summary>
+    public Task RecordSummaryAsync(Guid id) => http.PostAsync($"api/sessions/{id}/summary", null);
+
     public Task<SessionStateDto?> SetSeatOrderAsync(Guid id, IReadOnlyList<Guid> playerIds)
         => PostFor($"api/sessions/{id}/seat-order", new SetSeatOrderRequest(playerIds));
     public Task<SessionStateDto?> SetStatusDoneAsync(Guid id, Guid playerId, bool done)
