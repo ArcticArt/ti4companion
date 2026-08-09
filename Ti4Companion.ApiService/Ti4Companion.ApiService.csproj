@@ -8,6 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
+    <!-- Direct reference lifts the vulnerable native SQLite in SQLitePCLRaw.lib.e_sqlite3 2.1.11
+         (CVE-2025-6965 / GHSA-2m69-gcr7-jv3q, high: SQLite before 3.50.2 can corrupt memory when the
+         number of aggregate terms exceeds the columns available). EF Core still pins the bundle at
+         2.1.11 as of 10.0.10, so the native lib has to be raised on its own — the bundle only requires
+         >= 2.1.11, so this wins. Managed core/provider stay at 2.1.11; only the native binary moves.
+         Drop when Microsoft.EntityFrameworkCore.Sqlite ships a fixed bundle. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <!-- Direct reference lifts the vulnerable transitive Microsoft.OpenApi 2.0.0 (GHSA-v5pm-xwqc-g5wc)
