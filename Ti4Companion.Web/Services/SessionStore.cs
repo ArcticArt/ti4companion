@@ -334,7 +334,8 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
             var s = Session;
             if (s is null || s.CurrentAgendaId is null) return AgendaStage.Influence;
             if (!s.VotingStarted) return AgendaStage.AgendaRevealed;
-            return s.AgendaVotesHidden ? AgendaStage.VotingHidden : AgendaStage.VotingOpen;
+            if (!s.AgendaVotesHidden) return AgendaStage.VotingOpen;
+            return s.AgendaTotalsRevealed ? AgendaStage.VotingHiddenTotals : AgendaStage.VotingHidden;
         }
     }
 
@@ -414,5 +415,7 @@ public enum AgendaStage
     /// <summary>Open voting: drafts are locked one by one and shown as they lock.</summary>
     VotingOpen,
     /// <summary>Face-down voting: only "voted" shows until the host reveals.</summary>
-    VotingHidden
+    VotingHidden,
+    /// <summary>Face-down voting, intermediate step: the totals are public, who voted what is not.</summary>
+    VotingHiddenTotals
 }

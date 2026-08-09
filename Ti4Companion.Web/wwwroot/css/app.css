@@ -235,6 +235,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 span.rt-marker { cursor: default; }
 .beamer .rt-marker { font-size: clamp(.8rem, 1.6vh, 1.5rem); }
 
+/* Face-down vote, intermediate step: totals shown, attribution still secret. */
+.beamer .agenda-elect.totals-note { color: var(--gold); font-style: italic; }
+
 /* Optional technology prompt after the Technology strategy action. */
 .tech-prompt { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; border-left: 4px solid var(--gold); }
 .tech-prompt .tp-text { font-size: .88rem; }

@@ -46,14 +46,19 @@ else
                     <div class="agenda-headline">@Loc.Pick(agenda.Name, agenda.NameDe)</div>
                     <div class="agenda-body">@Loc.Pick(agenda.Text, agenda.TextDe)</div>
 
-                    @if (s.AgendaVotesHidden)
+                    @* Three states for a face-down vote: nothing, then the TOTALS only (server-computed —
+                       the per-player rows stay redacted), then everything. *@
+                    @if (s.AgendaVotesHidden && s.AgendaTotals is null)
                     {
                         <div class="agenda-elect">@Loc["agenda.hidden"]</div>
                     }
                     else if (elect == ElectType.ForAgainst)
                     {
-                        var forVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
-                        var againstVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+                        var forVotes = s.AgendaTotals?.For
+                            ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
+                        var againstVotes = s.AgendaTotals?.Against
+                            ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+                        @if (s.AgendaTotals is not null) { <div class="agenda-elect totals-note">@Loc["agenda.totalsOnly"]</div> }
                         <div class="tally-row">
                             <span class="tally @(forVotes >= againstVotes && forVotes > 0 ? "lead" : "")" style="color:#8fe0bd;">@Loc["agenda.for"]: @forVotes</span>
                             <span class="tally @(againstVotes > forVotes ? "lead" : "")" style="color:#f1a3ae;">@Loc["agenda.against"]: @againstVotes</span>
@@ -61,12 +66,15 @@ else
                     }
                     else
                     {
-                        @* Elect agendas: tally locked votes per chosen candidate, leader highlighted. *@
-                        var tally = s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
-                            .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
-                            .OrderByDescending(t => t.Votes).ToList();
+                        @* Elect agendas: tally per chosen candidate, leader highlighted. *@
+                        var tally = s.AgendaTotals is { } tot
+                            ? tot.Choices.Select(c => (Choice: c.Choice, Votes: c.Votes)).ToList()
+                            : s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
+                                .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
+                                .OrderByDescending(t => t.Votes).ToList();
                         var lead = tally.FirstOrDefault().Votes;
                         <div class="agenda-elect"><b>@Loc["agenda.elect"]:</b> @agenda.Elect</div>
+                        @if (s.AgendaTotals is not null) { <div class="agenda-elect totals-note">@Loc["agenda.totalsOnly"]</div> }
                         <div class="tally-row">
                             @foreach (var t in tally)
                             {
@@ -422,20 +430,26 @@ else
     // the host has revealed. For/Against → passed / rejected / tie (speaker decides); elect → winner / tie.
     private string? AgendaResult(SessionStateDto s, AgendaDto? agenda, ElectType elect)
     {
-        if (agenda is null || s.AgendaVotesHidden) return null;
+        // Still fully face-down → no outcome. Once the TOTALS are public the outcome follows from them,
+        // so it is shown even though who voted what is still secret.
+        if (agenda is null || (s.AgendaVotesHidden && s.AgendaTotals is null)) return null;
         var allLocked = s.Players.Count > 0 && s.Players.All(p => s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
         if (!allLocked) return null;
         if (elect == ElectType.ForAgainst)
         {
-            var f = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
-            var a = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+            var f = s.AgendaTotals?.For
+                ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
+            var a = s.AgendaTotals?.Against
+                ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
             if (f == 0 && a == 0) return Loc["agenda.speakerDecides"];
             if (f == a) return Loc["agenda.speakerDecides"];
             return f > a ? Loc["agenda.passed"] : Loc["agenda.rejected"];
         }
-        var tally = s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
-            .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
-            .OrderByDescending(t => t.Votes).ToList();
+        var tally = s.AgendaTotals is { } tot
+            ? tot.Choices.Select(c => (Choice: c.Choice, Votes: c.Votes)).ToList()
+            : s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
+                .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
+                .OrderByDescending(t => t.Votes).ToList();
         if (tally.Count == 0) return null;
         if (tally.Count > 1 && tally[0].Votes == tally[1].Votes) return Loc["agenda.speakerDecides"];
         return $"{Loc["agenda.elected"]}: {ChoiceLabel(agenda, tally[0].Choice)}";

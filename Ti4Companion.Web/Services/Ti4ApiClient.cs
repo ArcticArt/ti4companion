@@ -105,6 +105,8 @@ public class Ti4ApiClient(HttpClient http)
         => PostForAllowBadRequest($"api/sessions/{id}/agenda/start", new StartVotingRequest(hidden));
     public Task<SessionStateDto?> CancelVotingAsync(Guid id)
         => PostFor<SessionStateDto>($"api/sessions/{id}/agenda/cancel", null);
+    public Task<SessionStateDto?> RevealVoteTotalsAsync(Guid id)
+        => PostFor<SessionStateDto>($"api/sessions/{id}/agenda/reveal-totals", null);
     public Task<SessionStateDto?> RevealVotesAsync(Guid id)
         => PostFor<SessionStateDto>($"api/sessions/{id}/agenda/reveal", null);
     public Task<SessionStateDto?> LockVoteAsync(Guid id, Guid playerId, VoteOutcome outcome, int votes, string? choice)

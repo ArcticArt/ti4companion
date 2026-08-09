@@ -39,6 +39,10 @@ public class GameSession
     public DisplayMode DisplayMode { get; set; } = DisplayMode.Objectives;
     /// <summary>When true, agenda votes are cast face-down and only revealed when the host flips them.</summary>
     public bool AgendaVotesHidden { get; set; }
+
+    /// <summary>Intermediate step of a face-down vote: the totals are public but not who voted what.
+    /// Only meaningful while <see cref="AgendaVotesHidden"/> is still true; reset with the vote.</summary>
+    public bool AgendaTotalsRevealed { get; set; }
     /// <summary>Agenda phase: false while players enter their available influence and the host picks an
     /// agenda; true once the host has started the vote (influence then locks). Cleared on cancel / new
     /// agenda / next round.</summary>

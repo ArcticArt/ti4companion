@@ -125,12 +125,31 @@ public static class Mapping
                 : new AgendaVoteDto(v.PlayerId, v.Outcome, v.Votes, v.Choice, v.Locked))
             .ToList();
 
+        // Intermediate step of a face-down vote: the table may see the TOTALS without learning who voted
+        // what. Since the per-player rows above stay redacted, the aggregate has to be computed here —
+        // only locked votes count, exactly as in the final tally.
+        AgendaTotalsDto? totals = null;
+        if (s.VotingStarted && s.AgendaTotalsRevealed)
+        {
+            var locked = s.AgendaVotes.Where(v => v.Locked).ToList();
+            totals = new AgendaTotalsDto(
+                locked.Where(v => v.Outcome == VoteOutcome.For).Sum(v => v.Votes),
+                locked.Where(v => v.Outcome == VoteOutcome.Against).Sum(v => v.Votes),
+                locked.Count(v => v.Outcome == VoteOutcome.Abstain),
+                locked.Where(v => !string.IsNullOrEmpty(v.Choice))
+                    .GroupBy(v => v.Choice!)
+                    .Select(g => new AgendaChoiceTallyDto(g.Key, g.Sum(v => v.Votes)))
+                    .OrderByDescending(t => t.Votes)
+                    .ToList());
+        }
+
         return new SessionStateDto(
             s.Id, s.JoinCode, s.Name, s.DefaultLanguage, s.ActiveExpansions,
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
             s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.Paused, s.RetentionHours,
             s.TurnTimerSeconds, s.StrategyCardsPerPlayer, s.RedTapeLite, s.PromptTechOnAction,
             s.CreatedAtUtc, s.LastActivityUtc,
-            players, objectives, cardStates, votes);
+            players, objectives, cardStates, votes,
+            s.AgendaTotalsRevealed, totals);
     }
 }

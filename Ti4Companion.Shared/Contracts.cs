@@ -195,6 +195,16 @@ public record StrategyCardStateDto(int StrategyCardId, int TradeGoods);
 /// <paramref name="Locked"/> = secret vote committed (can't be reopened until reset).</summary>
 public record AgendaVoteDto(Guid PlayerId, VoteOutcome Outcome, int Votes, string? Choice, bool Locked);
 
+/// <summary>Votes per elected candidate (player id / planet id / card number / law id / free text).</summary>
+public record AgendaChoiceTallyDto(string Choice, int Votes);
+
+/// <summary>
+/// Aggregate result of the current vote, WITHOUT attribution — the intermediate step of a face-down vote
+/// (Galactic Event / hidden agenda), where the table sees the totals before it sees who voted how. The
+/// server computes it precisely because the per-player rows stay redacted at that point.
+/// </summary>
+public record AgendaTotalsDto(int For, int Against, int Abstained, IReadOnlyList<AgendaChoiceTallyDto> Choices);
+
 public record SessionStateDto(
     Guid Id, string JoinCode, string Name,
     Language DefaultLanguage, Expansion ActiveExpansions,
@@ -207,7 +217,11 @@ public record SessionStateDto(
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
     IReadOnlyList<StrategyCardStateDto> StrategyCardStates,
-    IReadOnlyList<AgendaVoteDto> AgendaVotes);
+    IReadOnlyList<AgendaVoteDto> AgendaVotes,
+    /// <summary>Face-down vote: totals are public, attribution is not (see <see cref="AgendaTotals"/>).</summary>
+    bool AgendaTotalsRevealed = false,
+    /// <summary>Set once the totals are public — while the votes themselves are still redacted.</summary>
+    AgendaTotalsDto? AgendaTotals = null);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>

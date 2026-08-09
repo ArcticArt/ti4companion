@@ -268,5 +268,8 @@ public enum SessionLogKind
     /// <summary>Host paused the game. <see cref="GameResumed"/> ends it. The interval between them is
     /// subtracted from all statistics durations (a pause doesn't count as play time).</summary>
     GamePaused = 22,
-    GameResumed = 23
+    GameResumed = 23,
+    /// <summary>Host published the totals of a face-down vote without the attribution (intermediate step
+    /// before <see cref="AgendaReveal2"/>).</summary>
+    AgendaRevealTotals = 24
 }

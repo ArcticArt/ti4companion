@@ -157,7 +157,7 @@
 
     // Agenda-phase noise we no longer surface in the log (only reveal + the summarised result remain).
     private static bool HideInLog(SessionLogKind k) => k is SessionLogKind.AgendaStartVote
-        or SessionLogKind.AgendaCancel or SessionLogKind.AgendaReveal2
+        or SessionLogKind.AgendaCancel or SessionLogKind.AgendaReveal2 or SessionLogKind.AgendaRevealTotals
         or SessionLogKind.VoteLock or SessionLogKind.InfluenceSet;
 
     // Render the packed agenda result ("agendaId|for|against|topChoiceKey|topVotes|runnerUpVotes").

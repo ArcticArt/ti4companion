@@ -86,6 +86,7 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/agenda", SetAgenda);              // reveal an agenda / clear it (deducts spent influence)
         g.MapPost("/{id:guid}/agenda/start", StartVoting);      // host opens the vote (open or face-down)
         g.MapPost("/{id:guid}/agenda/cancel", CancelVoting);    // host aborts → back to influence entry
+        g.MapPost("/{id:guid}/agenda/reveal-totals", RevealVoteTotals); // totals only, no attribution
         g.MapPost("/{id:guid}/agenda/reveal", RevealVotes);     // host flips a face-down vote face-up
         g.MapPost("/{id:guid}/agenda/lock", LockVote);          // commit a vote (open or hidden); counts only once locked
 
@@ -336,6 +337,7 @@ public static class SessionEndpoints
         session.CurrentAgendaId = null;
         session.VotingStarted = false;
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         foreach (var p in session.Players) p.Influence = 0;
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Agenda, round: session.CurrentRound);
@@ -356,6 +358,7 @@ public static class SessionEndpoints
         session.CurrentAgendaId = null;
         session.VotingStarted = false;
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         foreach (var p in session.Players)
         {
@@ -751,6 +754,7 @@ public static class SessionEndpoints
         if (session.CurrentAgendaId is null) return Results.BadRequest(new { error = "Reveal an agenda first." });
         session.VotingStarted = true;
         session.AgendaVotesHidden = req.Hidden;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         Log(db, session, http, SessionLogKind.AgendaStartVote, detail: req.Hidden ? "hidden" : "open");
         return await SaveAndReturn(db, hub, session, ct);
@@ -764,10 +768,31 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
         session.VotingStarted = false;
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         Log(db, session, http, SessionLogKind.AgendaCancel);
         return await SaveAndReturn(db, hub, session, ct);
     }
+
+    // Intermediate step for a face-down vote: publish the TOTALS while keeping the attribution hidden
+    // (Galactic Event / hidden agenda). Deliberately its own route rather than a second meaning for
+    // /reveal — a double tap must not skip straight to the full reveal. Host only.
+    private static async Task<IResult> RevealVoteTotals(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (!AllVotesLocked(session))
+            return Results.BadRequest(new { error = "All players must lock their vote first." });
+        session.AgendaTotalsRevealed = true;
+        Log(db, session, http, SessionLogKind.AgendaRevealTotals);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>Every player has a locked vote — the gate for both reveal steps.</summary>
+    private static bool AllVotesLocked(GameSession session)
+        => session.Players.Count > 0
+           && session.Players.All(p => session.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
 
     // Host flips a face-down vote face-up (reveal). Host only.
     private static async Task<IResult> RevealVotes(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
@@ -777,9 +802,10 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
         // Same gate the client UI applies: a face-down vote is only flipped once EVERY player has
         // locked — otherwise late voters would cast into an already-open vote (secrecy broken).
-        if (session.Players.Count == 0 || !session.Players.All(p => session.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked)))
+        if (!AllVotesLocked(session))
             return Results.BadRequest(new { error = "All players must lock their vote first." });
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false; // fully open now, the intermediate step is over
         Log(db, session, http, SessionLogKind.AgendaReveal2);
         return await SaveAndReturn(db, hub, session, ct);
     }

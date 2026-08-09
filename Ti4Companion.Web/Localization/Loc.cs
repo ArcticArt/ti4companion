@@ -223,6 +223,11 @@ public class Loc
         ["agenda.secret"] = ("Hide votes", "Wahl verdecken"),
         ["agenda.reveal"] = ("Reveal votes", "Stimmen aufdecken"),
         ["agenda.hidden"] = ("Votes are hidden until the host reveals them.", "Stimmen sind verdeckt, bis der Host sie aufdeckt."),
+        // Intermediate step of a face-down vote: totals public, attribution still secret.
+        ["agenda.revealTotals"] = ("Reveal totals only", "Nur Summen aufdecken"),
+        ["agenda.totalsOnly"] = ("Totals only — who voted how is still hidden.",
+                                 "Nur die Summen — wer wie gestimmt hat, bleibt verdeckt."),
+        ["agenda.totalsShown"] = ("Totals are public.", "Die Summen sind aufgedeckt."),
         ["agenda.voted"] = ("Voted", "Abgestimmt"),
         ["agenda.waiting"] = ("Waiting…", "Wartet…"),
         ["agenda.voteFor"] = ("Vote", "Abstimmen"),

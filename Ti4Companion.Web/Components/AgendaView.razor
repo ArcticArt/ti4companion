@@ -7,7 +7,7 @@
     var host = Store.IsHost;
     var stage = Store.CurrentAgendaStage;
     var hidden = s.AgendaVotesHidden;
-    var voting = stage is AgendaStage.VotingOpen or AgendaStage.VotingHidden;
+    var voting = stage is AgendaStage.VotingOpen or AgendaStage.VotingHidden or AgendaStage.VotingHiddenTotals;
     // The host may only reveal a face-down vote once every player's vote is locked (so nobody peeks early).
     var allLocked = s.Players.Count > 0 && s.Players.All(p => s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
     // For the host, exactly one row is "open" for entry at a time (their own by default; switched via "Vote").
@@ -144,8 +144,15 @@
                         <button class="btn btn-sm btn-danger" @onclick="CancelVote">@Loc[allLocked ? "agenda.repeatVote" : "agenda.cancelVote"]</button>
                         @if (hidden)
                         {
+                            @* Two-step reveal: totals first (no attribution), then the full flip. The
+                               totals button disappears once it has been used. *@
+                            @if (stage == AgendaStage.VotingHidden)
+                            {
+                                <button class="btn btn-sm" disabled="@(!allLocked)" @onclick="RevealTotals">@Loc["agenda.revealTotals"]</button>
+                            }
                             <button class="btn btn-sm btn-gold" disabled="@(!allLocked)" @onclick="RevealVotes">@Loc["agenda.reveal"]</button>
                             @if (!allLocked) { <span class="faint">@Loc["agenda.lockAllFirst"]</span> }
+                            else if (stage == AgendaStage.VotingHiddenTotals) { <span class="faint">@Loc["agenda.totalsShown"]</span> }
                         }
                     }
                     <button class="btn btn-sm" @onclick="() => Reveal(null)">↻ @Loc["agenda.revealNew"]</button>
@@ -237,6 +244,7 @@
     private Task SetInfluence(Guid playerId, int value) => Store.Mutate(Store.Api.SetInfluenceAsync(Sid, playerId, Math.Max(0, value)));
     private async Task StartVote(bool hidden) { openFor = Guid.Empty; ResetDraft(); await Store.Mutate(Store.Api.StartVotingAsync(Sid, hidden)); }
     private async Task CancelVote() { openFor = Guid.Empty; ResetDraft(); await Store.Mutate(Store.Api.CancelVotingAsync(Sid)); }
+    private Task RevealTotals() => Store.Mutate(Store.Api.RevealVoteTotalsAsync(Sid));
     private Task RevealVotes() => Store.Mutate(Store.Api.RevealVotesAsync(Sid));
 
     // ---- Vote draft, committed only on lock ("Festlegen") ----
