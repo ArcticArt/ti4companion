@@ -78,8 +78,10 @@
 @* Join QR for the people at the table — hold the phone up instead of dictating the code. *@
 @if (showQr && Store.Session is { } qs)
 {
-    <div class="modal" @onclick="() => showQr = false">
-        <div class="modal-box qr-box" @onclick:stopPropagation="true">
+    @* In this app `.modal-backdrop` is the overlay and `.modal` the box — bootstrap.min.css also defines
+       `.modal` (position:fixed, top/left 0), so using it as the overlay pins it to the corner. *@
+    <div class="modal-backdrop centered blurred" @onclick="() => showQr = false">
+        <div class="modal qr-box" @onclick:stopPropagation="true">
             <h3 style="margin:0;">@Loc["nav.joinQr"]</h3>
             <p class="faint" style="margin:0;">@Loc["nav.joinQrHint"]</p>
             <JoinQr Text="@InviteLink(qs.JoinCode)" SizeCss="min(72vw, 20rem)" Alt="@Loc["nav.joinQr"]" />

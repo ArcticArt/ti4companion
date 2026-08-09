@@ -70,6 +70,51 @@
                 return ok;
             } catch (e) { return false; }
         };
+        // Drag-to-reorder for the seat-order dialog. Pointer events, NOT the HTML5 drag events: those
+        // don't fire on touch, and the table's control device is an iPad. The helper only reports which
+        // row the pointer is over — Blazor keeps owning the DOM and re-renders the preview order, so we
+        // never move nodes behind its back (which would desync its diff).
+        window.ti4.seatDrag = function (container, dotNet) {
+            if (!container) return null;
+            let active = false;
+            var idxOf = function (el) {
+                var row = el && el.closest ? el.closest('[data-seat-idx]') : null;
+                return row ? parseInt(row.dataset.seatIdx, 10) : -1;
+            };
+            var down = function (e) {
+                var i = idxOf(e.target);
+                if (i < 0) return;
+                active = true;
+                // Capture on the container so moves keep coming once the finger leaves the row.
+                try { container.setPointerCapture(e.pointerId); } catch (err) { }
+                dotNet.invokeMethodAsync('DragStart', i);
+                e.preventDefault();
+            };
+            var move = function (e) {
+                if (!active) return;
+                var j = idxOf(document.elementFromPoint(e.clientX, e.clientY));
+                if (j >= 0) dotNet.invokeMethodAsync('DragOver', j);
+                e.preventDefault();
+            };
+            var up = function (e) {
+                if (!active) return;
+                active = false;
+                try { container.releasePointerCapture(e.pointerId); } catch (err) { }
+                dotNet.invokeMethodAsync('DragEnd');
+            };
+            container.addEventListener('pointerdown', down);
+            container.addEventListener('pointermove', move);
+            container.addEventListener('pointerup', up);
+            container.addEventListener('pointercancel', up);
+            return {
+                dispose: function () {
+                    container.removeEventListener('pointerdown', down);
+                    container.removeEventListener('pointermove', move);
+                    container.removeEventListener('pointerup', up);
+                    container.removeEventListener('pointercancel', up);
+                }
+            };
+        };
         // Turn timer ran out: a short buzz on the player's own device. Vibration is unsupported on iOS
         // Safari and requires a prior user gesture elsewhere, so failure is normal and ignored.
         window.ti4.buzz = function () {

@@ -70,6 +70,8 @@ public static class SessionEndpoints
         g.MapDelete("/{id:guid}/players/{playerId:guid}/strategy-cards/{cardId:int}", UnassignStrategyCard);
         g.MapPost("/{id:guid}/players/{playerId:guid}/strategy-cards/{cardId:int}/used", SetStrategyCardUsed);
 
+        g.MapPost("/{id:guid}/seat-order", SetSeatOrder);   // whole table order in one call (host)
+
         // ---- Status phase (scoring order + shared checklist) ----
         g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
         g.MapPost("/{id:guid}/status-step", SetStatusStep);
@@ -658,6 +660,26 @@ public static class SessionEndpoints
         if (session is null || obj is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
         session.Objectives.Remove(obj);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Set the whole seat order at once (host). Players missing from the list keep their relative order
+    // after the listed ones, so a stale client can't drop somebody off the table.
+    private static async Task<IResult> SetSeatOrder(Guid id, SetSeatOrderRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+
+        var seat = 0;
+        foreach (var pid in req.PlayerIds.Distinct())
+        {
+            var p = session.Players.FirstOrDefault(x => x.Id == pid);
+            if (p is not null) p.SeatOrder = seat++;
+        }
+        foreach (var p in session.Players.Where(p => !req.PlayerIds.Contains(p.Id)).OrderBy(p => p.SeatOrder))
+            p.SeatOrder = seat++;
+
         return await SaveAndReturn(db, hub, session, ct);
     }
 

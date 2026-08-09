@@ -240,7 +240,7 @@ span.rt-marker { cursor: default; }
    panel palette deliberately stops at the frame. */
 .joinqr { display: block; border-radius: 6px; background: #fff; }
 .beamer .b-qr { margin-left: 1.2vw; box-shadow: 0 0 0 .35vh rgba(255,255,255,.9); }
-.qr-box { display: flex; flex-direction: column; align-items: center; gap: .7rem; text-align: center; width: auto; }
+.qr-box { align-items: center; gap: .7rem; text-align: center; width: auto; max-width: min(90vw, 26rem); }
 .qr-box .qr-code { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; letter-spacing: .18em; color: var(--gold); }
 
 /* ---- Status phase: scoring order + shared checklist ---- */
@@ -864,9 +864,33 @@ span.rt-marker { cursor: default; }
 .modal { width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--shadow); padding: 1rem; }
 .modal-head { display: flex; align-items: center; gap: .5rem; }
 .modal-body { overflow: auto; min-height: 0; }
-/* Seat-order confirmation dialog (host, before the game starts) */
+/* Centred dialog with the rest of the page blurred behind it.
+   `margin:auto` on the box rather than `align-items:center`: a flex item taller than the container gets
+   its top cut off (and becomes unscrollable) with align-items, while auto margins centre it and still
+   allow scrolling once it no longer fits. */
+.modal-backdrop.centered { align-items: flex-start; }
+/* `position: static` is NOT redundant: bootstrap.min.css also defines a `.modal` class, with
+   `position: fixed; top: 0; left: 0`, and app.css never overrode those — which is why these dialogs sat
+   in the top-left corner no matter what the backdrop's flex alignment said. Putting the box back in flow
+   is what makes centring possible at all. */
+.modal-backdrop.centered > .modal { position: static; margin: auto; }
+.modal-backdrop.blurred { backdrop-filter: blur(7px); background: rgba(4, 8, 18, .5); }
+/* Without backdrop-filter (older Safari/Firefox) the blur is simply absent — darken instead so the
+   dialog still stands out. */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .modal-backdrop.blurred { background: rgba(4, 8, 18, .86); }
+}
+
+/* Seat-order confirmation dialog (host, before the game starts) — rows are drag-to-reorder */
 .seat-confirm { max-width: 440px; }
 .seat-confirm-row .seat-no { font-family: 'Orbitron', sans-serif; color: var(--gold); min-width: 1.4em; text-align: center; flex: 0 0 auto; }
+/* touch-action:none on the row, or a touch drag scrolls the dialog instead of reordering. */
+.seat-list .seat-confirm-row { touch-action: none; user-select: none; transition: transform .09s ease, opacity .09s ease; }
+.seat-confirm-row .seat-grip { flex: 0 0 auto; cursor: grab; color: var(--text-faint); font-size: 1.1rem; line-height: 1; padding: 0 .1rem; }
+.seat-confirm-row.dragging { opacity: .85; transform: scale(1.02); border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), var(--shadow); cursor: grabbing; }
+.seat-confirm-row.dragging .seat-grip { cursor: grabbing; color: var(--gold); }
+.seat-arrows { display: flex; flex-direction: column; gap: .1rem; flex: 0 0 auto; }
+.seat-arrows .btn { padding: 0 .35rem; line-height: 1.15; font-size: .7rem; }
 .stats-modal .stat-block { margin: .6rem 0; }
 .stats-modal .stat-block h4 { margin: .2rem 0 .4rem; color: var(--text-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
 .stats-modal .stat-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem .25rem; border-bottom: 1px solid var(--panel-border); border-left: 3px solid var(--player-color, transparent); padding-left: .5rem; }

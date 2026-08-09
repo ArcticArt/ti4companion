@@ -1,4 +1,5 @@
 @inherits Ti4ComponentBase
+@inject IJSRuntime JS
 
 @{
     var s = Store.Session!;
@@ -61,32 +62,40 @@
 </div>
 
 @* Seat-order confirmation before the game actually starts: shows the order around the table so the
-   host double-checks it. "Change it" just closes the dialog (nothing is started); the order is
-   edited with the ▲▼ arrows in the setup player list. *@
+   host double-checks it — and lets them fix it right here by dragging, instead of closing the dialog and
+   going back to the player list. "Change it" just closes (nothing is started). *@
 @if (showSeatConfirm && s.Phase == GamePhase.Setup)
 {
-    <div class="modal-backdrop" @onclick="() => showSeatConfirm = false">
+    <div class="modal-backdrop centered blurred" @onclick="CloseSeatConfirm">
         <div class="modal seat-confirm" @onclick:stopPropagation>
             <div class="modal-head">
                 <h3 style="margin:0;">@Loc["setup.confirmSeatTitle"]</h3>
             </div>
             <div class="modal-body">
-                <div class="grid" style="gap:.35rem;margin:.6rem 0;">
-                    @{ var seatOrdered = s.Players.OrderBy(p => p.SeatOrder).ToList(); }
+                @{ var seatOrdered = SeatOrdered(s); }
+                <div class="grid seat-list" style="gap:.35rem;margin:.6rem 0;" @ref="seatList">
                     @for (var i = 0; i < seatOrdered.Count; i++)
                     {
                         var p = seatOrdered[i];
-                        <div class="player-card seat-confirm-row" style="--player-color:@p.ColorHex;">
+                        var idx = i;
+                        <div @key="p.Id" class="player-card seat-confirm-row @(dragFrom == idx ? "dragging" : "")"
+                             style="--player-color:@p.ColorHex;" data-seat-idx="@idx">
+                            <span class="seat-grip" title='@Loc["setup.dragSeat"]'>⠿</span>
                             <span class="seat-no">@(i + 1)</span>
                             <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
                             <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">@p.Name</strong>
                             @if (s.SpeakerPlayerId == p.Id) { <SpeakerIcon SizeCss="1.3em" /> }
+                            @* Arrow fallback: always works, including where a drag is awkward. *@
+                            <span class="seat-arrows">
+                                <button class="btn btn-sm btn-ghost" disabled="@(idx == 0)" @onclick="() => Nudge(idx, -1)" title='@Loc["setup.moveUp"]'>▲</button>
+                                <button class="btn btn-sm btn-ghost" disabled="@(idx == seatOrdered.Count - 1)" @onclick="() => Nudge(idx, 1)" title='@Loc["setup.moveDown"]'>▼</button>
+                            </span>
                         </div>
                     }
                 </div>
-                <p class="faint" style="font-size:.78rem;margin:.2rem 0 .8rem;">@Loc["setup.confirmSeatHint"]</p>
+                <p class="faint" style="font-size:.78rem;margin:.2rem 0 .8rem;">@Loc["setup.confirmSeatDragHint"]</p>
                 <div class="row-wrap" style="gap:.5rem;justify-content:flex-end;">
-                    <button class="btn" @onclick="() => showSeatConfirm = false">◂ @Loc["setup.confirmSeatChange"]</button>
+                    <button class="btn" @onclick="CloseSeatConfirm">◂ @Loc["setup.confirmSeatChange"]</button>
                     <button class="btn btn-gold" @onclick="ConfirmStart">@Loc["setup.confirmSeatOk"] ▸</button>
                 </div>
             </div>
@@ -116,7 +125,104 @@
 @code {
     private Guid Sid => Store.Session!.Id;
     private bool showSeatConfirm;
-    private async Task ConfirmStart() { showSeatConfirm = false; await StartGame(); }
+
+    // ---- Seat order: drag to reorder inside the confirmation dialog ------------------------------
+    // `preview` holds the order while a drag is in flight, so the rows follow the finger without a
+    // server roundtrip per pixel; it is committed on release and then dropped so the server state wins.
+    private ElementReference seatList;
+    private DotNetObjectReference<PhaseView>? selfRef;
+    private IJSObjectReference? dragHandle;
+    private List<Guid>? preview;
+    private int dragFrom = -1;
+
+    private List<PlayerDto> SeatOrdered(SessionStateDto s)
+    {
+        var byId = s.Players.ToDictionary(p => p.Id);
+        if (preview is not null && preview.Count == s.Players.Count && preview.All(byId.ContainsKey))
+            return preview.Select(id => byId[id]).ToList();
+        return s.Players.OrderBy(p => p.SeatOrder).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (showSeatConfirm && dragHandle is null)
+        {
+            selfRef ??= DotNetObjectReference.Create(this);
+            dragHandle = await JS.InvokeAsync<IJSObjectReference>("ti4.seatDrag", seatList, selfRef);
+        }
+        else if (!showSeatConfirm && dragHandle is not null)
+        {
+            await DisposeDragAsync();
+        }
+    }
+
+    [JSInvokable]
+    public void DragStart(int index) => InvokeAsync(() =>
+    {
+        preview ??= Store.Session!.Players.OrderBy(p => p.SeatOrder).Select(p => p.Id).ToList();
+        dragFrom = index;
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public void DragOver(int index) => InvokeAsync(() =>
+    {
+        if (preview is null || dragFrom < 0 || index == dragFrom || index >= preview.Count) return;
+        var id = preview[dragFrom];
+        preview.RemoveAt(dragFrom);
+        preview.Insert(index, id);
+        dragFrom = index;
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task DragEnd() => InvokeAsync(async () =>
+    {
+        dragFrom = -1;
+        await CommitSeatOrder();
+    });
+
+    private async Task Nudge(int index, int delta)
+    {
+        var order = SeatOrdered(Store.Session!).Select(p => p.Id).ToList();
+        var target = index + delta;
+        if (target < 0 || target >= order.Count) return;
+        (order[index], order[target]) = (order[target], order[index]);
+        preview = order;
+        await CommitSeatOrder();
+    }
+
+    private async Task CommitSeatOrder()
+    {
+        if (preview is null) return;
+        var order = preview;
+        await Store.Mutate(Store.Api.SetSeatOrderAsync(Sid, order));
+        preview = null; // server state takes over again
+    }
+
+    private async Task CloseSeatConfirm()
+    {
+        showSeatConfirm = false;
+        preview = null;
+        dragFrom = -1;
+        await DisposeDragAsync();
+    }
+
+    private async Task DisposeDragAsync()
+    {
+        if (dragHandle is null) return;
+        try { await dragHandle.InvokeVoidAsync("dispose"); } catch { }
+        try { await dragHandle.DisposeAsync(); } catch { }
+        dragHandle = null;
+    }
+
+    public override void Dispose()
+    {
+        selfRef?.Dispose();
+        base.Dispose();
+    }
+
+    private async Task ConfirmStart() { await CloseSeatConfirm(); await StartGame(); }
     private Task StartGame() => Store.Mutate(Store.Api.StartGameAsync(Sid));
     private Task ToAction() => Store.Mutate(Store.Api.StartActionPhaseAsync(Sid));
     private Task EndAction() => Store.Mutate(Store.Api.EndActionPhaseAsync(Sid));

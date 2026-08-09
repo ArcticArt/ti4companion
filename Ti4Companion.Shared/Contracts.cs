@@ -269,6 +269,10 @@ public record UpdateSessionRequest(
 /// <summary>Red Tape variant: take the marker off an objective (or put it back).</summary>
 public record SetObjectiveMarkerRequest(bool Removed);
 
+/// <summary>Seat order as one list, in table order. Assigning it in a single call keeps the order
+/// consistent — reordering player by player would leave duplicate seats visible in between.</summary>
+public record SetSeatOrderRequest(IReadOnlyList<Guid> PlayerIds);
+
 /// <summary>Status phase: this player is done scoring (or wants their turn back).</summary>
 public record SetStatusDoneRequest(bool Done);
 

@@ -179,6 +179,10 @@ public class Loc
         ["setup.confirmSeatHint"] = (
             "This is the order around the table (speaker marked). You can change it with the ▲▼ arrows in the player list.",
             "So sitzt ihr am Tisch (Sprecher markiert). Ändern kannst du die Reihenfolge mit den ▲▼-Pfeilen in der Spielerliste."),
+        ["setup.confirmSeatDragHint"] = (
+            "Drag a row by its handle to change the order, or use the arrows. The speaker is marked.",
+            "Zeile am Griff ziehen, um die Reihenfolge zu ändern — oder die Pfeile nutzen. Der Sprecher ist markiert."),
+        ["setup.dragSeat"] = ("Drag to reorder", "Ziehen zum Umsortieren"),
         ["setup.confirmSeatOk"] = ("Looks good — start", "Passt — Spiel starten"),
         ["setup.confirmSeatChange"] = ("Change it", "Noch ändern"),
         ["setup.maxPlayers"] = ("Maximum of 8 players reached.", "Maximal 8 Spieler erreicht."),
