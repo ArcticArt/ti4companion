@@ -23,6 +23,7 @@
             @* A real link, not window.open via interop: popup blockers (and Safari, once an awaited
                interop roundtrip has expired the gesture) would swallow a scripted open. *@
             <a class="btn btn-sm btn-ghost" href="@($"/display/{s.JoinCode}")" target="_blank" rel="noopener" title='@Loc["nav.openDisplay"]'>🖥</a>
+            <button class="btn btn-sm btn-ghost" @onclick="() => showQr = true" title='@Loc["nav.joinQr"]'>▦</button>
             <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'><StatIcon /></button>
             <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'>⏸</button>
         <button class="btn btn-sm btn-danger ab-endgame" @onclick="EndGame" title='@Loc["turn.endGame"]'>@Loc["turn.endGame"]</button>
@@ -74,6 +75,20 @@
     <MatchStatsModal OnClose="CloseStats" />
 }
 
+@* Join QR for the people at the table — hold the phone up instead of dictating the code. *@
+@if (showQr && Store.Session is { } qs)
+{
+    <div class="modal" @onclick="() => showQr = false">
+        <div class="modal-box qr-box" @onclick:stopPropagation="true">
+            <h3 style="margin:0;">@Loc["nav.joinQr"]</h3>
+            <p class="faint" style="margin:0;">@Loc["nav.joinQrHint"]</p>
+            <JoinQr Text="@InviteLink(qs.JoinCode)" SizeCss="min(72vw, 20rem)" Alt="@Loc["nav.joinQr"]" />
+            <div class="qr-code">@qs.JoinCode</div>
+            <button class="btn" @onclick="() => showQr = false">@Loc["common.close"]</button>
+        </div>
+    </div>
+}
+
 @* Pause overlay — blocks all input while the game is paused; only the host can resume. *@
 @if (Store.Session is { Paused: true })
 {
@@ -95,7 +110,11 @@
 
 @code {
     private bool showStats;
+    private bool showQr;
     private void CloseStats() { showStats = false; StateHasChanged(); }
+
+    // Same URL the "copy invite link" button produces, so the QR works on a LAN address too.
+    private string InviteLink(string joinCode) => $"{Nav.BaseUri}join/{joinCode}";
 
     protected override void OnInitialized()
     {

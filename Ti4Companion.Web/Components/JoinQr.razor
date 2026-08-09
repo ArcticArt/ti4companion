@@ -1,0 +1,68 @@
+@using Net.Codecrete.QrCodeGenerator
+@using System.Text
+
+@*
+    QR code for an invite URL, generated in the browser (no online generator: the invite URL would leak to
+    a third party, and the wall display has to work on a LAN without internet).
+
+    Drawn as ONE svg path of unit squares rather than thousands of <rect> elements — a 33×33 code would
+    otherwise be ~500 DOM nodes per render, and the wall re-renders often. Always black on white with a
+    quiet zone; a scanner needs both, so the panel colours deliberately do not apply here.
+*@
+
+@if (matrix is not null)
+{
+    @* Size via style, not the width/height attributes: those are SVG attributes and reject CSS
+       functions like min(70vw, 22rem). *@
+    <svg class="joinqr @Class" viewBox="0 0 @size @size" style="@($"width:{SizeCss};height:{SizeCss}")"
+         xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="@Alt">
+        <rect width="@size" height="@size" fill="#ffffff" />
+        <path d="@path" fill="#000000" />
+    </svg>
+}
+
+@code {
+    /// <summary>The URL (or text) to encode.</summary>
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+
+    /// <summary>Rendered edge length as a CSS length, e.g. "12vh" or "9rem".</summary>
+    [Parameter] public string SizeCss { get; set; } = "8rem";
+
+    /// <summary>Quiet zone in modules. Four is the spec's minimum; less and some scanners give up.</summary>
+    [Parameter] public int Border { get; set; } = 4;
+
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Alt { get; set; }
+
+    private QrCode? matrix;
+    private string? renderedFor;
+    private int size;
+    private string path = "";
+
+    protected override void OnParametersSet()
+    {
+        // Encoding is not free, so only redo it when the text or the quiet zone actually changed.
+        var key = $"{Text}|{Border}";
+        if (renderedFor == key) return;
+        renderedFor = key;
+
+        if (string.IsNullOrWhiteSpace(Text)) { matrix = null; return; }
+
+        // Medium error correction: recovers from a bit of glare or a phone camera at an angle without
+        // making the modules noticeably smaller.
+        matrix = QrCode.EncodeText(Text, QrCode.Ecc.Medium);
+        size = matrix.Size + 2 * Border;
+
+        var sb = new StringBuilder();
+        for (var y = 0; y < matrix.Size; y++)
+        {
+            for (var x = 0; x < matrix.Size; x++)
+            {
+                if (!matrix.GetModule(x, y)) continue;
+                // Integers only, so no culture trap here (see the CSS-decimal gotcha in CLAUDE.md).
+                sb.Append('M').Append(x + Border).Append(' ').Append(y + Border).Append("h1v1h-1z");
+            }
+        }
+        path = sb.ToString();
+    }
+}

@@ -235,6 +235,14 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 span.rt-marker { cursor: default; }
 .beamer .rt-marker { font-size: clamp(.8rem, 1.6vh, 1.5rem); }
 
+/* ---- Join QR ---- */
+/* Always on white with a quiet zone (the component draws both) — a scanner needs the contrast, so the
+   panel palette deliberately stops at the frame. */
+.joinqr { display: block; border-radius: 6px; background: #fff; }
+.beamer .b-qr { margin-left: 1.2vw; box-shadow: 0 0 0 .35vh rgba(255,255,255,.9); }
+.qr-box { display: flex; flex-direction: column; align-items: center; gap: .7rem; text-align: center; width: auto; }
+.qr-box .qr-code { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; letter-spacing: .18em; color: var(--gold); }
+
 /* ---- Status phase: scoring order + shared checklist ---- */
 .scoring-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
 .scoring-order { display: flex; flex-direction: column; gap: .3rem; }

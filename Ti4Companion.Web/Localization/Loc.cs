@@ -53,6 +53,8 @@ public class Loc
         ["nav.beamer"] = ("Display", "Display"),
         ["nav.invite"] = ("Invite link", "Einladungslink"),
         ["nav.openDisplay"] = ("Open the wall display in a new tab", "Wandanzeige in neuem Tab öffnen"),
+        ["nav.joinQr"] = ("QR code to join", "QR-Code zum Beitreten"),
+        ["nav.joinQrHint"] = ("Scan to join this session.", "Scannen, um dieser Session beizutreten."),
         ["display.shows"] = ("Display shows", "Display zeigt"),
         ["display.control"] = ("Display control", "Displaysteuerung"),
         ["display.objectives"] = ("Objectives", "Aufträge"),

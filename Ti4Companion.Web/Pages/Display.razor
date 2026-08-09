@@ -1,6 +1,7 @@
 @page "/display/{Code}"
 @layout EmptyLayout
 @inherits Ti4ComponentBase
+@inject NavigationManager Nav
 
 @if (Store.Session is null || Store.Content is null)
 {
@@ -20,12 +21,14 @@ else
             <div class="b-title">@s.Name</div>
             <div class="b-meta">@Loc["turn.round"] @s.CurrentRound · <span class="b-phase">@Loc[$"phase.{s.Phase}"]</span></div>
             <div class="spacer" style="flex:1"></div>
-            @* Prominent join code so players can join straight off the wall. *@
+            @* Prominent join code so players can join straight off the wall — plus a QR of the invite
+               link, so arriving players just scan instead of typing the code. *@
             <div class="b-join">
                 <span class="b-join-lbl">@Loc["common.code"]</span>
                 <span class="b-join-code">@s.JoinCode</span>
                 <span class="dot @(Store.Connected ? "on" : "off")"></span>
             </div>
+            <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="13vh" Class="b-qr" Alt="@Loc["nav.joinQr"]" />
         </div>
 
         @if (isAgenda && s.DisplayMode != DisplayMode.Statistics)
@@ -462,6 +465,10 @@ else
             : ChoiceLabel(agenda, vote.Choice);
 
     // Resolve an elected candidate key (player id / planet / card number / law / objective) to a label.
+    // The invite link the QR encodes. BaseUri already carries scheme/host/port, so this is the same URL a
+    // player would get from the host's "copy invite link" button — including on a LAN address.
+    private string InviteUrl(string joinCode) => $"{Nav.BaseUri}join/{joinCode}";
+
     private string ChoiceLabel(AgendaDto agenda, string? choice)
         => AgendaDisplay.ChoiceLabel(Store, Loc, agenda, choice);
 }
