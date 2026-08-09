@@ -118,6 +118,21 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         }
     }
 
+    /// <summary>Status phase: whose turn it is to score (initiative order), from the server.</summary>
+    public Guid? StatusScorerId => Session?.StatusScorerId;
+
+    /// <summary>
+    /// Whether this device may score for a player right now. Outside the status phase scoring stays open
+    /// (abilities score at other times); inside it, it follows initiative order — mirrors the server gate
+    /// so the UI never offers a button the server would reject.
+    /// </summary>
+    public bool CanScoreFor(Guid playerId)
+    {
+        if (Session is not { } s) return false;
+        if (s.Phase != GamePhase.Status) return true;
+        return IsHost || s.StatusScorerId == playerId;
+    }
+
     /// <summary>Whether this device may edit the given player: self always, the host may edit anyone,
     /// or anyone when the session has open editing enabled.</summary>
     public bool CanEdit(Guid playerId)

@@ -63,6 +63,10 @@ public class GameSession
     /// <summary>Red Tape variant: show a removable marker on every revealed objective.</summary>
     public bool RedTapeLite { get; set; }
 
+    /// <summary>Status phase: which of the post-scoring steps the table has ticked off. Reset when the
+    /// status phase begins.</summary>
+    public StatusStep StatusStepsDone { get; set; }
+
     /// <summary>Offer to record a technology right after the Technology strategy action was played.
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
@@ -83,6 +87,9 @@ public class Player
     public string ColorHex { get; set; } = "#cccccc";
     public int SeatOrder { get; set; }
     public bool HasPassed { get; set; }
+    /// <summary>Status phase: this player is done scoring, so the turn moves on in initiative order.
+    /// Reset when the status phase begins.</summary>
+    public bool StatusDone { get; set; }
     /// <summary>True once the player has confirmed faction and colour and is ready to start.</summary>
     public bool IsReady { get; set; }
     /// <summary>The session creator. Stable regardless of seat order; grants host privileges.</summary>

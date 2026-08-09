@@ -59,6 +59,14 @@ public static class TurnService
         return null;
     }
 
+    /// <summary>
+    /// Status phase: whose turn it is to score, in initiative order — the first player who hasn't marked
+    /// themselves done. Null once everyone is through. Scoring used to be simultaneous, which made it
+    /// impossible to see who still owed a decision.
+    /// </summary>
+    public static Guid? CurrentScorer(GameSession s, IReadOnlyDictionary<string, int?> overrides)
+        => InitiativeOrder(s.Players, overrides).FirstOrDefault(p => !p.StatusDone)?.Id;
+
     /// <summary>Players in pick/agenda order: starting with the speaker, then clockwise by seat.</summary>
     public static List<Player> SeatOrderFromSpeaker(GameSession s)
     {

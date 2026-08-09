@@ -178,7 +178,9 @@ public record PlayerDto(
     bool HasPassed, bool IsReady, bool IsHost, int? Initiative,
     IReadOnlyList<PlayerStrategyCardDto> StrategyCards,
     IReadOnlyList<string> TechnologyIds,
-    int Influence);
+    int Influence,
+    /// <summary>Status phase: done scoring, so the turn has moved on.</summary>
+    bool StatusDone = false);
 
 /// <summary><paramref name="CustomName"/>/<paramref name="CustomPoints"/> are set for an objective added
 /// by hand (e.g. a secret made public via "Classified Document Leaks") rather than from the content set.</summary>
@@ -221,7 +223,12 @@ public record SessionStateDto(
     /// <summary>Face-down vote: totals are public, attribution is not (see <see cref="AgendaTotals"/>).</summary>
     bool AgendaTotalsRevealed = false,
     /// <summary>Set once the totals are public — while the votes themselves are still redacted.</summary>
-    AgendaTotalsDto? AgendaTotals = null);
+    AgendaTotalsDto? AgendaTotals = null,
+    /// <summary>Status phase: post-scoring steps the table has ticked off.</summary>
+    StatusStep StatusStepsDone = StatusStep.None,
+    /// <summary>Status phase: whose turn it is to score (initiative order), null when everyone is done.
+    /// Derived server-side so the client can't drift from the rule the server enforces.</summary>
+    Guid? StatusScorerId = null);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>
@@ -261,6 +268,12 @@ public record UpdateSessionRequest(
 
 /// <summary>Red Tape variant: take the marker off an objective (or put it back).</summary>
 public record SetObjectiveMarkerRequest(bool Removed);
+
+/// <summary>Status phase: this player is done scoring (or wants their turn back).</summary>
+public record SetStatusDoneRequest(bool Done);
+
+/// <summary>Status phase: tick one of the shared post-scoring steps off (or back on).</summary>
+public record SetStatusStepRequest(StatusStep Step, bool Done);
 
 public record SetDisplayModeRequest(DisplayMode Mode);
 

@@ -1,8 +1,94 @@
 @inherits Ti4ComponentBase
 
+@{
+    var s = Store.Session!;
+    var host = Store.IsHost;
+    var ordered = s.Players.OrderBy(p => p.Initiative ?? int.MaxValue).ThenBy(p => p.SeatOrder).ToList();
+    var scorerId = s.StatusScorerId;
+    var scorer = ordered.FirstOrDefault(p => p.Id == scorerId);
+    var mine = scorerId is not null && scorerId == Store.MyPlayerId;
+    var allDone = scorerId is null;
+}
+
 <div class="panel">
     <h3 style="margin:0 0 .3rem;">@Loc["status.title"]</h3>
     <p class="faint" style="margin:0;">@Loc["status.hint"]</p>
 </div>
 
+@* Scoring runs in initiative order — it used to be simultaneous, so nobody could tell who still owed a
+   decision. Purely a guide plus the matching server gate; nothing about the game is enforced. *@
+<div class="panel" style="margin-top:.6rem;">
+    <div class="scoring-head">
+        <h3 style="margin:0;">@Loc["status.scoringOrder"]</h3>
+        @if (allDone)
+        {
+            <span class="chip chip-done">@Loc["status.allScored"]</span>
+        }
+        else if (scorer is not null)
+        {
+            <span class="faint">@(mine ? Loc["status.yourTurn"] : string.Format(Loc["status.waitingFor"], scorer.Name))</span>
+        }
+    </div>
+
+    <div class="scoring-order">
+        @foreach (var p in ordered)
+        {
+            var isCurrent = p.Id == scorerId;
+            <div class="so-row @(isCurrent ? "current" : "") @(p.StatusDone ? "done" : "")" style="--player-color:@p.ColorHex">
+                <span class="so-init">@(p.Initiative?.ToString() ?? "—")</span>
+                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+                <span class="so-name">@p.Name</span>
+                @if (p.StatusDone)
+                {
+                    <span class="chip chip-done">✓</span>
+                    @if (host || p.Id == Store.MyPlayerId)
+                    {
+                        <button class="btn btn-sm btn-ghost" @onclick="() => SetDone(p.Id, false)" title='@Loc["status.undoDone"]'>↺</button>
+                    }
+                }
+                else if (isCurrent && (host || p.Id == Store.MyPlayerId))
+                {
+                    <button class="btn btn-sm btn-gold" @onclick="() => SetDone(p.Id, true)">@Loc["status.done"] ▸</button>
+                }
+            </div>
+        }
+    </div>
+</div>
+
 <ObjectivesTab />
+
+@* Shared checklist of the steps after scoring, so the table can see what is still outstanding. *@
+<div class="panel" style="margin-top:.6rem;">
+    <h3 style="margin:0 0 .4rem;">@Loc["status.checklist"]</h3>
+    <div class="status-steps">
+        @foreach (var (step, key) in Steps)
+        {
+            var done = s.StatusStepsDone.HasFlag(step);
+            <button class="step @(done ? "done" : "")" @onclick="() => ToggleStep(step, !done)">
+                <span class="step-box">@(done ? "✓" : "")</span>
+                <span>@Loc[key]</span>
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+
+    // The order and wording the user's table uses (command tokens discarded/gained is one entry).
+    private static readonly (StatusStep Step, string Key)[] Steps =
+    {
+        (StatusStep.RevealObjective, "status.step.revealObjective"),
+        (StatusStep.DrawActionCards, "status.step.drawActionCards"),
+        (StatusStep.CommandTokens, "status.step.commandTokens"),
+        (StatusStep.ReadyCards, "status.step.readyCards"),
+        (StatusStep.RepairUnits, "status.step.repairUnits"),
+        (StatusStep.ReturnStrategyCards, "status.step.returnStrategyCards"),
+    };
+
+    private Task SetDone(Guid playerId, bool done)
+        => Store.Mutate(Store.Api.SetStatusDoneAsync(Sid, playerId, done));
+
+    private Task ToggleStep(StatusStep step, bool done)
+        => Store.Mutate(Store.Api.SetStatusStepAsync(Sid, step, done));
+}

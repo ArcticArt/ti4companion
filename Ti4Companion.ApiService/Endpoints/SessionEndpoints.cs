@@ -70,6 +70,10 @@ public static class SessionEndpoints
         g.MapDelete("/{id:guid}/players/{playerId:guid}/strategy-cards/{cardId:int}", UnassignStrategyCard);
         g.MapPost("/{id:guid}/players/{playerId:guid}/strategy-cards/{cardId:int}/used", SetStrategyCardUsed);
 
+        // ---- Status phase (scoring order + shared checklist) ----
+        g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
+        g.MapPost("/{id:guid}/status-step", SetStatusStep);
+
         // ---- Objectives ----
         g.MapPost("/{id:guid}/objectives", RevealObjective);
         g.MapPost("/{id:guid}/objectives/custom", RevealCustomObjective); // secret made public / hand-added
@@ -323,6 +327,9 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Status;
         session.ActivePlayerId = null;
         session.ActiveStrategyCardId = null;
+        // Fresh status phase: scoring starts over at the lowest initiative and the checklist is blank.
+        session.StatusStepsDone = StatusStep.None;
+        foreach (var p in session.Players) p.StatusDone = false;
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Status, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -360,9 +367,11 @@ public static class SessionEndpoints
         session.AgendaVotesHidden = false;
         session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
+        session.StatusStepsDone = StatusStep.None;
         foreach (var p in session.Players)
         {
             p.HasPassed = false;
+            p.StatusDone = false;
             p.Influence = 0;
             p.StrategyCards.Clear();
         }
@@ -652,6 +661,30 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
+    // Status phase: mark a player done scoring so the turn moves to the next initiative. Self or host,
+    // and reversible — someone who clicked too early gets their turn back.
+    private static async Task<IResult> SetStatusDone(Guid id, Guid playerId, SetStatusDoneRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
+        if (session is null || player is null) return Results.NotFound();
+        if (!CallerIsHost(session, http) && GetCaller(session, http)?.Id != playerId) return Forbidden();
+        player.StatusDone = req.Done;
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Status phase: tick one of the shared post-scoring steps. Open to any device — it's a checklist on
+    // the table, and whoever does the step should be able to tick it.
+    private static async Task<IResult> SetStatusStep(Guid id, SetStatusStepRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        session.StatusStepsDone = req.Done
+            ? session.StatusStepsDone | req.Step
+            : session.StatusStepsDone & ~req.Step;
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
     // Red Tape variant: take the marker off an objective, or put it back. Open to any device like
     // scoring — it's a token on the table, not a privileged action.
     private static async Task<IResult> SetObjectiveMarker(Guid id, Guid sessionObjectiveId, SetObjectiveMarkerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
@@ -671,6 +704,14 @@ public static class SessionEndpoints
         // Scoring is open to any device, but the scorer must be a real player in THIS session —
         // otherwise an anonymous caller could insert unbounded score rows with random GUIDs.
         if (session.Players.All(p => p.Id != req.PlayerId)) return Results.NotFound();
+        // In the STATUS phase scoring runs in initiative order: only the player whose turn it is may
+        // score (the host may act for anyone). Outside that phase — during the action phase, or an
+        // ability that scores at another time — it stays open as before.
+        if (session.Phase == GamePhase.Status && !CallerIsHost(session, http)
+            && TurnService.CurrentScorer(session, FactionInitiative.Overrides) != req.PlayerId)
+        {
+            return Forbidden();
+        }
         if (!obj.Scores.Any(s => s.PlayerId == req.PlayerId))
         {
             obj.Scores.Add(new ObjectiveScore { SessionObjectiveId = obj.Id, PlayerId = req.PlayerId });

@@ -235,6 +235,27 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 span.rt-marker { cursor: default; }
 .beamer .rt-marker { font-size: clamp(.8rem, 1.6vh, 1.5rem); }
 
+/* ---- Status phase: scoring order + shared checklist ---- */
+.scoring-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.scoring-order { display: flex; flex-direction: column; gap: .3rem; }
+.so-row { display: flex; align-items: center; gap: .5rem; padding: .3rem .5rem; border-radius: 8px;
+    background: var(--panel-2); border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+.so-row.current { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.so-row.done .so-name, .so-row.done .so-init { opacity: .5; }
+.so-init { font-family: 'Orbitron', sans-serif; color: var(--gold); min-width: 1.4em; text-align: center; }
+.so-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.status-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .4rem; }
+.status-steps .step { display: flex; align-items: center; gap: .5rem; text-align: left; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 8px;
+    color: var(--text); font: inherit; font-size: .85rem; padding: .4rem .55rem; }
+.status-steps .step:hover { border-color: var(--gold-dim); }
+.status-steps .step.done { color: var(--text-faint); }
+.status-steps .step.done .step-box { background: var(--gold); color: #1a1405; border-color: var(--gold); }
+.status-steps .step-box { flex: 0 0 auto; width: 1.15rem; height: 1.15rem; display: inline-flex;
+    align-items: center; justify-content: center; border: 1px solid var(--panel-border); border-radius: 4px;
+    font-size: .8rem; line-height: 1; }
+
 /* Face-down vote, intermediate step: totals shown, attribution still secret. */
 .beamer .agenda-elect.totals-note { color: var(--gold); font-style: italic; }
 

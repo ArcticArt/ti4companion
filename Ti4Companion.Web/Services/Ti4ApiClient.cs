@@ -85,6 +85,10 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/objectives/custom", new RevealCustomObjectiveRequest(name, points));
     public Task RemoveObjectiveAsync(Guid id, Guid sessionObjectiveId)
         => http.DeleteAsync($"api/sessions/{id}/objectives/{sessionObjectiveId}");
+    public Task<SessionStateDto?> SetStatusDoneAsync(Guid id, Guid playerId, bool done)
+        => PostFor($"api/sessions/{id}/players/{playerId}/status-done", new SetStatusDoneRequest(done));
+    public Task<SessionStateDto?> SetStatusStepAsync(Guid id, StatusStep step, bool done)
+        => PostFor($"api/sessions/{id}/status-step", new SetStatusStepRequest(step, done));
     public Task<SessionStateDto?> SetObjectiveMarkerAsync(Guid id, Guid sessionObjectiveId, bool removed)
         => PostFor($"api/sessions/{id}/objectives/{sessionObjectiveId}/marker", new SetObjectiveMarkerRequest(removed));
     public Task<SessionStateDto?> ScoreObjectiveAsync(Guid id, Guid sessionObjectiveId, Guid playerId)

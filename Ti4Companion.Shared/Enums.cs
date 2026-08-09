@@ -76,6 +76,23 @@ public enum GamePhase
     Agenda = 4
 }
 
+/// <summary>
+/// The status-phase steps that follow the scoring, as a shared checklist so the whole table sees the same
+/// ticks. The list is the one the user gave (command tokens discarded/gained are one entry, as at their
+/// table) — it is a reminder of the sequence, not a transcription of the rulebook, and nothing is enforced.
+/// </summary>
+[Flags]
+public enum StatusStep
+{
+    None = 0,
+    RevealObjective = 1,
+    DrawActionCards = 2,
+    CommandTokens = 4,
+    ReadyCards = 8,
+    RepairUnits = 16,
+    ReturnStrategyCards = 32
+}
+
 public enum ObjectiveStage
 {
     StageI = 1,

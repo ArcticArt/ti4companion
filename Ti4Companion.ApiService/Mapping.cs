@@ -98,7 +98,7 @@ public static class Mapping
                     .Select(c => new PlayerStrategyCardDto(c.StrategyCardId, c.IsExhausted))
                     .ToList(),
                 p.Technologies.Select(t => t.TechnologyId).ToList(),
-                p.Influence))
+                p.Influence, p.StatusDone))
             .ToList();
 
         var objectives = s.Objectives
@@ -150,6 +150,9 @@ public static class Mapping
             s.TurnTimerSeconds, s.StrategyCardsPerPlayer, s.RedTapeLite, s.PromptTechOnAction,
             s.CreatedAtUtc, s.LastActivityUtc,
             players, objectives, cardStates, votes,
-            s.AgendaTotalsRevealed, totals);
+            s.AgendaTotalsRevealed, totals,
+            s.StatusStepsDone,
+            // Only meaningful in the status phase; null elsewhere so the client can't mistake it for a turn.
+            s.Phase == GamePhase.Status ? TurnService.CurrentScorer(s, factionOverrides) : null);
     }
 }
