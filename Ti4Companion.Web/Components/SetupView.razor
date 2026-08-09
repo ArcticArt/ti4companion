@@ -99,6 +99,25 @@
     }
 </div>
 
+@* Optional per-player time budget. Table decision, so it lives with the other setup choices. *@
+@if (host)
+{
+    <div class="panel">
+        <h3 style="margin:0 0 .2rem;">@Loc["timer.title"]</h3>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc["timer.hint"]</p>
+        <div class="timer-option">
+            <label for="turnTimer">@Loc["timer.perRound"]</label>
+            <select id="turnTimer" value="@Store.Session!.TurnTimerSeconds" @onchange="SetTurnTimer">
+                <option value="0">@Loc["timer.off"]</option>
+                @foreach (var min in new[] { 5, 8, 10, 12, 15, 20, 30 })
+                {
+                    <option value="@(min * 60)">@min min</option>
+                }
+            </select>
+        </div>
+    </div>
+}
+
 @if (host)
 {
     <div class="panel">
@@ -122,6 +141,13 @@
             .Where(p => p.Id != exceptId && !string.IsNullOrEmpty(p.FactionId))
             .Select(p => p.FactionId!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private Task SetTurnTimer(ChangeEventArgs e)
+    {
+        var seconds = int.TryParse(e.Value?.ToString(), out var s) ? s : 0;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(
+            Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, seconds)));
+    }
 
     private Task SetName(Guid id, ChangeEventArgs e)
         => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(e.Value?.ToString(), null, null, null, null, null)));

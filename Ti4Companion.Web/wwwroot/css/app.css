@@ -220,6 +220,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .picker-banner .pb-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); }
 .picker-banner .pb-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.3rem; }
 
+/* Turn-timer setup option */
+.timer-option { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.timer-option label { font-size: .82rem; color: var(--text-faint); }
+.timer-option select { max-width: 12rem; }
+
 /* phase bar */
 .phase-bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 /* In-game phases (Setup excluded) as plain labels — no button boxes; the current phase glows blue. */
@@ -507,6 +512,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .turn-banner .tb-big { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.5rem; }
 .turn-banner .tb-sub { font-size: .85rem; color: var(--danger); font-weight: 600; }
 
+/* ---- Turn timer (per player, per round; informational only) ---- */
+.turn-timer { display: inline-flex; align-items: baseline; gap: .3em; padding: .12em .5em; border-radius: 8px;
+    font-family: 'Orbitron', sans-serif; font-variant-numeric: tabular-nums; font-size: 1.35rem; line-height: 1.2;
+    background: var(--panel-2); border: 1px solid var(--panel-border); color: var(--text); }
+.turn-timer .tt-icon { font-size: .8em; opacity: .7; }
+/* Last minute: amber. Budget gone: red, counting up — but nothing is ever blocked. */
+.turn-timer.warn { color: var(--gold); border-color: var(--gold-dim); }
+.turn-timer.over { color: #f1a3ae; border-color: #6b2a35; background: rgba(224,85,106,.16); }
+.turn-timer.compact { padding: 0 .3em; font-size: 1rem; background: none; border: 0; }
+
 /* status chips */
 .chip { font-size: .68rem; padding: .08rem .45rem; border-radius: 999px; border: 1px solid var(--panel-border); }
 .chip-passed { background: rgba(224,85,106,.18); color: #f1a3ae; border-color: #6b2a35; }
@@ -562,6 +577,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .ptr.passed .ptr-badge,
 .beamer .ptr.passed .p-name,
 .beamer .ptr.passed .p-fac { opacity: .45; filter: saturate(.5); }
+/* Turn timer adds a 5th column. Higher specificity than the base rule, so order doesn't matter. */
+.beamer .ptable.with-timer { grid-template-columns: auto auto minmax(0, 14em) auto auto; }
+.beamer .ptr-timer { display: inline-flex; align-items: center; justify-content: flex-end; }
+.beamer .ptr-timer .turn-timer { font-size: clamp(.9rem, 1.5vw, 1.9rem); }
+.beamer .ptr.passed .ptr-timer { opacity: .45; }
 .beamer .ptr-init { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: clamp(1rem, 1.9vw, 2.4rem); text-align: center; min-width: 1.4em; }
 .beamer .ptr-badge { display: inline-flex; align-items: center; justify-content: center; }
 .beamer .ptr-id { min-width: 0; }

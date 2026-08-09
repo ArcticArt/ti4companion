@@ -223,7 +223,9 @@ else
                 <div class="panel players-panel">
                     <h3 style="color:var(--gold);">@Loc["nav.players"]</h3>
                     <div class="panel-body">
-                        <div class="ptable">
+                        @* The timer adds a 5th subgrid column — the class and the extra cell must switch
+                           together, or the rows would fall into an implicit (unaligned) track. *@
+                        <div class="ptable @(Store.TurnTimerEnabled ? "with-timer" : "")">
                             @foreach (var p in ordered)
                             {
                                 var fac = Store.Faction(p.FactionId);
@@ -256,6 +258,10 @@ else
                                             }
                                         }
                                     </div>
+                                    @if (Store.TurnTimerEnabled)
+                                    {
+                                        <span class="ptr-timer"><TurnTimer PlayerId="@p.Id" Compact="true" /></span>
+                                    }
                                 </div>
                             }
                         </div>

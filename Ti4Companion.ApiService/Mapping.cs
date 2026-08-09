@@ -129,6 +129,7 @@ public static class Mapping
             s.Id, s.JoinCode, s.Name, s.DefaultLanguage, s.ActiveExpansions,
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
             s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.Paused, s.RetentionHours,
+            s.TurnTimerSeconds,
             s.CreatedAtUtc, s.LastActivityUtc,
             players, objectives, cardStates, votes);
     }

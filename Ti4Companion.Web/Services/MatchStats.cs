@@ -20,7 +20,16 @@ public class MatchStats
     public IReadOnlyDictionary<GamePhase, TimeSpan> PhaseTotals { get; init; } = new Dictionary<GamePhase, TimeSpan>();
     public IReadOnlyDictionary<Guid, TimeSpan> PerPlayer { get; init; } = new Dictionary<Guid, TimeSpan>();
 
-    public static MatchStats Compute(IReadOnlyList<SessionLogEntryDto> log, DateTimeOffset now)
+    /// <summary>Time on turn per player **within the current round only** — what the turn timer counts down.</summary>
+    public IReadOnlyDictionary<Guid, TimeSpan> PerPlayerRound { get; init; } = new Dictionary<Guid, TimeSpan>();
+
+    /// <summary>The round the current-round figures belong to (1 when no round change has been logged yet).</summary>
+    public int CurrentRound { get; init; } = 1;
+
+    /// <param name="currentPicker">Whose turn it is to pick a strategy card, if the strategy phase is running.
+    /// The log only credits strategy time when a pick happens, so without this the player currently thinking
+    /// would show a frozen timer.</param>
+    public static MatchStats Compute(IReadOnlyList<SessionLogEntryDto> log, DateTimeOffset now, Guid? currentPicker = null)
     {
         var ordered = log.OrderBy(l => l.TimestampUtc).ToList();
         var phaseChanges = ordered.Where(l => l.Kind == SessionLogKind.PhaseChange && l.Phase is not null).ToList();
@@ -70,9 +79,18 @@ public class MatchStats
             rounds.Add(new RoundDuration(roundChanges[i].Round!.Value, Active(from, to)));
         }
 
+        // The round currently being played — the turn timer resets with it.
+        var currentRoundStart = roundChanges.Count > 0 ? roundChanges[^1].TimestampUtc : start;
+        var currentRound = roundChanges.Count > 0 ? roundChanges[^1].Round!.Value : 1;
+
+        // Same interval, but only the part that falls inside the current round.
+        TimeSpan ActiveThisRound(DateTimeOffset from, DateTimeOffset to)
+            => to <= currentRoundStart ? TimeSpan.Zero : Active(from > currentRoundStart ? from : currentRoundStart, to);
+
         // Per-player time: action-phase intervals → the active player; strategy-phase intervals leading up
         // to each pick → that picker (so the strategy phase is counted per player too). Pauses excluded.
         var perPlayer = new Dictionary<Guid, TimeSpan>();
+        var perPlayerRound = new Dictionary<Guid, TimeSpan>();
         GamePhase? phase = null;
         Guid? active = null;
         var lastTs = start;
@@ -80,9 +98,15 @@ public class MatchStats
         {
             if (e.TimestampUtc < start) continue; // pre-game (setup joins)
             if (phase == GamePhase.Action && active is Guid a)
+            {
                 perPlayer[a] = Get(perPlayer, a) + Active(lastTs, e.TimestampUtc);
+                perPlayerRound[a] = Get(perPlayerRound, a) + ActiveThisRound(lastTs, e.TimestampUtc);
+            }
             else if (phase == GamePhase.Strategy && e.Kind == SessionLogKind.StrategyPick && e.TargetPlayerId is Guid pk)
+            {
                 perPlayer[pk] = Get(perPlayer, pk) + Active(lastTs, e.TimestampUtc);
+                perPlayerRound[pk] = Get(perPlayerRound, pk) + ActiveThisRound(lastTs, e.TimestampUtc);
+            }
             switch (e.Kind)
             {
                 case SessionLogKind.PhaseChange:
@@ -95,8 +119,20 @@ public class MatchStats
             }
             lastTs = e.TimestampUtc;
         }
-        if (phase == GamePhase.Action && active is Guid last)
-            perPlayer[last] = Get(perPlayer, last) + Active(lastTs, now);
+
+        // The still-open segment: in the action phase it belongs to the active player, in the strategy
+        // phase to whoever is on the clock to pick (nothing has been logged for them yet).
+        var openOwner = phase switch
+        {
+            GamePhase.Action => active,
+            GamePhase.Strategy => currentPicker,
+            _ => null
+        };
+        if (openOwner is Guid owner)
+        {
+            perPlayer[owner] = Get(perPlayer, owner) + Active(lastTs, now);
+            perPlayerRound[owner] = Get(perPlayerRound, owner) + ActiveThisRound(lastTs, now);
+        }
 
         return new MatchStats
         {
@@ -105,6 +141,8 @@ public class MatchStats
             Rounds = rounds,
             PhaseTotals = phaseTotals,
             PerPlayer = perPlayer,
+            PerPlayerRound = perPlayerRound,
+            CurrentRound = currentRound,
         };
     }
 

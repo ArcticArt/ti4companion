@@ -52,6 +52,7 @@ public class Loc
 
         ["nav.beamer"] = ("Display", "Display"),
         ["nav.invite"] = ("Invite link", "Einladungslink"),
+        ["nav.openDisplay"] = ("Open the wall display in a new tab", "Wandanzeige in neuem Tab öffnen"),
         ["display.shows"] = ("Display shows", "Display zeigt"),
         ["display.control"] = ("Display control", "Displaysteuerung"),
         ["display.objectives"] = ("Objectives", "Aufträge"),
@@ -98,6 +99,15 @@ public class Loc
         ["turn.takeOver"] = ("Take over", "Übernehmen"),
         ["turn.takeOverEnd"] = ("End takeover", "Übernahme beenden"),
         ["turn.endGame"] = ("End game", "Spiel beenden"),
+        // Per-player turn timer (informational only — never enforced).
+        ["timer.remaining"] = ("Time left this round", "Restzeit diese Runde"),
+        ["timer.over"] = ("Time budget used up", "Zeitbudget aufgebraucht"),
+        ["timer.title"] = ("Turn timer", "Zug-Timer"),
+        ["timer.perRound"] = ("Minutes per player per round", "Minuten pro Spieler pro Runde"),
+        ["timer.off"] = ("Off", "Aus"),
+        ["timer.hint"] = (
+            "Counts down only during that player's own turns in the strategy and action phase, pauses with the game, and resets each strategy phase. Running out is only signalled — nothing is blocked.",
+            "Läuft nur während der eigenen Züge in Strategie- und Aktionsphase, pausiert mit dem Spiel und wird jede Strategiephase zurückgesetzt. Ein Ablauf wird nur signalisiert — blockiert wird nichts."),
         ["pause.pause"] = ("Pause game", "Spiel pausieren"),
         ["pause.resume"] = ("Resume", "Fortsetzen"),
         ["pause.title"] = ("Game paused", "Spiel pausiert"),

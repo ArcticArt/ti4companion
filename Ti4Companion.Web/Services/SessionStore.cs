@@ -31,6 +31,60 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     public PlayerDto? Me => Session?.Players.FirstOrDefault(p => p.Id == MyPlayerId);
 
+    // --- turn timer -------------------------------------------------------------------------------
+    // The countdown is derived from the match log (which already carries every turn change and pause),
+    // so the log is cached here and refreshed with the session — but ONLY while the option is on, so a
+    // table that doesn't use the timer pays nothing.
+
+    /// <summary>Host enabled a per-player time budget per round.</summary>
+    public bool TurnTimerEnabled => (Session?.TurnTimerSeconds ?? 0) > 0;
+
+    /// <summary>Cached match log, kept fresh while <see cref="TurnTimerEnabled"/>.</summary>
+    public IReadOnlyList<SessionLogEntryDto> Log { get; private set; } = Array.Empty<SessionLogEntryDto>();
+
+    /// <summary>Fires once a second while at least one timer component is on screen.</summary>
+    private event Action? OnTick;
+    private System.Threading.Timer? _tick;
+    private int _tickSubscribers;
+
+    /// <summary>Subscribe to the 1 Hz tick. The ticker only runs while something is subscribed, and the
+    /// tick is deliberately separate from <see cref="OnChange"/> — re-rendering whole views every second
+    /// would re-run the wall display's expensive card-fitting pass.</summary>
+    public void SubscribeTick(Action handler)
+    {
+        OnTick += handler;
+        if (++_tickSubscribers == 1)
+            _tick = new System.Threading.Timer(_ => OnTick?.Invoke(), null, 1000, 1000);
+    }
+
+    public void UnsubscribeTick(Action handler)
+    {
+        OnTick -= handler;
+        if (--_tickSubscribers <= 0)
+        {
+            _tickSubscribers = 0;
+            _tick?.Dispose();
+            _tick = null;
+        }
+    }
+
+    /// <summary>Time each player has spent on turn in the current round, plus the live open segment.</summary>
+    public MatchStats TimerStats() => MatchStats.Compute(Log, DateTimeOffset.UtcNow, CurrentPickerId);
+
+    /// <summary>Remaining budget for a player this round; null when the timer is off.</summary>
+    public TimeSpan? RemainingFor(MatchStats stats, Guid playerId)
+    {
+        if (Session is not { TurnTimerSeconds: > 0 } s) return null;
+        var used = stats.PerPlayerRound.TryGetValue(playerId, out var u) ? u : TimeSpan.Zero;
+        return TimeSpan.FromSeconds(s.TurnTimerSeconds) - used;
+    }
+
+    private async Task RefreshLogAsync()
+    {
+        if (Session is null || !TurnTimerEnabled) { Log = Array.Empty<SessionLogEntryDto>(); return; }
+        Log = await api.GetLogAsync(Session.JoinCode);
+    }
+
     /// <summary>This device controls the host player (the session creator).</summary>
     public bool IsHost => Me?.IsHost == true
         // Legacy sessions created before the host flag: fall back to lowest seat.
@@ -156,6 +210,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
         ApplySessionLanguageIfUnset(s);
         await EnsureHubAsync(s.JoinCode);
+        await RefreshLogAsync(); // the turn timer needs the log right away, not only after the first change
         OnChange?.Invoke();
         return true;
     }
@@ -163,7 +218,12 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public async Task Mutate(Task<SessionStateDto?> apiCall)
     {
         var s = await apiCall;
-        if (s is not null) { Session = s; OnChange?.Invoke(); }
+        if (s is not null)
+        {
+            Session = s;
+            await RefreshLogAsync();
+            OnChange?.Invoke();
+        }
         else await RefreshAsync();
     }
 
@@ -171,6 +231,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     {
         if (Session is null) return;
         Session = await api.GetSessionAsync(Session.JoinCode);
+        await RefreshLogAsync();
         OnChange?.Invoke();
     }
 
@@ -202,6 +263,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         await storage.SetAsync(KeyPlayer, result.PlayerId.ToString());
         ApplySessionLanguageIfUnset(result.Session);
         await EnsureHubAsync(result.Session.JoinCode);
+        await RefreshLogAsync();
         OnChange?.Invoke();
     }
 

@@ -48,6 +48,10 @@ public class GameSession
     /// excluded from the statistics.</summary>
     public bool Paused { get; set; }
 
+    /// <summary>Time budget per player per round in seconds; <c>0</c> (the default) means no turn timer.
+    /// Purely informational — running out is signalled, never enforced.</summary>
+    public int TurnTimerSeconds { get; set; }
+
     public List<Player> Players { get; set; } = new();
     public List<SessionObjective> Objectives { get; set; } = new();
     public List<StrategyCardState> StrategyCardStates { get; set; } = new();

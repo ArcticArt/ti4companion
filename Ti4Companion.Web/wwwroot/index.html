@@ -70,6 +70,11 @@
                 return ok;
             } catch (e) { return false; }
         };
+        // Turn timer ran out: a short buzz on the player's own device. Vibration is unsupported on iOS
+        // Safari and requires a prior user gesture elsewhere, so failure is normal and ignored.
+        window.ti4.buzz = function () {
+            try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { }
+        };
         window.ti4.fitTechCols = function () {
             document.querySelectorAll('.beamer .tech-col, .beamer .tech-unit-row').forEach(function (col) {
                 col.querySelectorAll('.tech-item.collapsed').forEach(function (it) { it.classList.remove('collapsed'); });

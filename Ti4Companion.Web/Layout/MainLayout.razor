@@ -20,6 +20,9 @@
         {
             <span class="codechip ab-code" @onclick="CopyCode" title='@Loc["common.copy"]'>@s.JoinCode</span>
             <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(inviteCopied ? "✓" : "🔗")</button>
+            @* A real link, not window.open via interop: popup blockers (and Safari, once an awaited
+               interop roundtrip has expired the gesture) would swallow a scripted open. *@
+            <a class="btn btn-sm btn-ghost" href="@($"/display/{s.JoinCode}")" target="_blank" rel="noopener" title='@Loc["nav.openDisplay"]'>🖥</a>
             <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'><StatIcon /></button>
             <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'>⏸</button>
         <button class="btn btn-sm btn-danger ab-endgame" @onclick="EndGame" title='@Loc["turn.endGame"]'>@Loc["turn.endGame"]</button>

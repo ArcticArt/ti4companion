@@ -190,6 +190,9 @@ public static class SessionEndpoints
             Log(db, session, http, SessionLogKind.SpeakerSet, target: req.SpeakerPlayerId);
         }
         if (req.AgendaVotesHidden is not null) session.AgendaVotesHidden = req.AgendaVotesHidden.Value;
+        // Turn timer: 0 = off, otherwise clamped to a sane 10 s … 2 h budget per player per round.
+        if (req.TurnTimerSeconds is { } tt)
+            session.TurnTimerSeconds = tt <= 0 ? 0 : Math.Clamp(tt, 10, 7200);
 
         return await SaveAndReturn(db, hub, session, ct);
     }

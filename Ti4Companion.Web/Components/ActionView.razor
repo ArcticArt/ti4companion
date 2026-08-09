@@ -26,6 +26,11 @@
             @if (mine) { <span class="tb-big">@Loc["turn.youAreUp"]</span> }
             else { <span class="tb-big">@active.Name <span class="faint">@Loc["turn.isUp"]</span></span> }
         </div>
+        @* Signal only on your own turn — the buzz belongs to the player whose time is running out. *@
+        @if (Store.TurnTimerEnabled)
+        {
+            <TurnTimer PlayerId="@active.Id" Signal="@mine" />
+        }
         <div class="spacer" style="flex:1"></div>
         @if (host && !takeover) { <button class="btn btn-gold" @onclick="() => takeover = true">@Loc["turn.takeOver"]</button> }
         else if (host && takeover) { <button class="btn btn-ghost" @onclick="() => takeover = false">@Loc["turn.takeOverEnd"]</button> }

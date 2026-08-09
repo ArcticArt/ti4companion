@@ -27,6 +27,11 @@
             <div class="pb-lbl">@Loc["strategy.picking"]</div>
             <div class="pb-name">@picker.Name @if (myTurn) { <span class="chip chip-active">@Loc["players.you"]</span> } @if (host && !myTurn) { <span class="chip">@Loc["host.pickFor"]</span> }</div>
         </div>
+        @if (Store.TurnTimerEnabled)
+        {
+            <div class="spacer" style="flex:1"></div>
+            <TurnTimer PlayerId="@picker.Id" Signal="@myTurn" />
+        }
     </div>
 }
 else
