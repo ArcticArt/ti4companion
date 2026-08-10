@@ -450,6 +450,11 @@ public class Loc
         ["common.cancel"] = ("Cancel", "Abbrechen"),
         ["common.close"] = ("Close", "Schließen"),
         ["common.back"] = ("Back", "Zurück"),
+        // Secondary abilities of a strategy action (only with the turn timer in use).
+        ["secondary.title"] = ("Secondary ability", "Sekundärfähigkeit"),
+        ["secondary.hint"] = ("Tap whoever is taking it — including yourself for the primary. Each one stops their own clock with \"Done\".",
+                             "Antippen, wer sie wahrnimmt — dich selbst für die Primärfähigkeit mit dazu. Jeder stoppt seine Uhr selbst mit „Fertig“."),
+        ["secondary.running"] = ("Clock running for", "Uhr läuft für"),
         // "You're up" notification (per device).
         ["push.enable"] = ("Notify me when it's my turn", "Benachrichtige mich, wenn ich dran bin"),
         ["push.disable"] = ("Turn the notification off", "Benachrichtigung ausschalten"),

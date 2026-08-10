@@ -1048,3 +1048,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Push hint next to the bell: a chip, tappable to dismiss. Wraps rather than stretching the app bar. */
 .push-note { max-width: 22rem; white-space: normal; line-height: 1.25; cursor: pointer;
     background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
+
+/* Secondary-ability chips: one per player whose clock is running for the current strategy action. */
+.sec-chip { display: inline-flex; align-items: center; gap: .4rem; padding: .2rem .5rem .2rem .3rem;
+    border-radius: 999px; background: var(--panel-2); font-size: .85rem; font-weight: 600;
+    border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }

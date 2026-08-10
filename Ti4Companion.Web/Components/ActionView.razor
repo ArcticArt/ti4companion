@@ -61,6 +61,46 @@
     </div>
 }
 
+@* Secondary abilities of the running strategy action. Only shown when the turn timer is in use: without
+   time tracking there is nothing to gain from marking secondaries, and the app must not ask the table for
+   input it has no use for. Every card works the same way here — the card-specific extras are separate. *@
+@if (Store.TurnTimerEnabled && activeCard is not null && active is not null)
+{
+    var pending = s.Players.Where(p => p.SecondaryPending).Select(p => p.Id).ToList();
+    <div class="panel secondary-panel" style="margin-top:.6rem;">
+        <div class="row-wrap" style="gap:.5rem;align-items:baseline;">
+            <h3 style="margin:0;">@Loc["secondary.title"]</h3>
+            <span class="faint" style="font-size:.78rem;">@Loc["secondary.hint"]</span>
+        </div>
+        @if (canControl)
+        {
+            <div style="margin-top:.45rem;">
+                <PlayerPicker Players="s.Players.OrderBy(p => p.SeatOrder)" SelectedIds="pending"
+                              OnPick="TogglePending" />
+            </div>
+        }
+        @if (pending.Count > 0)
+        {
+            <div class="row-wrap" style="gap:.4rem;margin-top:.55rem;align-items:center;">
+                <span class="faint" style="font-size:.78rem;">@Loc["secondary.running"]:</span>
+                @foreach (var p in s.Players.Where(p => p.SecondaryPending).OrderBy(p => p.SeatOrder))
+                {
+                    var pid = p.Id;
+                    <span class="sec-chip" style="--player-color:@p.ColorHex">
+                        <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.4" Ring="@p.ColorHex" />
+                        <span>@p.Name</span>
+                        <TurnTimer PlayerId="@pid" Compact="true" />
+                        @if (Store.IsHost || pid == Store.MyPlayerId)
+                        {
+                            <button class="btn btn-sm btn-gold" @onclick="() => SecondaryDone(pid)">@Loc["status.done"] ▸</button>
+                        }
+                    </span>
+                }
+            </div>
+        }
+    </div>
+}
+
 @* Host takeover: tap any player to steer their turn. *@
 @if (host && takeover)
 {
@@ -164,4 +204,15 @@ else
 
     private Task Pass(Guid playerId, bool passed)
         => Store.Mutate(Store.Api.SetPassedAsync(Sid, playerId, passed));
+
+    // The whole set goes over the wire, not a single toggle — same reason as on the server: no intermediate
+    // state where two players think they are the last one outstanding.
+    private Task TogglePending(Guid playerId)
+    {
+        var next = Store.Session!.Players.Where(p => p.SecondaryPending).Select(p => p.Id).ToList();
+        if (!next.Remove(playerId)) next.Add(playerId);
+        return Store.Mutate(Store.Api.SetSecondaryPlayersAsync(Sid, next));
+    }
+
+    private Task SecondaryDone(Guid playerId) => Store.Mutate(Store.Api.SetSecondaryDoneAsync(Sid, playerId));
 }

@@ -757,8 +757,11 @@ public static class SessionEndpoints
         session.SecondaryOpen = true;
         foreach (var p in session.Players)
         {
-            // The active player is on the primary, not a secondary — never put them in this set.
-            var take = wanted.Contains(p.Id) && p.Id != session.ActivePlayerId;
+            // The ACTIVE player may be in this set too. The flag really means "this player's clock is still
+            // running for the action that is on the table" — for them that is the primary, for the others
+            // the secondary. Same "done", same interval maths, and it is what lets the active player stop
+            // their own clock while the others are still deciding.
+            var take = wanted.Contains(p.Id);
             if (take == p.SecondaryPending) continue;
             p.SecondaryPending = take;
             // One log entry per player, per direction: that is what the durations are diffed from.
