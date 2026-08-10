@@ -82,6 +82,9 @@
                 return row ? parseInt(row.dataset.seatIdx, 10) : -1;
             };
             var down = function (e) {
+                // Only the grip starts a drag. Listening on the whole row meant the preventDefault()
+                // below swallowed the click on the ▲▼ buttons inside it, so they did nothing.
+                if (!(e.target && e.target.closest && e.target.closest('[data-seat-grip]'))) return;
                 var i = idxOf(e.target);
                 if (i < 0) return;
                 active = true;

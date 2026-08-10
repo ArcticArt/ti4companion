@@ -80,7 +80,7 @@
                         var idx = i;
                         <div @key="p.Id" class="player-card seat-confirm-row @(dragFrom == idx ? "dragging" : "")"
                              style="--player-color:@p.ColorHex;" data-seat-idx="@idx">
-                            <span class="seat-grip" title='@Loc["setup.dragSeat"]'>⠿</span>
+                            <span class="seat-grip" data-seat-grip title='@Loc["setup.dragSeat"]'>⠿</span>
                             <span class="seat-no">@(i + 1)</span>
                             <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
                             <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">@p.Name</strong>

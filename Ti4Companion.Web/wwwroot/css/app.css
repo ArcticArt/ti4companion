@@ -884,9 +884,11 @@ span.rt-marker { cursor: default; }
 /* Seat-order confirmation dialog (host, before the game starts) — rows are drag-to-reorder */
 .seat-confirm { max-width: 440px; }
 .seat-confirm-row .seat-no { font-family: 'Orbitron', sans-serif; color: var(--gold); min-width: 1.4em; text-align: center; flex: 0 0 auto; }
-/* touch-action:none on the row, or a touch drag scrolls the dialog instead of reordering. */
-.seat-list .seat-confirm-row { touch-action: none; user-select: none; transition: transform .09s ease, opacity .09s ease; }
-.seat-confirm-row .seat-grip { flex: 0 0 auto; cursor: grab; color: var(--text-faint); font-size: 1.1rem; line-height: 1; padding: 0 .1rem; }
+.seat-list .seat-confirm-row { user-select: none; transition: transform .09s ease, opacity .09s ease; }
+/* touch-action:none only on the GRIP: on the whole row it also blocked scrolling the dialog on touch,
+   and a drag may only start here anyway (otherwise the row's own buttons stop working). */
+.seat-confirm-row .seat-grip { flex: 0 0 auto; touch-action: none; cursor: grab; color: var(--text-faint);
+    font-size: 1.25rem; line-height: 1; padding: .1rem .35rem; align-self: stretch; display: flex; align-items: center; }
 .seat-confirm-row.dragging { opacity: .85; transform: scale(1.02); border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), var(--shadow); cursor: grabbing; }
 .seat-confirm-row.dragging .seat-grip { cursor: grabbing; color: var(--gold); }
 .seat-arrows { display: flex; flex-direction: column; gap: .1rem; flex: 0 0 auto; }
