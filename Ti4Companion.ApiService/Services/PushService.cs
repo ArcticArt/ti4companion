@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using Lib.Net.Http.WebPush;
 using Lib.Net.Http.WebPush.Authentication;
@@ -105,13 +106,20 @@ public class PushService(
                 {
                     await client.RequestPushMessageDeliveryAsync(target, message);
                 }
+                catch (PushServiceClientException ex)
+                {
+                    // 404/410 mean the browser threw the subscription away: retire it instead of retrying
+                    // forever. Anything else is left alone — the push service may simply be down.
+                    // Read the STATUS, never the message: this library's exception says just "Gone", so an
+                    // earlier check for "410" in the text silently never matched (caught by the test).
+                    var gone = ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone;
+                    if (gone) sub.FailedAtUtc = DateTimeOffset.UtcNow;
+                    log.LogWarning(ex, "Push delivery failed with {Status} ({State})",
+                        ex.StatusCode, gone ? "subscription retired" : "transient");
+                }
                 catch (Exception ex)
                 {
-                    // 404/410 mean the browser threw the subscription away. Mark it instead of retrying
-                    // forever; anything else is logged and left alone (the push service may just be down).
-                    var gone = ex.Message.Contains("404") || ex.Message.Contains("410");
-                    if (gone) sub.FailedAtUtc = DateTimeOffset.UtcNow;
-                    log.LogWarning(ex, "Push delivery failed ({State})", gone ? "subscription gone" : "transient");
+                    log.LogWarning(ex, "Push delivery failed (transient)");
                 }
             }
             await db.SaveChangesAsync();

@@ -450,6 +450,15 @@ public class Loc
         ["common.cancel"] = ("Cancel", "Abbrechen"),
         ["common.close"] = ("Close", "Schließen"),
         ["common.back"] = ("Back", "Zurück"),
+        // "You're up" notification (per device).
+        ["push.enable"] = ("Notify me when it's my turn", "Benachrichtige mich, wenn ich dran bin"),
+        ["push.disable"] = ("Turn the notification off", "Benachrichtigung ausschalten"),
+        ["push.iosHint"] = (
+            "On iPhone and iPad this only works once the page is on the home screen: Share → Add to Home Screen, then open it from there.",
+            "Auf iPhone und iPad geht das erst, wenn die Seite auf dem Home-Bildschirm liegt: Teilen → Zum Home-Bildschirm, dann von dort öffnen."),
+        ["push.blocked"] = ("Notifications are blocked for this site in the browser settings.",
+                           "Benachrichtigungen sind für diese Seite in den Browsereinstellungen gesperrt."),
+        ["push.failed"] = ("The notification could not be set up.", "Die Benachrichtigung konnte nicht eingerichtet werden."),
         ["common.loading"] = ("Loading…", "Lädt…"),
         ["common.connecting"] = ("Connecting…", "Verbinde…"),
         ["common.code"] = ("Code", "Code"),

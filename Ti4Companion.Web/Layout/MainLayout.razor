@@ -36,6 +36,8 @@
             <FactionBadge Faction="Store.Faction(me.FactionId)" Size="2" Ring="@me.ColorHex" />
             <span class="ab-name">@me.Name</span>
         }
+        @* Per-device notification switch — every player wants it for their own phone, not just the host. *@
+        <PushToggle />
         <span class="dot @(Store.Connected ? "on" : "off")" title="@(Store.Connected ? "live" : Loc["common.connecting"])"></span>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
         <button class="btn btn-sm btn-ghost" @onclick="Leave" title='@Loc["nav.leave"]'>✕</button>

@@ -22,6 +22,15 @@ public class Ti4ApiClient(HttpClient http)
     public Task<InstanceDto?> GetInstanceAsync()
         => http.GetFromJsonAsync<InstanceDto>("api/instance");
 
+    public Task<PushKeyDto?> GetPushKeyAsync()
+        => http.GetFromJsonAsync<PushKeyDto>("api/push/key");
+
+    public Task SubscribePushAsync(Guid id, PushSubscribeRequest req)
+        => http.PostAsJsonAsync($"api/sessions/{id}/push", req);
+
+    public Task UnsubscribePushAsync(Guid id, string endpoint)
+        => http.PostAsJsonAsync($"api/sessions/{id}/push/remove", new PushSubscribeRequest(endpoint, "", ""));
+
     public async Task<SessionStateDto?> GetSessionAsync(string code)
     {
         var resp = await http.GetAsync($"api/sessions/{code}");

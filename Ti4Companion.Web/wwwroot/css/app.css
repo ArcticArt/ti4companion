@@ -1044,3 +1044,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .beamer-grid { grid-template-columns: 1fr; }
     .container { padding: .7rem; }
 }
+
+/* Push hint next to the bell: a chip, tappable to dismiss. Wraps rather than stretching the app bar. */
+.push-note { max-width: 22rem; white-space: normal; line-height: 1.25; cursor: pointer;
+    background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }

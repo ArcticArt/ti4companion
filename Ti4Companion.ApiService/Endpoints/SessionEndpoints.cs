@@ -78,7 +78,10 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/status-step", SetStatusStep);
         g.MapPost("/{id:guid}/status-stage", SetStatusStage);
         g.MapPost("/{id:guid}/push", SubscribePush);
-        g.MapDelete("/{id:guid}/push", UnsubscribePush);
+        // POST, not DELETE: minimal APIs refuse an inferred body on DELETE ("Body was inferred but the
+        // method does not allow inferred body parameters" — it crashes at startup), and the endpoint URL is
+        // far too long to hang off a query string.
+        g.MapPost("/{id:guid}/push/remove", UnsubscribePush);
 
         // ---- Objectives ----
         g.MapPost("/{id:guid}/objectives", RevealObjective);

@@ -123,6 +123,73 @@
         window.ti4.buzz = function () {
             try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { }
         };
+        // ---- Web Push ("you're up") -------------------------------------------------------------
+        // The notification itself is shown by the service worker (see service-worker*.js); this part only
+        // deals with the browser's subscription. Every call answers rather than throws, so the UI can
+        // explain what is wrong instead of failing silently.
+        window.ti4.push = {
+            supported: function () {
+                return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+            },
+            // iOS grants Web Push ONLY to a PWA installed on the home screen (Safari 16.4+). Report it so
+            // the UI can say so, rather than showing a switch that does nothing when tapped.
+            standalone: function () {
+                try {
+                    return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+                } catch (e) { return false; }
+            },
+            isApple: function () {
+                return /iPad|iPhone|iPod/.test(navigator.userAgent)
+                    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            },
+            permission: function () {
+                try { return window.Notification ? Notification.permission : 'unsupported'; }
+                catch (e) { return 'unsupported'; }
+            },
+            // Endpoint of the subscription this browser already has, or null.
+            current: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (!reg || !reg.pushManager) return null;
+                    const sub = await reg.pushManager.getSubscription();
+                    return sub ? sub.endpoint : null;
+                } catch (e) { return null; }
+            },
+            subscribe: async function (publicKey) {
+                try {
+                    const perm = await Notification.requestPermission();
+                    if (perm !== 'granted') return { error: perm };
+                    const reg = await navigator.serviceWorker.ready;
+                    let sub = await reg.pushManager.getSubscription();
+                    if (!sub) {
+                        sub = await reg.pushManager.subscribe({
+                            userVisibleOnly: true,          // required by Chrome, and honest: we always show one
+                            applicationServerKey: b64ToBytes(publicKey)
+                        });
+                    }
+                    const j = sub.toJSON();
+                    return { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth };
+                } catch (e) { return { error: (e && e.message) || 'failed' }; }
+            },
+            unsubscribe: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+                    if (!sub) return null;
+                    const endpoint = sub.endpoint;
+                    await sub.unsubscribe();
+                    return endpoint;
+                } catch (e) { return null; }
+            }
+        };
+        // applicationServerKey wants raw bytes, and the key travels as base64url.
+        function b64ToBytes(base64url) {
+            const pad = '='.repeat((4 - base64url.length % 4) % 4);
+            const raw = atob((base64url + pad).replace(/-/g, '+').replace(/_/g, '/'));
+            const out = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+            return out;
+        }
         window.ti4.fitTechCols = function () {
             document.querySelectorAll('.beamer .tech-col, .beamer .tech-unit-row').forEach(function (col) {
                 col.querySelectorAll('.tech-item.collapsed').forEach(function (it) { it.classList.remove('collapsed'); });
