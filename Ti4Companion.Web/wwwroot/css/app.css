@@ -234,9 +234,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .game-option .go-check { display: flex; align-items: center; gap: .4rem; cursor: pointer; color: var(--text); font-size: .85rem; }
 .game-option .go-check input { accent-color: var(--gold); cursor: pointer; }
 
-/* Red Tape variant: the token on an objective. Filled = still there, hollow = taken off. */
-/* (Red Tape marker styling lives with the tape further down — see `.rt-marker` / `.rt-tape`. It used to be
-   duplicated here, which is exactly the same-specificity collision this file has been bitten by before.) */
+/* (Red Tape styling lives with the objective cards further down — see `.rt-tape`. It used to be duplicated
+   here, which is exactly the same-specificity collision this file has been bitten by before.) */
 
 /* ---- Join QR ---- */
 /* Always on white with a quiet zone (the component draws both) — a scanner needs the contrast, so the
@@ -244,7 +243,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .joinqr { display: block; border-radius: 6px; background: #fff; }
 .beamer .b-qr { margin-left: 1.2vw; box-shadow: 0 0 0 .35vh rgba(255,255,255,.9); }
 .qr-box { align-items: center; gap: .7rem; text-align: center; width: auto; max-width: min(90vw, 26rem); }
-.qr-box .qr-code { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; letter-spacing: .18em; color: var(--gold); }
+/* Same three lines as the wall's QR area (see `.beamer .qr-*`), sized for a phone in the hand. */
+.qr-box .qr-title { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); font-size: 1.05rem; }
+.qr-box .qr-url { color: var(--text-dim); font-size: .8rem; word-break: break-all; }
+.qr-box .qr-code-big { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.6rem; letter-spacing: .18em; color: var(--text); }
 
 /* ---- Status phase: scoring order + shared checklist ---- */
 .scoring-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
@@ -265,6 +267,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .status-steps .step.done .step-box { background: var(--gold); color: #1a1405; border-color: var(--gold); }
 .status-steps .step-box { flex: 0 0 auto; width: 1.15rem; height: 1.15rem; display: inline-flex;
     align-items: center; justify-content: center; border: 1px solid var(--panel-border); border-radius: 4px;
+    font-size: .8rem; line-height: 1; }
+/* Non-host: the same list without a box — a checkbox nobody may tick is a broken control. */
+.status-steps .step.readonly { cursor: default; }
+.status-steps .step.readonly:hover { border-color: var(--panel-border); }
+.status-steps .step-mark { flex: 0 0 auto; width: 1.15rem; text-align: center; color: var(--gold);
     font-size: .8rem; line-height: 1; }
 
 /* Face-down vote, intermediate step: totals shown, attribution still secret. */
@@ -326,30 +333,34 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Status phase: scored THIS round. The card and its fresh markers glow, so the table sees what just
    happened rather than the whole history at equal weight. */
 .obj-card.glow { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 18px rgba(217,176,74,.45); }
-.objm.fresh { display: inline-flex; border-radius: 8px; box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(217,176,74,.6); }
+.objm.fresh { border-radius: 6px; box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(217,176,74,.6); }
 /* Scoring stage: the whole card is the tap target, like taking a strategy card. */
 .obj-card.clickable { cursor: pointer; transition: .12s ease; }
 .obj-card.clickable:hover { border-color: var(--gold-dim); transform: translateY(-1px); }
 .obj-tap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .5rem; }
 
-/* Red Tape: real hazard tape across the player markers while the objective is sealed. The ●/○ dots were
-   reported as too quiet, and the tape carries the reason the markers are dead. */
-.rt-marker { font-family: 'Orbitron', sans-serif; font-size: .58rem; font-weight: 700; letter-spacing: .06em;
-    padding: .1rem .4rem; border-radius: 4px; cursor: pointer; background: none; border: 1px solid; }
-.rt-marker.on { color: #ffd9a0; border-color: #b8721c; background: rgba(184,114,28,.22); }
-.rt-marker.off { color: #8fe0bd; border-color: #2c5e49; background: rgba(70,192,138,.14); }
-span.rt-marker { cursor: default; }   /* the wall renders it as a span — display only */
+/* Red Tape: red hazard tape across the player markers while the objective is sealed. The tape IS the
+   control — no separate "sealed" chip to read (it said the same thing twice) and nothing else to find. */
 .obj-markers.taped { position: relative; min-height: 2.4rem; }
 .obj-markers.taped .marker { opacity: .25; filter: grayscale(1); }
 .rt-tape { position: absolute; left: -2%; right: -2%; top: 50%; transform: translateY(-50%) rotate(-3deg);
-    display: flex; align-items: center; justify-content: center; padding: .18rem 0;
+    display: flex; align-items: center; justify-content: center; padding: .18rem 0; width: auto;
     font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .6rem; letter-spacing: .1em;
-    color: #2a1400; text-align: center; text-shadow: none; pointer-events: none;
-    background: repeating-linear-gradient(135deg, #e8b23c 0 12px, #1b1205 12px 24px);
-    border-top: 1px solid rgba(0,0,0,.5); border-bottom: 1px solid rgba(0,0,0,.5);
-    -webkit-text-stroke: .5px #e8b23c; }
+    color: #ffe9e6; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,.85);
+    background: repeating-linear-gradient(135deg, #c1261c 0 12px, #2c0a07 12px 24px);
+    border-top: 1px solid rgba(0,0,0,.5); border-bottom: 1px solid rgba(0,0,0,.5); }
+/* As a <span> (the wall) it is display only; as a <button> it can be pulled off. */
+span.rt-tape { pointer-events: none; }
+button.rt-tape { cursor: pointer; z-index: 2; }
+button.rt-tape:hover { filter: brightness(1.15); }
+/* Armed = one more tap removes it (status phase, where the card itself is a scoring tap target). */
+button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 12px, #2c0a07 12px 24px);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+/* The way back once the tape is off — nothing to tap otherwise. */
+.rt-restore { font-size: .8rem; line-height: 1; padding: .1rem .35rem; border-radius: 4px; cursor: pointer;
+    background: none; border: 1px solid var(--panel-border); color: var(--text-faint); }
+.rt-restore:hover { border-color: var(--gold-dim); color: var(--gold); }
 .beamer .rt-tape { font-size: clamp(.6rem, .85vw, 1.05rem); }
-.beamer .rt-marker { font-size: clamp(.55rem, .72vw, .95rem); }
 
 /* Instance badge (staging). Always on top, never in the way: both parts are pointer-events:none, so no
    button underneath becomes untappable. The frame is what makes it readable from across the room on the
@@ -418,6 +429,12 @@ span.rt-marker { cursor: default; }   /* the wall renders it as a span — displ
 /* Hairline token outline; the symbol fills the token almost completely so ring and symbol match. */
 .obj-markers .marker .faction-badge { border-width: 1px; border-radius: 6px; }
 .obj-markers .marker .faction-badge .fb-img { padding: 1%; }
+/* The read-only markers on a display card (wall + status scoring) had never got the same treatment: they
+   kept the default 7% image padding, so the token frame was visibly larger than the symbol inside — most
+   obvious on the score screen, where the fresh-scored glow ring outlines it. */
+.obj-markers .objm { display: inline-flex; line-height: 0; }
+.obj-markers .objm .faction-badge { border-width: 1px; border-radius: 6px; }
+.obj-markers .objm .faction-badge .fb-img { padding: 1%; }
 
 /* tech rows */
 .tech-row { background: var(--panel-2); border-radius: 8px; padding: .4rem .5rem; }
@@ -639,7 +656,17 @@ span.rt-marker { cursor: default; }   /* the wall renders it as a span — displ
 .turn-timer .tt-value { display: inline-block; min-width: 5.5ch; text-align: right; }
 /* Last minute: amber. Budget gone: red, counting up — but nothing is ever blocked. */
 .turn-timer.warn { color: var(--gold); border-color: var(--gold-dim); }
-.turn-timer.over { color: #f1a3ae; border-color: #6b2a35; background: rgba(224,85,106,.16); }
+.turn-timer.over { color: #f1a3ae; border-color: #6b2a35; background: rgba(224,85,106,.16);
+    animation: tt-over 1.6s ease-in-out infinite; }
+/* Over time has to be noticeable from across the room, not just a colour change — the report was that
+   running out went unnoticed. Paired with a repeating buzz and one push notification. */
+@keyframes tt-over {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(224,85,106,0); }
+    50% { box-shadow: 0 0 0 3px rgba(224,85,106,.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .turn-timer.over { animation: none; box-shadow: 0 0 0 2px rgba(224,85,106,.45); }
+}
 .turn-timer.compact { padding: 0 .3em; font-size: 1rem; background: none; border: 0; }
 
 /* Material Symbols (see MaterialIcon.razor): inline, sized in em, coloured by currentColor. The
@@ -818,6 +845,11 @@ span.rt-marker { cursor: default; }   /* the wall renders it as a span — displ
 .beamer .status-reveal-card .obj-card { transform: scale(1); }
 .beamer .status-reveal-card .obj-name { font-size: clamp(1.2rem, 2.2vw, 3rem); }
 .beamer .status-reveal-card .obj-req { font-size: clamp(1rem, 1.6vw, 2.1rem); }
+/* Several revealed at once: side by side and correspondingly smaller, rather than one hiding the other. */
+.beamer .status-reveal-card.multi { display: flex; gap: 1.5vw; width: min(100%, 46vw); align-items: stretch; }
+.beamer .status-reveal-card.multi > .obj-card { flex: 1 1 0; min-width: 0; }
+.beamer .status-reveal-card.multi .obj-name { font-size: clamp(1rem, 1.6vw, 2.2rem); }
+.beamer .status-reveal-card.multi .obj-req { font-size: clamp(.85rem, 1.2vw, 1.6rem); }
 .beamer .status-detail { max-width: 40vw; text-align: center; color: var(--text-dim);
     font-size: clamp(.85rem, 1.15vw, 1.5rem); line-height: 1.35; margin: 0; }
 /* Checklist: rows stretch to fill the panel height, so it reads from across the room. */
@@ -1008,6 +1040,10 @@ span.rt-marker { cursor: default; }   /* the wall renders it as a span — displ
 .seat-confirm-row.dragging .seat-grip { cursor: grabbing; color: var(--gold); }
 .seat-arrows { display: flex; flex-direction: column; gap: .1rem; flex: 0 0 auto; }
 .seat-arrows .btn { padding: 0 .35rem; line-height: 1.15; font-size: .7rem; }
+/* Speaker per row: the same slot whether or not this player holds the token, so the rows stay aligned. */
+.seat-speaker { flex: 0 0 auto; min-width: 2.2rem; display: inline-flex; align-items: center; justify-content: center;
+    padding: .1rem .3rem; line-height: 1; }
+.seat-speaker .ss-dash { color: var(--text-faint); }
 .stats-modal .stat-block { margin: .6rem 0; }
 .stats-modal .stat-block h4 { margin: .2rem 0 .4rem; color: var(--text-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
 .stats-modal .stat-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem .25rem; border-bottom: 1px solid var(--panel-border); border-left: 3px solid var(--player-color, transparent); padding-left: .5rem; }
@@ -1062,10 +1098,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .push-note { max-width: 22rem; white-space: normal; line-height: 1.25; cursor: pointer;
     background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
 
-/* Secondary-ability chips: one per player whose clock is running for the current strategy action. */
-.sec-chip { display: inline-flex; align-items: center; gap: .4rem; padding: .2rem .5rem .2rem .3rem;
-    border-radius: 999px; background: var(--panel-2); font-size: .85rem; font-weight: 600;
-    border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+/* Secondary round + Politics appointment, as popups (see SecondaryModal / ActionView). Both use the
+   `.modal-backdrop.centered` box, so the bootstrap `.modal` positioning trap is already handled there. */
+.secondary-modal, .politics-modal { max-width: 480px; }
+.sec-rows { display: flex; flex-direction: column; gap: .4rem; }
+.sec-row { display: flex; align-items: center; gap: .55rem; padding: .35rem .5rem; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+.sec-row.running { border-color: var(--gold-dim); background: color-mix(in srgb, var(--gold) 8%, var(--panel)); }
+.sec-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 
 /* Join QR as an overlay on the wall during the agenda phase. Everything behind it is blurred, so the code
    is unmistakably the thing to look at — and unlike the header strip it costs the vote view no height. */

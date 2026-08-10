@@ -101,6 +101,16 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     /// silently drop it, which meant re-tapping it constantly when one person runs the whole table.</summary>
     public bool HostTakeover { get; set; }
 
+    /// <summary>This device asked to see the secondary-round popup although it is not addressed to it (the
+    /// host opening it from the action view). Per device and not per component, because the popup lives in
+    /// the shell while the button that opens it is in a tab.</summary>
+    public bool ShowSecondary
+    {
+        get => _showSecondary;
+        set { _showSecondary = value; OnChange?.Invoke(); }
+    }
+    private bool _showSecondary;
+
     /// <summary>This device controls the host player (the session creator).</summary>
     public bool IsHost => Me?.IsHost == true
         // Legacy sessions created before the host flag: fall back to lowest seat.
@@ -142,7 +152,10 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     /// server gate exactly, so the UI disables what the server would refuse (a 403/400 is a silent no-op
     /// on this client, which is how a player ends up tapping a dead button).</summary>
     public bool RedTapeBlocks(SessionObjectiveDto so)
-        => Session is { RedTapeLite: true } && !so.MarkerRemoved;
+        => RedTapeOn && !so.MarkerRemoved;
+
+    /// <summary>A Red Tape variant is in play (either of them — the tape behaves the same in both).</summary>
+    public bool RedTapeOn => Session is not null && Session.RedTapeVariant != RedTapeVariant.None;
 
     /// <summary>Whether this device may edit the given player: self always, the host may edit anyone,
     /// or anyone when the session has open editing enabled.</summary>

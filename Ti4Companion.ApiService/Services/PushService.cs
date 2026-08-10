@@ -4,6 +4,7 @@ using Lib.Net.Http.WebPush;
 using Lib.Net.Http.WebPush.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Ti4Companion.ApiService.Data;
+using Ti4Companion.Shared;
 
 namespace Ti4Companion.ApiService.Services;
 
@@ -60,20 +61,39 @@ public class PushService(
     /// Tell a player it is their turn. Runs detached on the thread pool with its own DbContext scope: the
     /// caller is inside a request that has already saved, and must not wait for a push service.
     /// </summary>
-    public void NotifyTurn(Guid sessionId, Guid playerId, string playerName, string joinCode, int round)
+    public void NotifyTurn(Guid sessionId, Guid playerId, string playerName, string joinCode, int round, Language lang)
     {
         if (!Enabled) return;
-        var payload = System.Text.Json.JsonSerializer.Serialize(new
-        {
-            title = "TI4 Companion",
-            body = $"{playerName}: du bist dran (Runde {round})",
-            code = joinCode,
-            tag = "turn"
-        });
-        _ = Task.Run(() => SendToPlayerAsync(sessionId, playerId, payload));
+        var payload = Payload(
+            lang == Language.De ? $"{playerName}: du bist dran (Runde {round})"
+                                : $"{playerName}: it's your turn (round {round})",
+            joinCode, "turn");
+        _ = Task.Run(() => SendToPlayerAsync(sessionId, playerId, payload, "turn"));
     }
 
-    private async Task SendToPlayerAsync(Guid sessionId, Guid playerId, string payload)
+    /// <summary>
+    /// A player's turn budget has run out. Sent at most once per player per round: several devices notice the
+    /// same second (the wall, the host, the player), and each of them reports it. The guard is in memory on
+    /// purpose — losing it in a restart costs one duplicate notification, and nothing else.
+    /// </summary>
+    public void NotifyTimeUp(Guid sessionId, Guid playerId, string playerName, string joinCode, int round, Language lang)
+    {
+        if (!Enabled) return;
+        if (_timeUpSent.Count > 10_000) _timeUpSent.Clear();      // a long-running process, not a leak
+        if (!_timeUpSent.TryAdd((playerId, round), 0)) return;
+        var payload = Payload(
+            lang == Language.De ? $"{playerName}: Zeit abgelaufen (Runde {round})"
+                                : $"{playerName}: your time is up (round {round})",
+            joinCode, "timeup");
+        _ = Task.Run(() => SendToPlayerAsync(sessionId, playerId, payload, "timeup"));
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(Guid Player, int Round), byte> _timeUpSent = new();
+
+    private static string Payload(string body, string joinCode, string tag) =>
+        System.Text.Json.JsonSerializer.Serialize(new { title = "TI4 Companion", body, code = joinCode, tag });
+
+    private async Task SendToPlayerAsync(Guid sessionId, Guid playerId, string payload, string topic)
     {
         try
         {
@@ -91,8 +111,9 @@ public class PushService(
 
             var message = new PushMessage(payload)
             {
-                // One pending "your turn" per device is enough — a later one replaces the earlier.
-                Topic = "turn",
+                // One pending notification of each kind per device is enough — a later one replaces the
+                // earlier, so a phone that was off does not wake up to a stack of stale turns.
+                Topic = topic,
                 Urgency = PushMessageUrgency.High,
                 TimeToLive = 600
             };

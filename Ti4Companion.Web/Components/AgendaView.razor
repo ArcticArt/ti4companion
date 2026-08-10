@@ -97,19 +97,7 @@
     }
 
     @* ===== Agenda selection / card ===== *@
-    @if (current is null && Store.CustomVoteActive)
-    {
-        @* A free vote: no agenda card, just the headline the host typed and what it elects. Everything after
-           this point — influence, hidden/open, locking, totals, the wall — is the same machinery. *@
-        <div class="agenda-card">
-            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-                <span class="chip">@Loc["agenda.freeVote"]</span>
-                <h3 style="margin:0;color:var(--gold);">@s.CustomVoteTitle</h3>
-            </div>
-            <div class="faint" style="margin:.2rem 0;">@Loc[$"elect.{kind}"]</div>
-        </div>
-    }
-    else if (current is null)
+    @if (current is null && !Store.CustomVoteActive)
     {
         @if (host)
         {
@@ -149,13 +137,28 @@
     }
     else
     {
+        @* One card for both: a revealed agenda, or a free vote whose headline the host typed. Everything
+           past the header — influence, open/face-down, locking, totals, the wall — is the same machinery,
+           so the host controls below must NOT be nested in the agenda-only branch. They were, which left a
+           free vote with no way to start, cancel or leave it (reported: stuck in custom mode for good). *@
         <div class="agenda-card">
-            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-                <span class="chip @(current.Type == AgendaType.Law ? "chip-active" : "")">@Loc[current.Type == AgendaType.Law ? "agenda.law" : "agenda.directive"]</span>
-                <h3 style="margin:0;color:var(--gold);">@Loc.Pick(current.Name, current.NameDe)</h3>
-            </div>
-            @if (!string.IsNullOrEmpty(current.Elect)) { <div class="faint" style="margin:.2rem 0;">@Loc["agenda.elect"]: @current.Elect</div> }
-            <p style="margin:.4rem 0;">@Loc.Pick(current.Text, current.TextDe)</p>
+            @if (current is null)
+            {
+                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                    <span class="chip">@Loc["agenda.freeVote"]</span>
+                    <h3 style="margin:0;color:var(--gold);">@s.CustomVoteTitle</h3>
+                </div>
+                <div class="faint" style="margin:.2rem 0;">@Loc[$"elect.{kind}"]</div>
+            }
+            else
+            {
+                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                    <span class="chip @(current.Type == AgendaType.Law ? "chip-active" : "")">@Loc[current.Type == AgendaType.Law ? "agenda.law" : "agenda.directive"]</span>
+                    <h3 style="margin:0;color:var(--gold);">@Loc.Pick(current.Name, current.NameDe)</h3>
+                </div>
+                @if (!string.IsNullOrEmpty(current.Elect)) { <div class="faint" style="margin:.2rem 0;">@Loc["agenda.elect"]: @current.Elect</div> }
+                <p style="margin:.4rem 0;">@Loc.Pick(current.Text, current.TextDe)</p>
+            }
 
             @if (host)
             {
@@ -182,7 +185,8 @@
                             else if (stage == AgendaStage.VotingHiddenTotals) { <span class="faint">@Loc["agenda.totalsShown"]</span> }
                         }
                     }
-                    <button class="btn btn-sm" @onclick="() => Reveal(null)">↻ @Loc["agenda.revealNew"]</button>
+                    @* Back to the picker. For a free vote it is the way OUT of the mode, so it says so. *@
+                    <button class="btn btn-sm" @onclick="() => Reveal(null)">↻ @Loc[current is null ? "agenda.freeVoteEnd" : "agenda.revealNew"]</button>
                 </div>
                 @if (hidden && voting) { <p class="faint" style="font-size:.78rem;margin:.4rem 0 0;">@Loc["agenda.hostHint"]</p> }
             }

@@ -93,10 +93,11 @@ public class MatchStats
         var perPlayerRound = new Dictionary<Guid, TimeSpan>();
         GamePhase? phase = null;
         Guid? active = null;
-        // Players whose clock is running for the strategy action on the table (see SecondaryStart/Done).
-        // While this set is non-empty it OVERRIDES the "one active player" rule: several clocks legitimately
-        // run at once, and the set is then the truth — including the active player, who is in it for the
-        // primary and leaves it when they tap "done", even though the turn hasn't moved on yet.
+        // Players whose clock is running for a secondary ability (see SecondaryStart/Done). This is a UNION
+        // with the active player's clock, not a replacement: several clocks legitimately run at once, and a
+        // secondary outlives the turn it belongs to — the point of the whole feature is that the next player
+        // can start while the others are still resolving. The active player is never in this set (the server
+        // keeps them out; their clock IS the turn clock).
         var secondaries = new HashSet<Guid>();
 
         void Credit(Guid pid, DateTimeOffset from, DateTimeOffset to)
@@ -109,15 +110,12 @@ public class MatchStats
         foreach (var e in ordered)
         {
             if (e.TimestampUtc < start) continue; // pre-game (setup joins)
-            if (secondaries.Count > 0)
+            if (phase == GamePhase.Action && active is Guid a) Credit(a, lastTs, e.TimestampUtc);
+            foreach (var pid in secondaries)
             {
-                foreach (var pid in secondaries) Credit(pid, lastTs, e.TimestampUtc);
+                if (pid != active) Credit(pid, lastTs, e.TimestampUtc);
             }
-            else if (phase == GamePhase.Action && active is Guid a)
-            {
-                Credit(a, lastTs, e.TimestampUtc);
-            }
-            else if (phase == GamePhase.Strategy && e.Kind == SessionLogKind.StrategyPick && e.TargetPlayerId is Guid pk)
+            if (phase == GamePhase.Strategy && e.Kind == SessionLogKind.StrategyPick && e.TargetPlayerId is Guid pk)
             {
                 perPlayer[pk] = Get(perPlayer, pk) + Active(lastTs, e.TimestampUtc);
                 perPlayerRound[pk] = Get(perPlayerRound, pk) + ActiveThisRound(lastTs, e.TimestampUtc);
@@ -130,9 +128,9 @@ public class MatchStats
                     break;
                 case SessionLogKind.TurnChange:
                     active = e.TargetPlayerId;
-                    // The server closes the secondary round on every turn change; mirror that here so a
-                    // missing SecondaryDone can never leak a clock into the next player's turn.
-                    secondaries.Clear();
+                    // Secondaries are NOT cleared here: they run on past the turn change by design. The
+                    // server closes them when the next action is played or the phase ends, and each of
+                    // those emits a SecondaryDone, which is what empties this set.
                     break;
                 case SessionLogKind.SecondaryStart:
                     if (e.TargetPlayerId is Guid ss) secondaries.Add(ss);
@@ -152,14 +150,11 @@ public class MatchStats
             GamePhase.Strategy => currentPicker,
             _ => null
         };
-        if (secondaries.Count > 0)
+        if (openOwner is Guid owner) Credit(owner, lastTs, now);
+        // Plus everyone still resolving a secondary — the same union as inside the loop.
+        foreach (var pid in secondaries)
         {
-            // An open secondary round wins over the single-owner rule, exactly as inside the loop.
-            foreach (var pid in secondaries) Credit(pid, lastTs, now);
-        }
-        else if (openOwner is Guid owner)
-        {
-            Credit(owner, lastTs, now);
+            if (pid != openOwner) Credit(pid, lastTs, now);
         }
 
         return new MatchStats

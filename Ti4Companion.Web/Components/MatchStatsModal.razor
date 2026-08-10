@@ -179,6 +179,6 @@
         int.TryParse(parts.ElementAtOrDefault(5), out var secV);
         if (topV == 0) return $"{name}: {Loc["agenda.noVotes"]}";
         if (topV == secV) return $"{name}: {Loc["agenda.speakerDecides"]}";
-        return $"{name}: {Loc["agenda.elected"]} {AgendaDisplay.ChoiceLabel(Store, Loc, agenda, parts.ElementAtOrDefault(3))} ({topV})";
+        return $"{name}: {Loc["agenda.elected"]} {AgendaDisplay.ChoiceLabel(Store, Loc, elect, parts.ElementAtOrDefault(3))} ({topV})";
     }
 }

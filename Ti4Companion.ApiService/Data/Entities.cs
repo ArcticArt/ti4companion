@@ -69,8 +69,13 @@ public class GameSession
     /// or <c>2</c> pin it. See <see cref="GameRules.StrategyCardsPerPlayer"/>.</summary>
     public int StrategyCardsPerPlayer { get; set; }
 
-    /// <summary>Red Tape variant: show a removable marker on every revealed objective.</summary>
-    public bool RedTapeLite { get; set; }
+    /// <summary>Which Red Tape variant is in play (<see cref="RedTapeVariant.None"/> = off). A taped
+    /// objective carries a removable marker and cannot be scored.</summary>
+    public RedTapeVariant RedTapeVariant { get; set; }
+
+    /// <summary>Which strategy card carries the Red Tape ability: the variant replaces either Diplomacy (2)
+    /// or Imperial (8), and the table decides which before the game. 0 until they have.</summary>
+    public int RedTapeCardNumber { get; set; }
 
     /// <summary>Status phase: which of the post-scoring steps the table has ticked off. Reset when the
     /// status phase begins.</summary>
@@ -80,11 +85,22 @@ public class GameSession
     /// with <see cref="StatusStepsDone"/>.</summary>
     public StatusStage StatusStage { get; set; }
 
-    /// <summary>Whether a strategy action's secondary round is open: the active player has played the card
-    /// and the table is working through who else takes the secondary. Cleared when the turn moves on.
+    /// <summary>The strategy card whose secondary the table is working through, or null when no secondary
+    /// round is open. Deliberately survives the turn advance: the other players keep resolving their
+    /// secondary after the active player is done, and their clocks have to keep running until they say so.
+    /// Closed when the next strategy action is played, or when the action phase / round ends.
     /// Only ever set while the turn timer is in use — without time tracking there is nothing to gain from
     /// tracking secondaries, and the app should not ask the table for input it has no use for.</summary>
-    public bool SecondaryOpen { get; set; }
+    public int? SecondaryCardId { get; set; }
+
+    /// <summary>Who played that primary. They (and the host) run the secondary round; a player may always
+    /// declare their own secondary done.</summary>
+    public Guid? SecondaryOwnerId { get; set; }
+
+    /// <summary>Politics was played and no new speaker has been appointed yet. The turn cannot be ended
+    /// until it is — the one place the app blocks a step, because the whole card is that appointment and
+    /// forgetting it silently changes who picks first next round.</summary>
+    public bool SpeakerPending { get; set; }
 
     /// <summary>Offer to record a technology right after the Technology strategy action was played.
     /// A table decision — the app never forces the entry.</summary>
@@ -164,8 +180,9 @@ public class SessionObjective
     public string? CustomName { get; set; }
     public int? CustomPoints { get; set; }
     public DateTimeOffset RevealedAtUtc { get; set; } = DateTimeOffset.UtcNow;
-    /// <summary>Red Tape variant: the marker that sits on this objective has been taken off. Only shown
-    /// when <see cref="GameSession.RedTapeLite"/> is on; the app just tracks the token, it enforces no rule.</summary>
+    /// <summary>Red Tape variant: the tape that sits on this objective has been pulled off. Only shown while
+    /// <see cref="GameSession.RedTapeVariant"/> is set; until then the objective cannot be scored — the one
+    /// rule the app does enforce, and only for a table that chose the variant.</summary>
     public bool MarkerRemoved { get; set; }
     public List<ObjectiveScore> Scores { get; set; } = new();
 }
@@ -252,7 +269,8 @@ public class SessionSummary
     public Language DefaultLanguage { get; set; }
     public int TurnTimerSeconds { get; set; }
     public int StrategyCardsPerPlayer { get; set; }
-    public bool RedTapeLite { get; set; }
+    /// <summary>Which Red Tape variant the table played (0 = none). Was a bool while there was only one.</summary>
+    public RedTapeVariant RedTapeVariant { get; set; }
 
     /// <summary>Highest score; null when nobody scored or the top score is shared.</summary>
     public string? WinnerName { get; set; }

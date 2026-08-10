@@ -219,7 +219,7 @@ public record SessionStateDto(
     Guid? SpeakerPlayerId, Guid? ActivePlayerId, int? ActiveStrategyCardId,
     string? CurrentAgendaId, bool AllowEditAllPlayers,
     bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, bool Paused, int RetentionHours,
-    int TurnTimerSeconds, int StrategyCardsPerPlayer, bool RedTapeLite, bool PromptTechOnAction,
+    int TurnTimerSeconds, int StrategyCardsPerPlayer, RedTapeVariant RedTapeVariant, int RedTapeCardNumber, bool PromptTechOnAction,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
@@ -238,8 +238,13 @@ public record SessionStateDto(
     bool ShowJoinQr = true,
     /// <summary>Status phase: which of the three stages the table is on (score → reveal → checklist).</summary>
     StatusStage StatusStage = StatusStage.Scoring,
-    /// <summary>A strategy action's secondary round is open — the table is working through who takes it.</summary>
-    bool SecondaryOpen = false,
+    /// <summary>The strategy card whose secondary round is open (null = none). Outlives the turn advance:
+    /// the others keep resolving after the active player is done.</summary>
+    int? SecondaryCardId = null,
+    /// <summary>Who played that primary — they and the host run the secondary round.</summary>
+    Guid? SecondaryOwnerId = null,
+    /// <summary>Politics is on the table and the new speaker has not been appointed yet.</summary>
+    bool SpeakerPending = false,
     /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
     string? CustomVoteTitle = null,
     /// <summary>What the free vote elects (null unless one is running).</summary>
@@ -276,8 +281,10 @@ public record UpdateSessionRequest(
     int? TurnTimerSeconds = null,
     /// <summary>Strategy cards per player: 0 = automatic, 1 or 2 to pin it.</summary>
     int? StrategyCardsPerPlayer = null,
-    /// <summary>Red Tape variant: removable marker on every revealed objective.</summary>
-    bool? RedTapeLite = null,
+    /// <summary>Which Red Tape variant to play (None turns it off).</summary>
+    RedTapeVariant? RedTapeVariant = null,
+    /// <summary>Which strategy card carries the Red Tape ability: 2 (Diplomacy) or 8 (Imperial).</summary>
+    int? RedTapeCardNumber = null,
     /// <summary>Offer a technology entry after the Technology strategy action.</summary>
     bool? PromptTechOnAction = null,
     /// <summary>Show the join QR code on the wall display (shared state — the wall is shared).</summary>

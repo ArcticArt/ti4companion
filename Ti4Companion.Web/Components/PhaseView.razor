@@ -39,8 +39,9 @@
             switch (s.Phase)
             {
                 case GamePhase.Setup:
-                    @if (!speakerSet) { <span class="faint">@Loc["setup.needSpeaker"]</span> }
-                    <button class="btn btn-gold" disabled="@(!allReady || !speakerSet)" @onclick="() => showSeatConfirm = true">@Loc["turn.startGame"] ▸</button>
+                    @* The speaker is NOT a gate anymore — it is settled in the seat dialog (or later at the
+                       table), so a game can start while that is still being argued about. *@
+                    <button class="btn btn-gold" disabled="@(!allReady)" @onclick="() => showSeatConfirm = true">@Loc["turn.startGame"] ▸</button>
                     break;
                 case GamePhase.Strategy:
                     @if (!allPicked) { <span class="faint">@Loc["strategy.needAllPicks"]</span> }
@@ -84,7 +85,14 @@
                             <span class="seat-no">@(i + 1)</span>
                             <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
                             <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">@p.Name</strong>
-                            @if (s.SpeakerPlayerId == p.Id) { <SpeakerIcon SizeCss="1.3em" /> }
+                            @* The speaker is chosen right here — it decides who picks first, so this is the
+                               screen where it matters. Tapping a row's token makes that player speaker. *@
+                            @{ var pid = p.Id; }
+                            <button class="btn btn-sm seat-speaker @(s.SpeakerPlayerId == p.Id ? "btn-gold" : "btn-ghost")"
+                                    @onclick="() => SetSpeaker(pid)" title='@Loc["setup.makeSpeaker"]'>
+                                @if (s.SpeakerPlayerId == p.Id) { <SpeakerIcon SizeCss="1.3em" /> }
+                                else { <span class="ss-dash">—</span> }
+                            </button>
                             @* Arrow fallback: always works, including where a drag is awkward. *@
                             <span class="seat-arrows">
                                 <button class="btn btn-sm btn-ghost" disabled="@(idx == 0)" @onclick="() => Nudge(idx, -1)" title='@Loc["setup.moveUp"]'>▲</button>
@@ -92,6 +100,10 @@
                             </span>
                         </div>
                     }
+                </div>
+                <div class="row-wrap" style="gap:.5rem;align-items:center;margin:.2rem 0 .6rem;">
+                    <span class="faint" style="font-size:.78rem;">@Loc[speakerSet ? "setup.speakerLbl" : "setup.noSpeakerYet"]</span>
+                    <button class="btn btn-sm" @onclick="RandomSpeaker">🎲 @Loc["setup.randomSpeaker"]</button>
                 </div>
                 <p class="faint" style="font-size:.78rem;margin:.2rem 0 .8rem;">@Loc["setup.confirmSeatDragHint"]</p>
                 <div class="row-wrap" style="gap:.5rem;justify-content:flex-end;">
@@ -220,6 +232,18 @@
     {
         selfRef?.Dispose();
         base.Dispose();
+    }
+
+    private Task SetSpeaker(Guid playerId)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, playerId)));
+
+    // Nobody wants to argue about who goes first. Random.Shared is fine here — this is a seating decision,
+    // not a shuffle anyone could gain from predicting.
+    private Task RandomSpeaker()
+    {
+        var players = Store.Session!.Players;
+        if (players.Count == 0) return Task.CompletedTask;
+        return SetSpeaker(players[Random.Shared.Next(players.Count)].Id);
     }
 
     private async Task ConfirmStart() { await CloseSeatConfirm(); await StartGame(); }

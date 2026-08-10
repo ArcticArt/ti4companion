@@ -32,6 +32,7 @@
     private bool on;
     private string? note;
     private bool busy;
+    private bool iosNotInstalled;
 
     private string Title => on ? Loc["push.disable"] : Loc["push.enable"];
 
@@ -44,9 +45,14 @@
             try { key = (await Store.Api.GetPushKeyAsync())?.PublicKey; } catch { key = null; }
         }
         if (string.IsNullOrEmpty(key)) return;                       // push not configured on this server
-        if (!await Call<bool>("ti4.push.supported")) return;          // browser can't do it at all
+        // In iOS Safari that is NOT installed on the home screen, `PushManager` doesn't exist at all, so the
+        // support check fails and the bell used to vanish — on a phone, which is the one device that needs
+        // it. Show it there anyway and let the tap explain the home-screen requirement (reported as
+        // "no notification button in the mobile view").
+        iosNotInstalled = await Call<bool>("ti4.push.isApple") && !await Call<bool>("ti4.push.standalone");
+        if (!iosNotInstalled && !await Call<bool>("ti4.push.supported")) return;   // browser can't do it at all
         show = true;
-        on = await Call<string?>("ti4.push.current") is not null;
+        if (!iosNotInstalled) on = await Call<string?>("ti4.push.current") is not null;
     }
 
     private async Task Toggle()
@@ -65,7 +71,7 @@
             }
 
             // iOS refuses outside an installed PWA, and the failure is silent — say so before asking.
-            if (await Call<bool>("ti4.push.isApple") && !await Call<bool>("ti4.push.standalone"))
+            if (iosNotInstalled)
             {
                 note = Loc["push.iosHint"];
                 return;

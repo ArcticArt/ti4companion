@@ -72,7 +72,7 @@ public static class SessionSummaryService
         summary.DefaultLanguage = session.DefaultLanguage;
         summary.TurnTimerSeconds = session.TurnTimerSeconds;
         summary.StrategyCardsPerPlayer = session.StrategyCardsPerPlayer;
-        summary.RedTapeLite = session.RedTapeLite;
+        summary.RedTapeVariant = session.RedTapeVariant;
         summary.WinnerName = winner?.Name;
         summary.WinnerFactionId = winner?.FactionId;
         summary.TopPoints = top;

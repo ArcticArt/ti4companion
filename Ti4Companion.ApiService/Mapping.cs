@@ -148,13 +148,14 @@ public static class Mapping
             s.Id, s.JoinCode, s.Name, s.DefaultLanguage, s.ActiveExpansions,
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
             s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.Paused, s.RetentionHours,
-            s.TurnTimerSeconds, s.StrategyCardsPerPlayer, s.RedTapeLite, s.PromptTechOnAction,
+            s.TurnTimerSeconds, s.StrategyCardsPerPlayer, s.RedTapeVariant, s.RedTapeCardNumber, s.PromptTechOnAction,
             s.CreatedAtUtc, s.LastActivityUtc,
             players, objectives, cardStates, votes,
             s.AgendaTotalsRevealed, totals,
             s.StatusStepsDone,
             // Only meaningful in the status phase; null elsewhere so the client can't mistake it for a turn.
             s.Phase == GamePhase.Status ? TurnService.CurrentScorer(s, factionOverrides) : null,
-            s.ShowJoinQr, s.StatusStage, s.SecondaryOpen, s.CustomVoteTitle, s.CustomVoteElect);
+            s.ShowJoinQr, s.StatusStage, s.SecondaryCardId, s.SecondaryOwnerId, s.SpeakerPending,
+            s.CustomVoteTitle, s.CustomVoteElect);
     }
 }

@@ -31,7 +31,7 @@
         @* Signal only on your own turn — the buzz belongs to the player whose time is running out. *@
         @if (Store.TurnTimerEnabled)
         {
-            <TurnTimer PlayerId="@active.Id" Signal="@mine" />
+            <TurnTimer PlayerId="@active.Id" Signal="@mine" Report="@(mine || host)" />
         }
         <div class="spacer" style="flex:1"></div>
         @if (host && !takeover) { <button class="btn btn-gold" @onclick="() => Store.HostTakeover = true">@Loc["turn.takeOver"]</button> }
@@ -40,20 +40,37 @@
 }
 
 @* Card-specific actions. Only three of the eight have one worth offering; the other five are resolved on
-   the table and the app would only be in the way. All three are offers, never gates. *@
-@if (s.ActiveStrategyCardId == GameRules.PoliticsStrategyCard && canControl)
+   the table and the app would only be in the way. Technology and Imperial are offers; Politics is the one
+   exception — see the modal below. *@
+@if (s.SpeakerPending && canControl)
 {
-    @* Politics: the player who played it appoints the speaker (own route — see AppointSpeaker). *@
+    @* Politics: the appointment IS the card, and it comes first. A modal rather than a panel further down
+       the page, because the turn cannot be ended until it is done (server-side too) and a blocked button
+       with the reason off-screen is how a table gets stuck. *@
+    <div class="modal-backdrop centered blurred">
+        <div class="modal politics-modal">
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["politics.speaker"]</h3>
+            </div>
+            <div class="modal-body">
+                <p class="faint" style="margin:0 0 .6rem;">@Loc["politics.modalHint"]</p>
+                @* The current speaker is out (the card says "a player other than the speaker"), and so is
+                   the player playing it — the table's own house rule. *@
+                <PlayerPicker Players="Appointable(s)" OnPick="AppointSpeaker" />
+                @if (!Appointable(s).Any())
+                {
+                    <p class="faint" style="margin:.6rem 0 0;">—</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+else if (s.SpeakerPending)
+{
+    @* Everyone else just sees who the table is waiting for. *@
     <div class="panel" style="margin-top:.6rem;">
-        <div class="row-wrap" style="gap:.5rem;align-items:baseline;">
-            <h3 style="margin:0;">@Loc["politics.speaker"]</h3>
-            <span class="faint" style="font-size:.78rem;">@Loc["politics.hint"]</span>
-        </div>
-        <div style="margin-top:.45rem;">
-            <PlayerPicker Players="s.Players.OrderBy(p => p.SeatOrder)"
-                          SelectedIds="s.SpeakerPlayerId is Guid sp ? new[] { sp } : Array.Empty<Guid>()"
-                          OnPick="AppointSpeaker" />
-        </div>
+        <strong>@Loc["politics.speaker"]</strong>
+        <span class="faint"> — @string.Format(Loc["politics.waitingFor"], active?.Name ?? "—")</span>
     </div>
 }
 @* Technology: offer the tech entry. The nudge is a table option; the participants of the secondary get it
@@ -66,6 +83,24 @@
         <span class="tp-text">@Loc["tech.promptText"]</span>
         <div class="spacer" style="flex:1"></div>
         <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowTechTab()">@Loc["tech.promptOpen"] ▸</button>
+    </div>
+}
+@* Red Tape variant: the carrier card's own step, which the variant puts BEFORE everything else on the card.
+   An offer like the others — the app tapes the objectives and refuses to score a taped one, but which tape
+   comes off is the table's decision (and the rest of the variant's rules stay with them). *@
+@if (Store.RedTapeOn && s.ActiveStrategyCardId == s.RedTapeCardNumber && canControl)
+{
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text">
+            <strong>@Loc["redtape.action"]</strong> —
+            @Loc[s.RedTapeVariant == RedTapeVariant.Lite ? "redtape.actionLite" : "redtape.actionBureaucracy"]
+        </span>
+        <div class="spacer" style="flex:1"></div>
+        @if (s.RedTapeVariant == RedTapeVariant.Lite)
+        {
+            <button class="btn btn-sm" title='@Loc["redtape.randomHint"]' disabled="@(!AnyTaped(s))" @onclick="RemoveRandomTape">🎲 @Loc["redtape.random"]</button>
+        }
+        <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowObjectivesTab()">@Loc["redtape.openObjectives"] ▸</button>
     </div>
 }
 @* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). *@
@@ -89,43 +124,22 @@
     </div>
 }
 
-@* Secondary abilities of the running strategy action. Only shown when the turn timer is in use: without
-   time tracking there is nothing to gain from marking secondaries, and the app must not ask the table for
-   input it has no use for. Every card works the same way here — the card-specific extras are separate. *@
-@if (Store.TurnTimerEnabled && activeCard is not null && active is not null)
+@* The secondary round has moved into its own popup (SecondaryModal, rendered by the shell): it opens when
+   the turn is ENDED, which is the moment the others' clocks should start and this player's should stop.
+   Asking for it while the primary was still being resolved meant a list you had to tick yourself off.
+   Here only the way back in, for a device the popup does not address (the host running the table). *@
+@if (s.SecondaryCardId is int secCard)
 {
-    var pending = s.Players.Where(p => p.SecondaryPending).Select(p => p.Id).ToList();
-    <div class="panel secondary-panel" style="margin-top:.6rem;">
-        <div class="row-wrap" style="gap:.5rem;align-items:baseline;">
-            <h3 style="margin:0;">@Loc["secondary.title"]</h3>
-            <span class="faint" style="font-size:.78rem;">@Loc["secondary.hint"]</span>
-        </div>
-        @if (canControl)
-        {
-            <div style="margin-top:.45rem;">
-                <PlayerPicker Players="s.Players.OrderBy(p => p.SeatOrder)" SelectedIds="pending"
-                              OnPick="TogglePending" />
-            </div>
-        }
-        @if (pending.Count > 0)
-        {
-            <div class="row-wrap" style="gap:.4rem;margin-top:.55rem;align-items:center;">
-                <span class="faint" style="font-size:.78rem;">@Loc["secondary.running"]:</span>
-                @foreach (var p in s.Players.Where(p => p.SecondaryPending).OrderBy(p => p.SeatOrder))
-                {
-                    var pid = p.Id;
-                    <span class="sec-chip" style="--player-color:@p.ColorHex">
-                        <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.4" Ring="@p.ColorHex" />
-                        <span>@p.Name</span>
-                        <TurnTimer PlayerId="@pid" Compact="true" />
-                        @if (Store.IsHost || pid == Store.MyPlayerId)
-                        {
-                            <button class="btn btn-sm btn-gold" @onclick="() => SecondaryDone(pid)">@Loc["status.done"] ▸</button>
-                        }
-                    </span>
-                }
-            </div>
-        }
+    var secOwner = Store.PlayerById(s.SecondaryOwnerId);
+    var secRunning = s.Players.Count(p => p.SecondaryPending);
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text">
+            @Loc["secondary.title"]: <strong>@(Store.Card(secCard) is { } sc ? Loc.Pick(sc.Name, sc.NameDe) : "—")</strong>
+            @if (secOwner is not null) { <span class="faint"> · @string.Format(Loc["secondary.playedBy"], secOwner.Name)</span> }
+            @if (secRunning > 0) { <span class="faint"> · @Loc["secondary.running"]: @secRunning</span> }
+        </span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-sm" @onclick="() => Store.ShowSecondary = true">@Loc["secondary.open"] ▸</button>
     </div>
 }
 
@@ -233,16 +247,22 @@ else
     private Task Pass(Guid playerId, bool passed)
         => Store.Mutate(Store.Api.SetPassedAsync(Sid, playerId, passed));
 
-    // The whole set goes over the wire, not a single toggle — same reason as on the server: no intermediate
-    // state where two players think they are the last one outstanding.
-    private Task TogglePending(Guid playerId)
-    {
-        var next = Store.Session!.Players.Where(p => p.SecondaryPending).Select(p => p.Id).ToList();
-        if (!next.Remove(playerId)) next.Add(playerId);
-        return Store.Mutate(Store.Api.SetSecondaryPlayersAsync(Sid, next));
-    }
+    /// <summary>Who may be given the speaker token by a Politics action: not the current speaker (the card
+    /// says so) and not the player playing it (the table's own rule).</summary>
+    private static IEnumerable<PlayerDto> Appointable(SessionStateDto s)
+        => s.Players.Where(p => p.Id != s.SpeakerPlayerId && p.Id != s.ActivePlayerId).OrderBy(p => p.SeatOrder);
 
     private Task AppointSpeaker(Guid playerId) => Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
 
-    private Task SecondaryDone(Guid playerId) => Store.Mutate(Store.Api.SetSecondaryDoneAsync(Sid, playerId));
+    private static bool AnyTaped(SessionStateDto s) => s.Objectives.Any(o => !o.MarkerRemoved);
+
+    /// <summary>Red Tape Lite: when nobody took the carrier card, one tape comes off at random. Rolled on
+    /// this device — it is a die roll the table would otherwise do by hand, and the result is what travels.</summary>
+    private Task RemoveRandomTape()
+    {
+        var taped = Store.Session!.Objectives.Where(o => !o.MarkerRemoved).ToList();
+        if (taped.Count == 0) return Task.CompletedTask;
+        var pick = taped[Random.Shared.Next(taped.Count)];
+        return Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, pick.Id, true));
+    }
 }

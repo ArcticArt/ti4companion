@@ -113,6 +113,8 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/secondary", new SetSecondaryPlayersRequest(playerIds));
     public Task<SessionStateDto?> SetSecondaryDoneAsync(Guid id, Guid playerId)
         => PostFor($"api/sessions/{id}/players/{playerId}/secondary-done", new { });
+    public Task<SessionStateDto?> CloseSecondaryAsync(Guid id)
+        => PostFor($"api/sessions/{id}/secondary/close", new { });
     public Task<SessionStateDto?> SetStatusStageAsync(Guid id, StatusStage stage)
         => PostFor($"api/sessions/{id}/status-stage", new SetStatusStageRequest(stage));
     public Task<SessionStateDto?> SetObjectiveMarkerAsync(Guid id, Guid sessionObjectiveId, bool removed)
@@ -146,6 +148,15 @@ public class Ti4ApiClient(HttpClient http)
         => PostForAllowBadRequest($"api/sessions/{id}/agenda/lock", new LockVoteRequest(playerId, outcome, votes, choice));
     public Task<SessionStateDto?> SetInfluenceAsync(Guid id, Guid playerId, int influence)
         => PostForAllowBadRequest($"api/sessions/{id}/players/{playerId}/influence", new SetInfluenceRequest(playerId, influence));
+
+    /// <summary>Report that a player's turn budget has run out, so the server can notify them. Changes no
+    /// state and returns nothing — several devices notice the same second and the server drops duplicates.
+    /// Never throws: a missed notification must not surface as an error in a ticking clock.</summary>
+    public async Task ReportTimeUpAsync(Guid id, Guid playerId)
+    {
+        try { await http.PostAsync($"api/sessions/{id}/players/{playerId}/time-up", null); }
+        catch { }
+    }
 
     // ---- Match log ----
     public async Task<IReadOnlyList<SessionLogEntryDto>> GetLogAsync(string code)

@@ -86,14 +86,25 @@
     @* In this app `.modal-backdrop` is the overlay and `.modal` the box — bootstrap.min.css also defines
        `.modal` (position:fixed, top/left 0), so using it as the overlay pins it to the corner. *@
     <div class="modal-backdrop centered blurred" @onclick="() => showQr = false">
+        @* Same card as the wall's QR area — the session name, the URL to type if scanning fails, and the
+           code. It used to be a generic "scan to join this session" hint, which told a phone holder less
+           than the link itself does. *@
         <div class="modal qr-box" @onclick:stopPropagation="true">
-            <h3 style="margin:0;">@Loc["nav.joinQr"]</h3>
-            <p class="faint" style="margin:0;">@Loc["nav.joinQrHint"]</p>
+            <div class="qr-title">@string.Format(Loc["nav.joinQrTitle"], qs.Name)</div>
+            <div class="qr-url">@InviteLink(qs.JoinCode)</div>
             <JoinQr Text="@InviteLink(qs.JoinCode)" SizeCss="min(72vw, 20rem)" Alt="@Loc["nav.joinQr"]" />
-            <div class="qr-code">@qs.JoinCode</div>
+            <div class="qr-code-big">@qs.JoinCode</div>
             <button class="btn" @onclick="() => showQr = false">@Loc["common.close"]</button>
         </div>
     </div>
+}
+
+@* The secondary round of a strategy action. In the shell, not in the action view: it opens when a turn is
+   ended and has to be visible whatever tab the device happens to be on. It shows itself only to the people
+   it concerns (see SecondaryModal). *@
+@if (Store.Session is not null)
+{
+    <SecondaryModal />
 }
 
 @* Pause overlay — blocks all input while the game is paused; only the host can resume. *@

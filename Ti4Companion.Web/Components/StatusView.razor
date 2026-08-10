@@ -86,35 +86,41 @@
             </div>
         </div>
 
-        @* Score by tapping the card itself (not via the little markers, as in the action phase). Only the
-           objectives this player hasn't scored yet are offered, so a tap can't be a no-op. *@
-        @if (scorer is not null)
-        {
-            var scoreable = s.Objectives.Where(o => !o.ScoredByPlayerIds.Contains(scorer.Id)).ToList();
-            <div class="panel" style="margin-top:.6rem;">
+        @* Score by tapping the card itself (not via the little markers, as in the action phase). ONE list:
+           every objective on the table, and the ones the player up can still score are the tap targets.
+           It used to be the tap grid plus a full ObjectivesTab underneath — which listed every objective
+           twice and put the reveal box (its own stage now) back on the scoring screen. Corrections and
+           hand-added objectives live in the Objectives tab, which is one tap away. *@
+        <div class="panel" style="margin-top:.6rem;">
+            @if (scorer is not null)
+            {
                 <h3 style="margin:0 0 .2rem;">@string.Format(Loc["status.scoreFor"], scorer.Name)</h3>
                 <p class="faint" style="margin:0 0 .5rem;">@Loc["status.tapToScore"]</p>
-                @if (scoreable.Count == 0)
-                {
-                    <p class="faint" style="margin:0;">@Loc["status.nothingLeft"]</p>
-                }
-                else
-                {
-                    <div class="obj-tap-grid">
-                        @foreach (var so in scoreable)
-                        {
-                            var soId = so.Id;
-                            <ObjectiveDisplayCard So="so"
-                                                  Clickable="Store.CanScoreFor(scorer.Id) && !Store.RedTapeBlocks(so)"
-                                                  OnClick="() => Score(soId, scorer.Id)" />
-                        }
-                    </div>
-                }
-            </div>
-        }
-
-        @* The full list stays reachable: corrections, secrets made public, Red Tape markers. *@
-        <ObjectivesTab />
+            }
+            else
+            {
+                <h3 style="margin:0 0 .5rem;">@Loc["obj.title"]</h3>
+            }
+            @if (s.Objectives.Count == 0)
+            {
+                <p class="faint" style="margin:0;">@Loc["obj.none"]</p>
+            }
+            else
+            {
+                <div class="obj-tap-grid">
+                    @foreach (var so in s.Objectives)
+                    {
+                        var soId = so.Id;
+                        var already = scorer is not null && so.ScoredByPlayerIds.Contains(scorer.Id);
+                        <ObjectiveDisplayCard So="so"
+                                              Clickable="scorer is not null && !already && Store.CanScoreFor(scorer.Id) && !Store.RedTapeBlocks(so)"
+                                              OnClick="() => Score(soId, scorer!.Id)"
+                                              TapeClickable="true"
+                                              OnRemoveTape="() => RemoveTape(soId)" />
+                    }
+                </div>
+            }
+        </div>
         break;
 
     case StatusStage.RevealObjective:
@@ -130,14 +136,26 @@
            the explanation. *@
         <div class="panel" style="margin-top:.6rem;">
             <h3 style="margin:0 0 .4rem;">@Loc["status.checklist"]</h3>
+            @* Ticking the steps is the host's job — everyone else reads along, so the list renders without
+               a box for them. The checklist is shared state, and eight devices toggling one row is noise. *@
             <div class="status-steps">
                 @foreach (var (step, key) in Steps)
                 {
                     var done = s.StatusStepsDone.HasFlag(step);
-                    <button class="step @(done ? "done" : "")" @onclick="() => ToggleStep(step, !done)">
-                        <span class="step-box">@(done ? "✓" : "")</span>
-                        <span>@Loc[key]</span>
-                    </button>
+                    @if (host)
+                    {
+                        <button class="step @(done ? "done" : "")" @onclick="() => ToggleStep(step, !done)">
+                            <span class="step-box">@(done ? "✓" : "")</span>
+                            <span>@Loc[key]</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="step readonly @(done ? "done" : "")">
+                            <span class="step-mark">@(done ? "✓" : "")</span>
+                            <span>@Loc[key]</span>
+                        </div>
+                    }
                 }
             </div>
         </div>
@@ -177,4 +195,8 @@
 
     private Task Score(Guid sessionObjectiveId, Guid playerId)
         => Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, sessionObjectiveId, playerId));
+
+    // Red Tape: pull the tape off an objective so it can be scored (the card asks for a second tap first).
+    private Task RemoveTape(Guid sessionObjectiveId)
+        => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, sessionObjectiveId, true));
 }

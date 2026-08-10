@@ -196,9 +196,15 @@ else
             // list (that is where the glow has to be visible), the other two stages take the panel over.
             // The left player table stays untouched in all cases — you still want to see who is up.
             var statusStage = s.Phase == GamePhase.Status ? s.StatusStage : (StatusStage?)null;
-            if (statusStage == StatusStage.Scoring && mode != DisplayMode.JoinQr) mode = DisplayMode.Objectives;
-            // Reveal stage: the newest objective on the table, shown large.
-            var justRevealed = statusStage == StatusStage.RevealObjective ? s.Objectives.LastOrDefault() : null;
+            // Reveal stage: the objectives revealed SINCE the stage began — one alone, or all of them
+            // together when the table reveals several. Until the first one appears the wall stays on the
+            // ordinary objective list; it used to jump straight to "the last objective in the list", which
+            // on entering the stage meant showing an old card as if it were news.
+            var revealNew = statusStage == StatusStage.RevealObjective && _revealBaseline is not null
+                ? s.Objectives.Where(o => !_revealBaseline.Contains(o.Id)).ToList()
+                : new List<SessionObjectiveDto>();
+            var revealWaiting = statusStage == StatusStage.RevealObjective && revealNew.Count == 0;
+            if ((statusStage == StatusStage.Scoring || revealWaiting) && mode != DisplayMode.JoinQr) mode = DisplayMode.Objectives;
             // All three modes share a left "player table" (Bereich 1); the right panel (Bereich 2) differs.
             // Objectives right panel: split by stage; collapse to one (half-width) column until a Stage II.
             var objStage2 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageII).ToList() : new();
@@ -294,7 +300,9 @@ else
                                     </div>
                                     @if (Store.TurnTimerEnabled)
                                     {
-                                        <span class="ptr-timer"><TurnTimer PlayerId="@p.Id" Compact="true" /></span>
+                                        @* The wall is the one device that is reliably on and shows every
+                                           player, so it reports the overruns; the server drops duplicates. *@
+                                        <span class="ptr-timer"><TurnTimer PlayerId="@p.Id" Compact="true" Report="true" /></span>
                                     }
                                 </div>
                             }
@@ -317,19 +325,16 @@ else
                             </div>
                         </div>
                     }
-                    else if (statusStage == StatusStage.RevealObjective)
+                    else if (statusStage == StatusStage.RevealObjective && revealNew.Count > 0)
                     {
                         <h3 style="color:var(--gold);">@Loc["status.stage.reveal"]</h3>
                         <div class="panel-body status-reveal">
-                            @if (justRevealed is null)
-                            {
-                                <p class="muted">@Loc["status.revealHint"]</p>
-                            }
-                            else
-                            {
-                                <div class="status-reveal-card"><ObjectiveDisplayCard So="justRevealed" Glow="true" /></div>
-                                <p class="status-detail">@Loc["status.detail.reveal"]</p>
-                            }
+                            @* One card gets the whole panel; several share it, so a double reveal doesn't
+                               hide the first one behind the second. *@
+                            <div class="status-reveal-card @(revealNew.Count > 1 ? "multi" : "")">
+                                @foreach (var so in revealNew) { <ObjectiveDisplayCard So="so" Glow="true" /> }
+                            </div>
+                            <p class="status-detail">@Loc["status.detail.reveal"]</p>
                         </div>
                     }
                     else if (statusStage == StatusStage.Checklist)
@@ -482,10 +487,27 @@ else
         _notFound = !await Store.ConnectAsync(Code.ToUpperInvariant());
     }
 
+    /// <summary>The objectives already on the table when the status-phase reveal stage began. Anything that
+    /// appears afterwards is what the table just revealed. Kept per device rather than in the session: it is
+    /// only ever used to decide what this wall shows, and a reload legitimately starts over (then nothing is
+    /// "new" and the ordinary objective list is shown).</summary>
+    private HashSet<Guid>? _revealBaseline;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         var s = Store.Session;
         if (s is null) return;
+
+        // Snapshot / clear the reveal-stage baseline. After the render, so the first frame of the stage
+        // still shows the ordinary list — which is exactly what it should show until something is revealed.
+        if (s.Phase == GamePhase.Status && s.StatusStage == StatusStage.RevealObjective)
+        {
+            _revealBaseline ??= s.Objectives.Select(o => o.Id).ToHashSet();
+        }
+        else if (_revealBaseline is not null)
+        {
+            _revealBaseline = null;
+        }
 
         // Statistics wall: load the log once on entering the mode, then compute the timing breakdown.
         // Takes precedence over the agenda view (End game can be pressed in any phase).
@@ -555,7 +577,9 @@ else
                 .OrderByDescending(t => t.Votes).ToList();
         if (tally.Count == 0) return null;
         if (tally.Count > 1 && tally[0].Votes == tally[1].Votes) return Loc["agenda.speakerDecides"];
-        return $"{Loc["agenda.elected"]}: {ChoiceLabel(agenda, tally[0].Choice)}";
+        // By elect KIND, not by card: a free vote has no agenda, and passing null in here used to throw
+        // exactly when it mattered — the moment a free vote's winner was about to be announced.
+        return $"{Loc["agenda.elected"]}: {AgendaDisplay.ChoiceLabel(Store, Loc, elect, tally[0].Choice)}";
     }
 
     // Resolve a per-player vote into a human label for the display.
@@ -565,11 +589,7 @@ else
             ? Loc[vote.Outcome == VoteOutcome.For ? "agenda.for" : "agenda.against"]
             : AgendaDisplay.ChoiceLabel(Store, Loc, elect, vote.Choice);
 
-    // Resolve an elected candidate key (player id / planet / card number / law / objective) to a label.
     // The invite link the QR encodes. BaseUri already carries scheme/host/port, so this is the same URL a
     // player would get from the host's "copy invite link" button — including on a LAN address.
     private string InviteUrl(string joinCode) => $"{Nav.BaseUri}join/{joinCode}";
-
-    private string ChoiceLabel(AgendaDto agenda, string? choice)
-        => AgendaDisplay.ChoiceLabel(Store, Loc, agenda, choice);
 }

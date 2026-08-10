@@ -51,15 +51,13 @@
             var pts = so.CustomPoints ?? def?.Points;
             <div class="obj-card @(custom ? "secret" : stage2 ? "stage2" : "stage1")">
                 <div class="obj-head">
-                    @* Red Tape variant: a token sitting on the objective; any player may take it off
-                       (and put it back — mistakes happen). The app tracks it, it enforces nothing. *@
-                    @if (s.RedTapeLite)
+                    @* Red Tape: the tape across the markers is the control (see below). All that is left up
+                       here is the way BACK — mistakes happen, and once the tape is off there is nothing to
+                       tap. Only shown while there is something to undo. *@
+                    @if (Store.RedTapeOn && so.MarkerRemoved)
                     {
-                        <button class="rt-marker @(so.MarkerRemoved ? "off" : "on")"
-                                @onclick="() => ToggleMarker(so.Id, so.MarkerRemoved)"
-                                title="@(so.MarkerRemoved ? Loc["redtape.putBack"] : Loc["redtape.takeOff"])">
-                            @(so.MarkerRemoved ? Loc["redtape.clear"] : Loc["redtape.sealed"])
-                        </button>
+                        <button class="rt-restore" @onclick="() => SetMarker(so.Id, false)"
+                                title="@Loc["redtape.putBack"]">↺</button>
                     }
                     <span class="obj-name">@name</span>
                     @if (custom) { <span class="chip chip-passed">@Loc["obj.secret"]</span> }
@@ -79,6 +77,12 @@
                        disabled to mirror the server gate exactly, and the tape says why. *@
                     var taped = Store.RedTapeBlocks(so);
                     <div class="obj-markers @(taped ? "taped" : "")">
+                        @* One tap pulls the tape here — unlike the status screen, where the whole card is a
+                           tap target for scoring and a stray touch has to be caught by a confirm. *@
+                        @if (taped)
+                        {
+                            <button class="rt-tape" @onclick="() => SetMarker(so.Id, true)" title="@Loc["redtape.takeOff"]">@Loc["redtape.blocked"]</button>
+                        }
                         @foreach (var p in players)
                         {
                             var scored = so.ScoredByPlayerIds.Contains(p.Id);
@@ -89,7 +93,6 @@
                                 <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.9" Ring="@p.ColorHex" />
                             </button>
                         }
-                        @if (taped) { <span class="rt-tape">@Loc["redtape.blocked"]</span> }
                     </div>
                 }
             </div>
@@ -132,8 +135,9 @@
         customPoints = 1;
     }
 
-    private Task ToggleMarker(Guid soId, bool removed)
-        => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, soId, !removed));
+    /// <summary>Red Tape: <paramref name="removed"/> = the tape is off (the objective can be scored).</summary>
+    private Task SetMarker(Guid soId, bool removed)
+        => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, soId, removed));
 
     private Task ToggleScore(Guid soId, Guid playerId, bool scored)
         => scored ? ScoreOff(soId, playerId) : Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, soId, playerId));

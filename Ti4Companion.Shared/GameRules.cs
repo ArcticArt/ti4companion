@@ -24,4 +24,8 @@ public static class GameRules
 
     /// <summary>Imperial: the card whose primary may score a public objective.</summary>
     public const int ImperialStrategyCard = 8;
+
+    /// <summary>Diplomacy: the card the Red Tape variants are published for (the variant replaces either
+    /// this one or <see cref="ImperialStrategyCard"/>, and the table picks which at setup).</summary>
+    public const int RedTapeDiplomacyCard = 2;
 }

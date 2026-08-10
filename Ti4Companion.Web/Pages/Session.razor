@@ -26,10 +26,14 @@ else
                     <button class="seg-btn @(s.DisplayMode == DisplayMode.Tech ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Tech)">@Loc["display.techShort"]</button>
                     @* The QR is a wall AREA of its own, so it belongs in this group and behaves like the
                        others: exactly one is active. It used to be a separate toggle beside the group, which
-                       made two controls for one screen. *@
-                    <button class="seg-btn @(s.DisplayMode == DisplayMode.JoinQr ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.JoinQr)" title='@Loc["nav.joinQr"]'>
-                        <MaterialIcon Name="qr_code" SizeCss="1em" /> @Loc["display.qrShort"]
-                    </button>
+                       made two controls for one screen. Host only — inviting people to the table is the
+                       host's business, and everyone else already has the code. *@
+                    @if (Store.IsHost)
+                    {
+                        <button class="seg-btn @(s.DisplayMode == DisplayMode.JoinQr ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.JoinQr)" title='@Loc["nav.joinQr"]'>
+                            <MaterialIcon Name="qr_code" SizeCss="1em" /> @Loc["display.qrShort"]
+                        </button>
+                    }
                 </div>
             </div>
         </div>

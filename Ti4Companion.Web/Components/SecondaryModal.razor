@@ -1,0 +1,127 @@
+@inherits Ti4ComponentBase
+
+@*
+    The secondary round of a strategy action, as a popup.
+
+    It opens when the player who played the primary ends their turn, and stays open until everyone who took
+    the secondary says they are done — the next player's turn runs in parallel, which is exactly the point:
+    their clocks keep counting while the table gets on with it.
+
+    Shown to the player who played the primary, to the host, and to anyone whose own clock is running. Not
+    to the rest of the table — a popup they can only close is noise.
+*@
+@if (Visible && Store.Session is { } s)
+{
+    var owner = Store.PlayerById(s.SecondaryOwnerId);
+    var card = s.SecondaryCardId is int cid ? Store.Card(cid) : null;
+    var others = s.Players.Where(p => p.Id != s.SecondaryOwnerId).OrderBy(p => p.SeatOrder).ToList();
+    var canRun = Store.IsHost || Store.MyPlayerId == s.SecondaryOwnerId;
+
+    <div class="modal-backdrop centered blurred">
+        <div class="modal secondary-modal">
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["secondary.title"]</h3>
+                @if (card is not null)
+                {
+                    <span class="chip chip-active">@Loc.Pick(card.Name, card.NameDe)</span>
+                }
+                @if (owner is not null)
+                {
+                    <span class="faint">@string.Format(Loc["secondary.playedBy"], owner.Name)</span>
+                }
+            </div>
+            <div class="modal-body">
+                <p class="faint" style="margin:0 0 .6rem;">@Loc[canRun ? "secondary.modalHint" : "secondary.modalHintPlayer"]</p>
+                <div class="sec-rows">
+                    @foreach (var p in others)
+                    {
+                        var pid = p.Id;
+                        var running = p.SecondaryPending;
+                        var mine = pid == Store.MyPlayerId;
+                        <div class="sec-row @(running ? "running" : "")" style="--player-color:@p.ColorHex">
+                            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+                            <span class="sec-name">@p.Name</span>
+                            @if (running)
+                            {
+                                <TurnTimer PlayerId="@pid" Compact="true" Signal="@mine" Report="@(mine || canRun)" />
+                            }
+                            @if (canRun || mine)
+                            {
+                                @if (running)
+                                {
+                                    <button class="btn btn-sm btn-gold" @onclick="() => Done(pid)">@Loc["status.done"] ▸</button>
+                                }
+                                else if (canRun)
+                                {
+                                    <button class="btn btn-sm btn-ghost" @onclick="() => Start(pid)">▶ @Loc["secondary.start"]</button>
+                                }
+                                else
+                                {
+                                    <span class="chip">—</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="chip @(running ? "chip-active" : "")">@(running ? Loc["secondary.running"] : "—")</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="row-wrap" style="gap:.5rem;justify-content:flex-end;margin-top:.8rem;">
+                    @* Local hide: nobody gets trapped behind a popup, and reopening it is one tap on the
+                       action view. The server state is untouched by this. *@
+                    <button class="btn btn-sm btn-ghost" @onclick="Hide">@Loc["common.close"]</button>
+                    @if (canRun)
+                    {
+                        <button class="btn btn-gold" @onclick="AllDone">@Loc["secondary.allDone"]</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Card round this device dismissed, so a hide sticks for THIS secondary round only and the
+    /// next one pops up again.</summary>
+    private int? hiddenFor;
+
+    private bool Visible
+    {
+        get
+        {
+            if (Store.Session is not { } s || s.SecondaryCardId is null) return false;
+            if (hiddenFor == s.SecondaryCardId) return false;
+            if (Store.ShowSecondary) return true;                 // opened by hand from the action view
+            var me = Store.MyPlayerId;
+            var mineRunning = me is Guid m && s.Players.Any(p => p.Id == m && p.SecondaryPending);
+            // Deliberately NOT every host: a round opens at every turn end where an action was played, so
+            // the table device would be interrupted six to eight times a round. The host opens it from the
+            // action view when they want it.
+            return me == s.SecondaryOwnerId || mineRunning;
+        }
+    }
+
+    private Guid Sid => Store.Session!.Id;
+
+    private void Hide()
+    {
+        hiddenFor = Store.Session?.SecondaryCardId;
+        Store.ShowSecondary = false;
+    }
+
+    private Task Start(Guid playerId) => SetPending(playerId, true);
+    private Task Done(Guid playerId) => Store.Mutate(Store.Api.SetSecondaryDoneAsync(Sid, playerId));
+
+    // The whole set travels, same as on the server: no intermediate state where two devices each think
+    // they removed the last player.
+    private Task SetPending(Guid playerId, bool pending)
+    {
+        var next = Store.Session!.Players.Where(p => p.SecondaryPending).Select(p => p.Id).ToList();
+        if (pending) { if (!next.Contains(playerId)) next.Add(playerId); }
+        else next.Remove(playerId);
+        return Store.Mutate(Store.Api.SetSecondaryPlayersAsync(Sid, next));
+    }
+
+    private Task AllDone() => Store.Mutate(Store.Api.CloseSecondaryAsync(Sid));
+}

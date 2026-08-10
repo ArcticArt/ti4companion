@@ -113,6 +113,26 @@ public enum StatusStage
     Checklist = 2
 }
 
+/// <summary>
+/// Which Red Tape variant the table plays. Both are community variants, so the app tracks the tape and
+/// blocks scoring a taped objective — it does not run the rest of the rules (purging, the random removal
+/// timing, the Stage II gate); those stay with the table.
+/// <para>
+/// Sources: "Bureaucracy: Red Tape for TI4" by WildFalkon (BGG file 221470) and "Red Tape Lite" by
+/// van nguyen (BGG thread 3553379).
+/// </para>
+/// </summary>
+public enum RedTapeVariant
+{
+    None = 0,
+    /// <summary>The full variant: every public objective face-up at setup, taped; the player who takes the
+    /// carrier strategy card removes counters equal to the trade goods on it.</summary>
+    Bureaucracy = 1,
+    /// <summary>The leaner take: only the first two objectives start untaped, five Stage I can ever score,
+    /// and if nobody takes the carrier card one counter comes off at random.</summary>
+    Lite = 2
+}
+
 public enum ObjectiveStage
 {
     StageI = 1,

@@ -127,13 +127,38 @@
             <span class="faint go-hint">@Loc["timer.hint"]</span>
         </div>
 
+        @* Red Tape: two published community variants (see RedTapeVariant). Both put tape on the public
+           objectives and hand the removal to one strategy card, so the table also picks which card carries
+           it — the variant replaces either Diplomacy or Imperial. *@
         <div class="game-option">
-            <label class="go-check">
-                <input type="checkbox" id="redTape" checked="@Store.Session!.RedTapeLite" @onchange="SetRedTape" />
-                @Loc["redtape.title"]: @Loc["redtape.option"]
-            </label>
-            <span class="faint go-hint">@Loc["redtape.hint"]</span>
+            <label for="redTape">@Loc["redtape.title"]</label>
+            <select id="redTape" value="@((int)Store.Session!.RedTapeVariant)" @onchange="SetRedTapeVariant">
+                <option value="0">@Loc["redtape.off"]</option>
+                <option value="1">@Loc["redtape.bureaucracy"]</option>
+                <option value="2">@Loc["redtape.lite"]</option>
+            </select>
+            <span class="faint go-hint">@Loc[Store.Session!.RedTapeVariant switch
+                {
+                    RedTapeVariant.Bureaucracy => "redtape.bureaucracyHint",
+                    RedTapeVariant.Lite => "redtape.liteHint",
+                    _ => "redtape.hint",
+                }]</span>
         </div>
+
+        @if (Store.RedTapeOn)
+        {
+            <div class="game-option">
+                <label for="redTapeCard">@Loc["redtape.card"]</label>
+                <select id="redTapeCard" value="@Store.Session!.RedTapeCardNumber" @onchange="SetRedTapeCard">
+                    @foreach (var n in new[] { GameRules.RedTapeDiplomacyCard, GameRules.ImperialStrategyCard })
+                    {
+                        var card = Store.Card(n);
+                        <option value="@n">@n — @(card is null ? "" : Loc.Pick(card.Name, card.NameDe))</option>
+                    }
+                </select>
+                <span class="faint go-hint">@Loc["redtape.cardHint"]</span>
+            </div>
+        }
 
         <div class="game-option">
             <label class="go-check">
@@ -183,9 +208,20 @@
             Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, null, count)));
     }
 
-    private Task SetRedTape(ChangeEventArgs e)
-        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
-            null, null, null, null, null, null, null, null, null, null, RedTapeLite: e.Value as bool? ?? false)));
+    private Task SetRedTapeVariant(ChangeEventArgs e)
+    {
+        var v = int.TryParse(e.Value?.ToString(), out var n) && Enum.IsDefined(typeof(RedTapeVariant), n)
+            ? (RedTapeVariant)n : RedTapeVariant.None;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, null, RedTapeVariant: v)));
+    }
+
+    private Task SetRedTapeCard(ChangeEventArgs e)
+    {
+        var n = int.TryParse(e.Value?.ToString(), out var c) ? c : GameRules.RedTapeDiplomacyCard;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, null, RedTapeCardNumber: n)));
+    }
 
     private Task SetPromptTech(ChangeEventArgs e)
         => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(

@@ -8,12 +8,6 @@
      role="@(Clickable ? "button" : null)" tabindex="@(Clickable ? "0" : null)"
      @onclick="OnCardClick" @onkeydown="OnCardKey">
     <div class="obj-head">
-        @* Red Tape variant: show whether the token is still on this objective. Read-only here — the
-           wall is a display, taken off on someone's device. *@
-        @if (Store.Session is { RedTapeLite: true })
-        {
-            <span class="rt-marker @(So.MarkerRemoved ? "off" : "on")">@(So.MarkerRemoved ? Loc["redtape.clear"] : Loc["redtape.sealed"])</span>
-        }
         <span class="obj-name">@Name</span>
         <span class="obj-vp">@Pts</span>
     </div>
@@ -22,7 +16,22 @@
         <div class="obj-req">@Loc.Pick(Def.Requirement, Def.RequirementDe)</div>
     }
     <div class="obj-markers @(Store.RedTapeBlocks(So) ? "taped" : "")">
-        @if (Store.RedTapeBlocks(So)) { <span class="rt-tape">@Loc["redtape.blocked"]</span> }
+        @* Red Tape: the tape IS the control — no separate "sealed" label to read and no second button to
+           find. On the wall it stays a plain span (a display can't be tapped); where it can be removed it
+           takes two taps, because pulling the tape is exactly the kind of thing a stray touch shouldn't do. *@
+        @if (Store.RedTapeBlocks(So))
+        {
+            @if (TapeClickable)
+            {
+                <button class="rt-tape @(armed ? "armed" : "")" @onclick="TapeTap" @onclick:stopPropagation="true">
+                    @(armed ? Loc["redtape.confirmRemove"] : Loc["redtape.blocked"])
+                </button>
+            }
+            else
+            {
+                <span class="rt-tape">@Loc["redtape.blocked"]</span>
+            }
+        }
         @foreach (var pid in So.ScoredByPlayerIds)
         {
             var pl = Store.Session?.Players.FirstOrDefault(x => x.Id == pid);
@@ -32,7 +41,7 @@
             if (pl is not null)
             {
                 <span class="objm @(fresh ? "fresh" : "")">
-                    <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.7rem,3.6vh,3.4rem)" Ring="@pl.ColorHex" />
+                    <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.4rem,3vh,3rem)" Ring="@pl.ColorHex" />
                 </span>
             }
         }
@@ -51,6 +60,22 @@
     [Parameter] public bool Clickable { get; set; }
 
     [Parameter] public EventCallback OnClick { get; set; }
+
+    /// <summary>Let the tape be pulled off here (two taps). Off on the wall, on in the status phase.</summary>
+    [Parameter] public bool TapeClickable { get; set; }
+
+    [Parameter] public EventCallback OnRemoveTape { get; set; }
+
+    private bool armed;
+
+    // First tap arms, second removes. Kept local: a confirm that lived in the session would show up on
+    // everyone's device, which is the opposite of what a confirmation is for.
+    private async Task TapeTap()
+    {
+        if (!armed) { armed = true; return; }
+        armed = false;
+        await OnRemoveTape.InvokeAsync();
+    }
 
     private Task OnCardClick() => Clickable ? OnClick.InvokeAsync() : Task.CompletedTask;
 
