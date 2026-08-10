@@ -194,7 +194,6 @@ public class Loc
         ["pause.resume"] = ("Resume", "Fortsetzen"),
         ["pause.title"] = ("Game paused", "Spiel pausiert"),
         ["pause.waiting"] = ("Waiting for the host to resume…", "Warte, bis der Host fortsetzt…"),
-        ["turn.endGameConfirm"] = ("End the match and show the statistics on the wall display?", "Match beenden und die Statistik auf dem Display anzeigen?"),
         ["turn.isUp"] = ("is up", "ist dran"),
         ["turn.notYourTurn"] = ("Not your turn", "Du bist nicht dran"),
         ["turn.notYour"] = ("It's not your turn — the host can take over.", "Du bist nicht dran — der Host kann übernehmen."),
@@ -537,6 +536,23 @@ public class Loc
         ["secondary.start"] = ("Start", "Starten"),
         ["secondary.allDone"] = ("Everyone done", "Alle fertig"),
         ["secondary.open"] = ("Open", "Öffnen"),
+        // Combat: the app only tracks that one is running (the wall shows the two sides, the clock stops).
+        ["combat.title"] = ("Combat", "Kampf"),
+        ["combat.hint"] = ("Pick your opponent — the wall shows both sides, and the turn clock stops until it is over.",
+                           "Gegner wählen — die Wand zeigt beide Seiten, und die Zuguhr steht, bis der Kampf vorbei ist."),
+        ["combat.running"] = ("Combat", "Kampf"),
+        ["combat.vs"] = ("VS", "VS"),
+        ["combat.clockStopped"] = ("the clock is stopped", "die Uhr steht"),
+        ["combat.end"] = ("Combat over", "Kampf beendet"),
+        // End of the match: the three ways out of the statistics dialog.
+        ["endgame.continue"] = ("Continue", "Weiterspielen"),
+        ["endgame.backToSetup"] = ("Back to setup", "Zurück zur Aufstellung"),
+        ["endgame.exit"] = ("Exit", "Beenden"),
+        ["endgame.note"] = (
+            "\"Back to setup\" and \"Exit\" archive the match: the summary is kept, everything else is cleared. Back to setup keeps the players for another game; Exit closes the session.",
+            "„Zurück zur Aufstellung“ und „Beenden“ archivieren die Partie: Die Zusammenfassung bleibt, alles andere wird gelöscht. Zurück zur Aufstellung behält die Spieler für eine weitere Partie, Beenden schließt die Session."),
+        ["log.combatStart"] = ("Combat: {0} against {1}", "Kampf: {0} gegen {1}"),
+        ["log.combatEnd"] = ("Combat over", "Kampf beendet"),
         ["secondary.running"] = ("Clock running", "Uhr läuft"),
         // "You're up" notification (per device).
         ["push.enable"] = ("Notify me when it's my turn", "Benachrichtige mich, wenn ich dran bin"),

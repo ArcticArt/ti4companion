@@ -80,6 +80,9 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/speaker", AppointSpeaker);
         g.MapPost("/{id:guid}/secondary", SetSecondaryPlayers);
         g.MapPost("/{id:guid}/secondary/close", CloseSecondary);
+        g.MapPost("/{id:guid}/combat", StartCombat);
+        g.MapPost("/{id:guid}/combat/end", EndCombat);
+        g.MapPost("/{id:guid}/archive", ArchiveSession);
         g.MapPost("/{id:guid}/players/{playerId:guid}/secondary-done", SetSecondaryDone);
         g.MapPost("/{id:guid}/players/{playerId:guid}/time-up", ReportTimeUp);
         g.MapPost("/{id:guid}/push", SubscribePush);
@@ -363,9 +366,11 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Status;
         session.ActivePlayerId = null;
         session.ActiveStrategyCardId = null;
-        // End of the phase bounds both: no clock keeps running into the status phase, and a Politics
-        // appointment nobody made can't block the game for the rest of the evening.
+        // End of the phase bounds all three: no clock keeps running into the status phase, a combat nobody
+        // ended can't keep it stopped, and a Politics appointment nobody made can't block the rest of the
+        // evening.
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+        CloseCombat(db, session, GetCaller(session, http)?.Id);
         session.SpeakerPending = false;
         // Fresh status phase: back to stage 1, scoring starts over at the lowest initiative, checklist blank.
         session.StatusStepsDone = StatusStep.None;
@@ -407,6 +412,7 @@ public static class SessionEndpoints
 
         LogAgendaResult(db, session);   // capture the last agenda's result before the round resets
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+        CloseCombat(db, session, GetCaller(session, http)?.Id);
         // Same as in StartAgendaPhase — whichever way the table leaves the status phase, the removal is due
         // once. Still in the OLD round here, which is what the per-round guard keys on.
         RedTapeRandom(db, session, http);
@@ -473,6 +479,8 @@ public static class SessionEndpoints
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
         if (session.SpeakerPending) return SpeakerFirst();
         var overrides = FactionInitiative.Overrides;
+        // A new turn begins: a combat from the last one is over whether or not anybody said so.
+        CloseCombat(db, session, GetCaller(session, http)?.Id);
         // The turn is over → this player's clock stops and the others' can start (see OpenSecondaries).
         OpenSecondaries(session);
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
@@ -751,6 +759,73 @@ public static class SessionEndpoints
         return Results.Ok(new { recorded });
     }
 
+    // Archive the match: keep the permanent summary, drop everything else. Two destinations, because "we are
+    // done with this game" means one of two things at a table:
+    //   Reset = true  → the session survives as a fresh setup with the same people (another game tonight),
+    //   Reset = false → the session is deleted outright (everyone goes home).
+    // Host only, and the summary is FORCED: the host declared this a finished match, so its length is not
+    // ours to second-guess — unlike the automatic recording, which filters out abandoned setups.
+    private static async Task<IResult> ArchiveSession(Guid id, ArchiveSessionRequest req, Ti4DbContext db, MasterDbContext master, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+
+        await SessionSummaryService.TryRecordAsync(db, session, ct, force: true);
+
+        if (!req.Reset)
+        {
+            // The summary has no FK to the session on purpose, so it outlives this delete.
+            db.Sessions.Remove(session);
+            await db.SaveChangesAsync(ct);
+            await hub.NotifySessionChanged(session.JoinCode);
+            return Results.Ok(new { archived = true, deleted = true });
+        }
+
+        // Back to setup: the TABLE stays (names, factions, colours, seats), the MATCH is gone. Ready flags are
+        // cleared so everyone confirms again, and the log goes with the match — otherwise the next game's
+        // statistics would start with the last one's timeline in them.
+        db.SessionLog.RemoveRange(db.SessionLog.Where(l => l.SessionId == session.Id));
+        session.Objectives.Clear();
+        session.StrategyCardStates.Clear();
+        session.AgendaVotes.Clear();
+        session.Phase = GamePhase.Setup;
+        session.CurrentRound = 1;
+        session.ActivePlayerId = null;
+        session.ActiveStrategyCardId = null;
+        session.CurrentAgendaId = null;
+        session.CustomVoteTitle = null;
+        session.CustomVoteElect = null;
+        session.VotingStarted = false;
+        session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
+        session.StatusStepsDone = StatusStep.None;
+        session.StatusStage = StatusStage.Scoring;
+        session.SpeakerPlayerId = null;
+        session.SpeakerPending = false;
+        session.SecondaryCardId = null;
+        session.SecondaryOwnerId = null;
+        session.CombatAId = null;
+        session.CombatBId = null;
+        session.RedTapeRandomRound = 0;
+        session.DisplayMode = DisplayMode.JoinQr;   // a fresh table starts on the join code again
+        foreach (var p in session.Players)
+        {
+            p.HasPassed = false;
+            p.IsReady = false;
+            p.StatusDone = false;
+            p.SecondaryPending = false;
+            p.Influence = 0;
+            p.StrategyCards.Clear();
+            p.Technologies.Clear();
+        }
+        // Starting technologies come back from the chosen faction, exactly as they did when it was picked —
+        // otherwise a reset table would sit there with a faction and no starting techs.
+        foreach (var p in session.Players)
+            await UpdateStartingTechnologiesAsync(master, session, p, null, p.FactionId, ct);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
     // Set the whole seat order at once (host). Players missing from the list keep their relative order
     // after the listed ones, so a stale client can't drop somebody off the table.
     private static async Task<IResult> SetSeatOrder(Guid id, SetSeatOrderRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
@@ -815,6 +890,50 @@ public static class SessionEndpoints
         session.SpeakerPending = false;   // the appointment is done — the turn may end
         Log(db, session, SessionLogKind.SpeakerSet, caller?.Id, target: req.PlayerId);
         return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // A combat between two players. Declared by whoever is up (or the host) and ended by either side or the
+    // host — a battle is resolved on the table, so the app only needs to know that one is running: the wall
+    // puts the two of them opposite each other, and the turn clock stops until it is over.
+    private static async Task<IResult> StartCombat(Guid id, StartCombatRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        var declaring = req.PlayerId ?? session.ActivePlayerId;
+        if (declaring is null) return Results.BadRequest(new { error = "Nobody is up." });
+        if (!CallerCanActFor(session, http, declaring.Value)) return Forbidden();
+        if (session.Players.All(p => p.Id != req.OpponentId)) return Results.NotFound();
+        if (req.OpponentId == declaring) return Results.BadRequest(new { error = "Pick another player." });
+
+        session.CombatAId = declaring;
+        session.CombatBId = req.OpponentId;
+        Log(db, session, SessionLogKind.CombatStart, declaring, target: req.OpponentId);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Combat over. Either participant or the host — whoever puts the dice down first.
+    private static async Task<IResult> EndCombat(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (session.CombatAId is null) return await SaveAndReturn(db, hub, session, ct);   // already over
+        var caller = GetCaller(session, http);
+        var involved = caller is not null && (caller.Id == session.CombatAId || caller.Id == session.CombatBId);
+        if (!involved && !CallerIsHost(session, http)) return Forbidden();
+        CloseCombat(db, session, caller?.Id);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>Stop a running combat. Also called wherever the turn or phase moves on, so a forgotten
+    /// "combat over" can never keep the clock stopped for the rest of the evening.</summary>
+    private static void CloseCombat(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        if (session.CombatAId is null && session.CombatBId is null) return;
+        var b = session.CombatBId;
+        session.CombatAId = null;
+        session.CombatBId = null;
+        Log(db, session, SessionLogKind.CombatEnd, actor, target: b);
     }
 
     // Who takes the secondary of the strategy action on the table. Announced by the player who played the

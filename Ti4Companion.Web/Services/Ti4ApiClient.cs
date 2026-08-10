@@ -115,6 +115,19 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/players/{playerId}/secondary-done", new { });
     public Task<SessionStateDto?> CloseSecondaryAsync(Guid id)
         => PostFor($"api/sessions/{id}/secondary/close", new { });
+    public Task<SessionStateDto?> StartCombatAsync(Guid id, Guid opponentId)
+        => PostFor($"api/sessions/{id}/combat", new StartCombatRequest(opponentId));
+    public Task<SessionStateDto?> EndCombatAsync(Guid id)
+        => PostFor($"api/sessions/{id}/combat/end", new { });
+
+    /// <summary>Archive the match: the summary is kept, the rest is dropped. <paramref name="reset"/> keeps the
+    /// session as a fresh setup with the same table; otherwise it is deleted. Never throws — the caller is
+    /// leaving the game either way.</summary>
+    public async Task ArchiveSessionAsync(Guid id, bool reset)
+    {
+        try { await http.PostAsJsonAsync($"api/sessions/{id}/archive", new ArchiveSessionRequest(reset)); }
+        catch { }
+    }
     public Task<SessionStateDto?> SetStatusStageAsync(Guid id, StatusStage stage)
         => PostFor($"api/sessions/{id}/status-stage", new SetStatusStageRequest(stage));
     public Task<SessionStateDto?> SetObjectiveMarkerAsync(Guid id, Guid sessionObjectiveId, bool removed)

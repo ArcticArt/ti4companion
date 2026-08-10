@@ -47,17 +47,39 @@ public class MatchStats
         }
         if (pauseStart is { } open) pauses.Add((open, now));
 
-        // Active (non-paused) duration of [from, to].
-        TimeSpan Active(DateTimeOffset from, DateTimeOffset to)
+        // Combat intervals (CombatStart → CombatEnd, or → now while one is running). Subtracted from
+        // TIME-ON-TURN only, not from the round/phase/match durations: resolving a battle with someone else
+        // is not the active player's thinking time, but it is still time the table spent playing. That is
+        // also exactly what "the clock pauses during combat" means for the turn timer.
+        var combats = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        DateTimeOffset? combatStart = null;
+        foreach (var e in ordered)
+        {
+            if (e.Kind == SessionLogKind.CombatStart) combatStart ??= e.TimestampUtc;
+            else if (e.Kind == SessionLogKind.CombatEnd && combatStart is { } cs) { combats.Add((cs, e.TimestampUtc)); combatStart = null; }
+        }
+        if (combatStart is { } openCombat) combats.Add((openCombat, now));
+
+        // Pauses, and pauses+combats, each MERGED into non-overlapping intervals — a pause declared during a
+        // combat overlaps, and subtracting both would take that time off twice.
+        var pauseOnly = Merge(pauses);
+        var pauseAndCombat = Merge(pauses.Concat(combats));
+
+        // Active duration of [from, to] with the excluded intervals taken out.
+        static TimeSpan Span(DateTimeOffset from, DateTimeOffset to, List<(DateTimeOffset From, DateTimeOffset To)> exclude)
         {
             var d = to - from;
-            foreach (var (pf, pt) in pauses)
+            foreach (var (xf, xt) in exclude)
             {
-                var ov = (pt < to ? pt : to) - (pf > from ? pf : from);
+                var ov = (xt < to ? xt : to) - (xf > from ? xf : from);
                 if (ov > TimeSpan.Zero) d -= ov;
             }
             return d < TimeSpan.Zero ? TimeSpan.Zero : d;
         }
+
+        TimeSpan Active(DateTimeOffset from, DateTimeOffset to) => Span(from, to, pauseOnly);
+        /// <summary>Time on turn: pauses AND combats removed (see the comment on `combats`).</summary>
+        TimeSpan OnTurn(DateTimeOffset from, DateTimeOffset to) => Span(from, to, pauseAndCombat);
 
         // Time per phase type: each phase segment runs until the next phase change (or now), minus pauses.
         var phaseTotals = new Dictionary<GamePhase, TimeSpan>();
@@ -84,11 +106,12 @@ public class MatchStats
         var currentRound = roundChanges.Count > 0 ? roundChanges[^1].Round!.Value : 1;
 
         // Same interval, but only the part that falls inside the current round.
-        TimeSpan ActiveThisRound(DateTimeOffset from, DateTimeOffset to)
-            => to <= currentRoundStart ? TimeSpan.Zero : Active(from > currentRoundStart ? from : currentRoundStart, to);
+        TimeSpan OnTurnThisRound(DateTimeOffset from, DateTimeOffset to)
+            => to <= currentRoundStart ? TimeSpan.Zero : OnTurn(from > currentRoundStart ? from : currentRoundStart, to);
 
         // Per-player time: action-phase intervals → the active player; strategy-phase intervals leading up
-        // to each pick → that picker (so the strategy phase is counted per player too). Pauses excluded.
+        // to each pick → that picker (so the strategy phase is counted per player too). Pauses AND combats
+        // excluded — see `combats`.
         var perPlayer = new Dictionary<Guid, TimeSpan>();
         var perPlayerRound = new Dictionary<Guid, TimeSpan>();
         GamePhase? phase = null;
@@ -102,8 +125,8 @@ public class MatchStats
 
         void Credit(Guid pid, DateTimeOffset from, DateTimeOffset to)
         {
-            perPlayer[pid] = Get(perPlayer, pid) + Active(from, to);
-            perPlayerRound[pid] = Get(perPlayerRound, pid) + ActiveThisRound(from, to);
+            perPlayer[pid] = Get(perPlayer, pid) + OnTurn(from, to);
+            perPlayerRound[pid] = Get(perPlayerRound, pid) + OnTurnThisRound(from, to);
         }
 
         var lastTs = start;
@@ -117,8 +140,7 @@ public class MatchStats
             }
             if (phase == GamePhase.Strategy && e.Kind == SessionLogKind.StrategyPick && e.TargetPlayerId is Guid pk)
             {
-                perPlayer[pk] = Get(perPlayer, pk) + Active(lastTs, e.TimestampUtc);
-                perPlayerRound[pk] = Get(perPlayerRound, pk) + ActiveThisRound(lastTs, e.TimestampUtc);
+                Credit(pk, lastTs, e.TimestampUtc);
             }
             switch (e.Kind)
             {
@@ -171,6 +193,21 @@ public class MatchStats
 
     private static TimeSpan Get<TKey>(Dictionary<TKey, TimeSpan> d, TKey k) where TKey : notnull
         => d.TryGetValue(k, out var v) ? v : TimeSpan.Zero;
+
+    /// <summary>Merge intervals so overlapping ones (a pause declared during a combat) are subtracted once.</summary>
+    private static List<(DateTimeOffset From, DateTimeOffset To)> Merge(IEnumerable<(DateTimeOffset From, DateTimeOffset To)> spans)
+    {
+        var merged = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        foreach (var s in spans.Where(s => s.To > s.From).OrderBy(s => s.From))
+        {
+            if (merged.Count > 0 && s.From <= merged[^1].To)
+            {
+                if (s.To > merged[^1].To) merged[^1] = (merged[^1].From, s.To);
+            }
+            else merged.Add(s);
+        }
+        return merged;
+    }
 
     /// <summary>Compact duration formatting, e.g. "1h 04m", "12m 30s", "45s".</summary>
     public static string Format(TimeSpan t)

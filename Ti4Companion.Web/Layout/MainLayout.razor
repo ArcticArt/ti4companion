@@ -77,7 +77,7 @@
 
 @if (showStats && Store.Session is not null)
 {
-    <MatchStatsModal OnClose="CloseStats" />
+    <MatchStatsModal OnClose="CloseStats" EndGame="endGame" OnArchived="Archived" />
 }
 
 @* Join QR for the people at the table — hold the phone up instead of dictating the code. *@
@@ -129,7 +129,24 @@
 @code {
     private bool showStats;
     private bool showQr;
-    private void CloseStats() { showStats = false; StateHasChanged(); }
+    private bool endGame;
+    private void CloseStats() { showStats = false; endGame = false; StateHasChanged(); }
+
+    // The match was archived: with the session deleted there is nothing left to look at, so leave. After a
+    // reset the same session is sitting in setup again — stay on it.
+    private async Task Archived(bool deleted)
+    {
+        showStats = false;
+        endGame = false;
+        if (deleted)
+        {
+            await Store.LeaveAsync();
+            Nav.NavigateTo("/");
+            return;
+        }
+        await Store.RefreshAsync();
+        StateHasChanged();
+    }
 
     // Same URL the "copy invite link" button produces, so the QR works on a LAN address too.
     private string InviteLink(string joinCode) => $"{Nav.BaseUri}join/{joinCode}";
@@ -178,17 +195,17 @@
     private Task Pause() => Store.Session is null ? Task.CompletedTask : Store.Mutate(Store.Api.PauseGameAsync(Store.Session.Id));
     private Task Resume() => Store.Session is null ? Task.CompletedTask : Store.Mutate(Store.Api.ResumeGameAsync(Store.Session.Id));
 
-    // End the match: bring the statistics onto the wall display and open the host stats overlay.
-    // Non-destructive — the game can still continue; the wall switches back via the display control.
+    // End the match: bring the statistics onto the wall display and open the end-of-match dialog (the stats
+    // with the three ways out). No confirm() first — the dialog IS the question, and its own buttons say what
+    // each one does, which a yes/no box never could.
     private async Task EndGame()
     {
         if (Store.Session is null) return;
-        var ok = await JS.InvokeAsync<bool>("confirm", Loc["turn.endGameConfirm"]);
-        if (!ok) return;
         // Keep a permanent record of the match before anything else — the session itself is wiped once
         // its retention window passes, and this is the moment the host declares the game finished.
         try { await Store.Api.RecordSummaryAsync(Store.Session.Id); } catch { }
         await Store.Mutate(Store.Api.SetDisplayModeAsync(Store.Session.Id, DisplayMode.Statistics));
+        endGame = true;
         showStats = true;
         StateHasChanged();
     }

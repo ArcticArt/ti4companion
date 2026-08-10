@@ -23,10 +23,15 @@ public static class SessionSummaryService
     /// Create or update the summary for <paramref name="session"/>. Returns false when the session doesn't
     /// clear <see cref="IsWorthRecording"/>. Does NOT save — the caller commits, so this can join an
     /// existing transaction (e.g. the wipe that follows it).
+    /// <para>
+    /// <paramref name="force"/> skips that filter: it is for the host explicitly ARCHIVING a match, where
+    /// the record is the whole point of the request and the length is not ours to judge. The filter still
+    /// applies to everything that records automatically.
+    /// </para>
     /// </summary>
-    public static async Task<bool> TryRecordAsync(Ti4DbContext db, GameSession session, CancellationToken ct)
+    public static async Task<bool> TryRecordAsync(Ti4DbContext db, GameSession session, CancellationToken ct, bool force = false)
     {
-        if (!IsWorthRecording(session)) return false;
+        if (!force && !IsWorthRecording(session)) return false;
 
         // The log lives in its own DbSet (not in the session graph).
         var log = await db.SessionLog.AsNoTracking()

@@ -349,5 +349,11 @@ public enum SessionLogKind
 
     /// <summary>Red Tape Lite: an objective was purged once five Stage I were clear (Detail = the
     /// objective). It can never be scored afterwards.</summary>
-    RedTapePurge = 28
+    RedTapePurge = 28,
+
+    /// <summary>A combat was declared (Actor = who declared it, Target = the opponent) and resolved. The
+    /// interval between the two is excluded from time-on-turn, the same way a pause is — see
+    /// <c>MatchStats</c>. Keep the numeric values stable, the statistics read them.</summary>
+    CombatStart = 29,
+    CombatEnd = 30
 }

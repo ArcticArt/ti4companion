@@ -1,8 +1,11 @@
 @inherits Ti4ComponentBase
 
 @* Host-only match statistics + log overlay (opened from the app bar). Statistics are computed
-   client-side from the structured match log (see MatchStats). *@
-<div class="modal-backdrop" @onclick="Close">
+   client-side from the structured match log (see MatchStats).
+
+   With `EndGame` set it is the end-of-match dialog: same content, plus the three ways out at the bottom.
+   Centred with the page blurred behind, like every other dialog. *@
+<div class="modal-backdrop centered blurred" @onclick="Close">
     <div class="modal stats-modal" @onclick:stopPropagation="true">
         <div class="modal-head">
             <h3 style="margin:0;color:var(--gold);">@Loc["stats.title"]</h3>
@@ -82,11 +85,40 @@
                 }
             }
         </div>
+
+        @* End of the match: keep playing, start over with the same table, or leave. Both of the latter
+           ARCHIVE first — the summary is written, then the match itself is gone. *@
+        @if (EndGame)
+        {
+            <div class="endgame-actions">
+                <button class="btn btn-gold btn-lg" @onclick="Close">@Loc["endgame.continue"]</button>
+                <button class="btn btn-lg" disabled="@busy" @onclick="() => Archive(true)">@Loc["endgame.backToSetup"]</button>
+                <button class="btn btn-danger btn-lg" disabled="@busy" @onclick="() => Archive(false)">@Loc["endgame.exit"]</button>
+            </div>
+            <p class="faint endgame-note">@Loc["endgame.note"]</p>
+        }
     </div>
 </div>
 
 @code {
     [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Show the three end-of-match actions (opened from the app bar's "End game").</summary>
+    [Parameter] public bool EndGame { get; set; }
+
+    /// <summary>Raised after the match was archived, with <c>true</c> when the session was deleted — the shell
+    /// navigates away in that case.</summary>
+    [Parameter] public EventCallback<bool> OnArchived { get; set; }
+
+    private bool busy;
+
+    private async Task Archive(bool reset)
+    {
+        if (busy || Store.Session is null) return;
+        busy = true;
+        await Store.Api.ArchiveSessionAsync(Store.Session.Id, reset);
+        await OnArchived.InvokeAsync(!reset);
+    }
 
     private int tab;
     private bool loading = true;
@@ -153,6 +185,8 @@
         SessionLogKind.GamePaused => Loc["log.gamePaused"],
         SessionLogKind.GameResumed => Loc["log.gameResumed"],
         // The app pulled a tape or purged an objective on its own — the two entries that say what it did.
+        SessionLogKind.CombatStart => string.Format(Loc["log.combatStart"], Target(e.ActorPlayerId), Target(e.TargetPlayerId)),
+        SessionLogKind.CombatEnd => Loc["log.combatEnd"],
         SessionLogKind.RedTapeRandom => string.Format(Loc["log.redTapeRandom"], ObjName(e.Detail)),
         SessionLogKind.RedTapePurge => string.Format(Loc["log.redTapePurge"], ObjName(e.Detail)),
         _ => Loc["log.generic"],

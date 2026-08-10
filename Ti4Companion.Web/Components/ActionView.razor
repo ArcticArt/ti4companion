@@ -85,6 +85,41 @@ else if (s.SpeakerPending)
         <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowTechTab()">@Loc["tech.promptOpen"] ▸</button>
     </div>
 }
+@* Combat. The battle itself happens on the table — the app only needs to know one is running: the wall puts
+   the two of them opposite each other with their technologies, and the turn clock stops (a battle with
+   somebody else is not the active player's thinking time). Anyone involved, or the host, can end it. *@
+@if (s.CombatAId is Guid ca)
+{
+    var foeA = Store.PlayerById(ca);
+    var foeB = Store.PlayerById(s.CombatBId);
+    var mayEnd = host || Store.MyPlayerId == ca || Store.MyPlayerId == s.CombatBId;
+    <div class="panel combat-band" style="margin-top:.6rem;">
+        <span class="tp-text">
+            <strong>@Loc["combat.running"]</strong> —
+            @(foeA?.Name ?? "?") <span class="combat-vs-inline">@Loc["combat.vs"]</span> @(foeB?.Name ?? "?")
+            @if (Store.TurnTimerEnabled) { <span class="faint"> · @Loc["combat.clockStopped"]</span> }
+        </span>
+        <div class="spacer" style="flex:1"></div>
+        @if (mayEnd)
+        {
+            <button class="btn btn-gold btn-sm" @onclick="EndCombat">@Loc["combat.end"] ▸</button>
+        }
+    </div>
+}
+else if (canControl && active is not null)
+{
+    <div class="panel" style="margin-top:.6rem;">
+        <div class="row-wrap" style="gap:.5rem;align-items:baseline;">
+            <h3 style="margin:0;">@Loc["combat.title"]</h3>
+            <span class="faint" style="font-size:.78rem;">@Loc["combat.hint"]</span>
+        </div>
+        <div style="margin-top:.45rem;">
+            <PlayerPicker Players="s.Players.Where(p => p.Id != active.Id).OrderBy(p => p.SeatOrder)"
+                          OnPick="StartCombat" />
+        </div>
+    </div>
+}
+
 @* Red Tape variant: the carrier card's own step, which the variant puts BEFORE everything else on the card.
    An offer like the others — the app tapes the objectives and refuses to score a taped one, but which tape
    comes off is the table's decision (and the rest of the variant's rules stay with them). *@
@@ -250,4 +285,7 @@ else
         => s.Players.Where(p => p.Id != s.SpeakerPlayerId).OrderBy(p => p.SeatOrder);
 
     private Task AppointSpeaker(Guid playerId) => Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
+
+    private Task StartCombat(Guid opponentId) => Store.Mutate(Store.Api.StartCombatAsync(Sid, opponentId));
+    private Task EndCombat() => Store.Mutate(Store.Api.EndCombatAsync(Sid));
 }

@@ -156,6 +156,6 @@ public static class Mapping
             // Only meaningful in the status phase; null elsewhere so the client can't mistake it for a turn.
             s.Phase == GamePhase.Status ? TurnService.CurrentScorer(s, factionOverrides) : null,
             s.ShowJoinQr, s.StatusStage, s.SecondaryCardId, s.SecondaryOwnerId, s.SpeakerPending,
-            s.RedTapeRandomRound, s.CustomVoteTitle, s.CustomVoteElect);
+            s.RedTapeRandomRound, s.CombatAId, s.CombatBId, s.CustomVoteTitle, s.CustomVoteElect);
     }
 }

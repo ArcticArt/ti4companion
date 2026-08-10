@@ -1020,7 +1020,11 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
    Modal overlay (match statistics / log)
    =================================================================== */
 .modal-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(4, 8, 18, .66); display: flex; align-items: flex-start; justify-content: center; padding: 4vh 1rem; overflow: auto; }
-.modal { width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--shadow); padding: 1rem; }
+/* `height: auto` is NOT redundant — the same bootstrap.min.css `.modal` collision as the positioning below:
+   bootstrap sets `height: 100%`, app.css overrode width/display but never height, so with `max-height: 90vh`
+   every dialog was exactly 90vh tall no matter how little was in it (a three-row seat dialog measured 648px
+   in an 800px window). Content height, capped at 90vh. */
+.modal { width: 100%; height: auto; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--shadow); padding: 1rem; }
 .modal-head { display: flex; align-items: center; gap: .5rem; }
 .modal-body { overflow: auto; min-height: 0; }
 /* Centred dialog with the rest of the page blurred behind it.
@@ -1056,6 +1060,10 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 .seat-speaker { flex: 0 0 auto; min-width: 2.2rem; display: inline-flex; align-items: center; justify-content: center;
     padding: .1rem .3rem; line-height: 1; }
 .seat-speaker .ss-dash { color: var(--text-faint); }
+/* End of the match: three equal, unmissable choices under the statistics. */
+.endgame-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .8rem; }
+.endgame-actions .btn { flex: 1 1 8rem; justify-content: center; text-align: center; }
+.endgame-note { font-size: .72rem; margin: .5rem 0 0; }
 .stats-modal .stat-block { margin: .6rem 0; }
 .stats-modal .stat-block h4 { margin: .2rem 0 .4rem; color: var(--text-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
 .stats-modal .stat-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem .25rem; border-bottom: 1px solid var(--panel-border); border-left: 3px solid var(--player-color, transparent); padding-left: .5rem; }
@@ -1109,6 +1117,32 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Push hint next to the bell: a chip, tappable to dismiss. Wraps rather than stretching the app bar. */
 .push-note { max-width: 22rem; white-space: normal; line-height: 1.25; cursor: pointer;
     background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
+
+/* ---- Combat ---------------------------------------------------------------------------------------- */
+/* Control view: one band while a battle is running. */
+.combat-band { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.combat-vs-inline { font-family: 'Orbitron', sans-serif; color: var(--danger); font-weight: 900; margin: 0 .3em; }
+/* Wall: the whole screen, two even halves and VS between them. */
+.beamer .combat-stage { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; gap: 1.5vh; padding: 1vh 1.5vw 2vh; }
+.beamer .combat-title { font-family: 'Orbitron', sans-serif; font-weight: 900; text-align: center;
+    font-size: clamp(1.8rem, 5vw, 5.5rem); letter-spacing: .12em; color: var(--danger);
+    text-shadow: 0 0 18px rgba(214, 83, 74, .55); }
+.beamer .combat-cols { flex: 1 1 auto; display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5vw;
+    align-items: stretch; min-height: 0; }
+.beamer .combat-side { display: flex; flex-direction: column; align-items: center; gap: 1vh; min-height: 0;
+    padding: 1vh 1vw; border-radius: 14px; background: var(--panel);
+    border: 1px solid var(--panel-border); border-top: 5px solid var(--player-color, #888); }
+.beamer .combat-side .cs-head { flex: 0 0 auto; max-height: 46%; display: flex; justify-content: center; }
+.beamer .combat-side .fac-portrait { max-height: min(38vh, 100%); }
+.beamer .cs-fac { color: var(--text-dim); font-size: clamp(.8rem, 1.2vw, 1.5rem); text-align: center; }
+.beamer .cs-techs { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-wrap: wrap;
+    align-content: flex-start; justify-content: center; gap: .5vh .6vw; }
+.beamer .cs-tech { display: inline-flex; align-items: center; gap: .35em; padding: .2em .6em; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--panel-border); border-left: 4px solid var(--tc, #888);
+    font-size: clamp(.7rem, 1.05vw, 1.25rem); }
+.beamer .cs-tech-name { white-space: nowrap; }
+.beamer .combat-vs { display: flex; align-items: center; font-family: 'Orbitron', sans-serif; font-weight: 900;
+    font-size: clamp(1.5rem, 4vw, 4.5rem); color: var(--danger); text-shadow: 0 0 16px rgba(214, 83, 74, .5); }
 
 /* Secondary round + Politics appointment, as popups (see SecondaryModal / ActionView). Both use the
    `.modal-backdrop.centered` box, so the bootstrap `.modal` positioning trap is already handled there. */

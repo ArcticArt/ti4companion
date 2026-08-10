@@ -250,6 +250,10 @@ public record SessionStateDto(
     /// <summary>Red Tape Lite: the round its random removal already happened in (0 = never). The client uses
     /// it to announce that one is still coming this round.</summary>
     int RedTapeRandomRound = 0,
+    /// <summary>A combat is running between these two players (null = none). The wall shows them facing each
+    /// other and the turn clock stops.</summary>
+    Guid? CombatAId = null,
+    Guid? CombatBId = null,
     /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
     string? CustomVoteTitle = null,
     /// <summary>What the free vote elects (null unless one is running).</summary>
@@ -276,6 +280,13 @@ public record CreateSessionRequest(
 /// non-host seat instead of creating a new player; otherwise a new player is added (capped at 8).</summary>
 public record JoinSessionRequest(string Name, string? FactionId, string? ColorHex, string? DeviceToken,
     Guid? ClaimPlayerId = null);
+
+/// <summary>Declare a combat. <paramref name="PlayerId"/> defaults to whoever is up.</summary>
+public record StartCombatRequest(Guid OpponentId, Guid? PlayerId = null);
+
+/// <summary>Archive a finished match: keep the summary, drop the rest. <paramref name="Reset"/> keeps the
+/// session as a fresh setup with the same table; otherwise it is deleted.</summary>
+public record ArchiveSessionRequest(bool Reset);
 
 public record UpdateSessionRequest(
     string? Name, Language? Language, Expansion? ActiveExpansions,

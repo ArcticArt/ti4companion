@@ -31,7 +31,46 @@ else
             </div>
         </div>
 
-        @if (isAgenda && s.DisplayMode != DisplayMode.Statistics)
+        @if (Store.PlayerById(s.CombatAId) is { } cbA && Store.PlayerById(s.CombatBId) is { } cbB
+             && s.DisplayMode != DisplayMode.Statistics)
+        {
+            @* Combat takes the whole wall: two halves, each with the player's portrait, name and every
+               technology they hold, and VS between them. No player table, no objectives — while dice are on
+               the table this is the only thing anybody looks at. Derived from the session (not a DisplayMode),
+               so it appears and disappears with the combat itself. *@
+            <div class="combat-stage">
+                <div class="combat-title">@Loc["combat.title"]</div>
+                <div class="combat-cols">
+                    @foreach (var side in new[] { cbA, cbB })
+                    {
+                        @if (side == cbB)
+                        {
+                            <div class="combat-vs">@Loc["combat.vs"]</div>
+                        }
+                        var fac = Store.Faction(side.FactionId);
+                        var techs = side.TechnologyIds.Select(id => Store.Tech(id)).Where(t => t is not null).Select(t => t!)
+                            .OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ThenBy(t => Loc.Pick(t.Name, t.NameDe)).ToList();
+                        <div class="combat-side" style="--player-color:@side.ColorHex">
+                            <div class="cs-head">
+                                <FactionPortrait Player="side" Faction="fac" Speaker="false" />
+                            </div>
+                            <div class="cs-fac">@(fac is null ? "" : Loc.Pick(fac.Name, fac.NameDe))</div>
+                            <div class="cs-techs">
+                                @if (techs.Count == 0) { <span class="muted">—</span> }
+                                @foreach (var t in techs)
+                                {
+                                    <span class="cs-tech" style="--tc:@TechColorHex(t.Color)">
+                                        <TechIcon Color="t.Color" Size="16" />
+                                        <span class="cs-tech-name">@Loc.Pick(t.Name, t.NameDe)</span>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (isAgenda && s.DisplayMode != DisplayMode.Statistics)
         {
             @* Agenda phase: the agenda + a portrait per player with their votes above and influence below. *@
             var elect = Store.AgendaElectKind;
@@ -550,6 +589,17 @@ else
     }
 
     private static string[] Lines(string text) => (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>Accent colour per tech colour, for the combat view's technology chips.</summary>
+    private static string TechColorHex(TechColor c) => c switch
+    {
+        TechColor.Biotic => "#46c08a",
+        TechColor.Propulsion => "#4a78d6",
+        TechColor.Cybernetic => "#e0c341",
+        TechColor.Warfare => "#d6534a",
+        TechColor.Unit => "#c9d1e0",
+        _ => "#9aa7c0",
+    };
 
     private static string PhaseColor(GamePhase ph) => ph switch
     {

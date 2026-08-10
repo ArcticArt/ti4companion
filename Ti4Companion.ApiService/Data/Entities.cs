@@ -107,6 +107,12 @@ public class GameSession
     /// forgetting it silently changes who picks first next round.</summary>
     public bool SpeakerPending { get; set; }
 
+    /// <summary>A combat is being resolved: the player who declared it and their opponent (both null when
+    /// no combat is running). The wall shows the two of them facing each other, and the turn clock stops —
+    /// rolling dice against someone else is not "time on turn". See <c>MatchStats</c>.</summary>
+    public Guid? CombatAId { get; set; }
+    public Guid? CombatBId { get; set; }
+
     /// <summary>Offer to record a technology right after the Technology strategy action was played.
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
