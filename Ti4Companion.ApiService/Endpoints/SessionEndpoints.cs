@@ -1000,11 +1000,26 @@ public static class SessionEndpoints
             if (p is not null) p.Influence = Math.Max(0, p.Influence - v.Votes);
         }
         LogAgendaResult(db, session);   // summarise the concluding agenda before its votes are cleared
-        session.CurrentAgendaId = ClampId(req.AgendaId);
+        // A free vote and an agenda are mutually exclusive: whichever is being started clears the other, so
+        // there is never a screen showing both a card and a typed headline.
+        // Clamp does not take null (it trims) — and "no custom title" is the normal case for a real agenda.
+        var custom = string.IsNullOrWhiteSpace(req.CustomTitle) ? null : Clamp(req.CustomTitle!, 100);
+        if (!string.IsNullOrWhiteSpace(custom))
+        {
+            session.CustomVoteTitle = custom;
+            session.CustomVoteElect = req.CustomElect is { } e && Enum.IsDefined(e) ? e : ElectType.ForAgainst;
+            session.CurrentAgendaId = null;
+        }
+        else
+        {
+            session.CustomVoteTitle = null;
+            session.CustomVoteElect = null;
+            session.CurrentAgendaId = ClampId(req.AgendaId);
+        }
         session.AgendaVotes.Clear();
         session.VotingStarted = false;     // back to influence entry until the host starts the vote
         session.AgendaVotesHidden = false;
-        Log(db, session, http, SessionLogKind.AgendaReveal, detail: session.CurrentAgendaId ?? "");
+        Log(db, session, http, SessionLogKind.AgendaReveal, detail: session.CurrentAgendaId ?? session.CustomVoteTitle ?? "");
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1014,7 +1029,8 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
-        if (session.CurrentAgendaId is null) return Results.BadRequest(new { error = "Reveal an agenda first." });
+        if (session.CurrentAgendaId is null && string.IsNullOrEmpty(session.CustomVoteTitle))
+            return Results.BadRequest(new { error = "Reveal an agenda or start a free vote first." });
         session.VotingStarted = true;
         session.AgendaVotesHidden = req.Hidden;
         session.AgendaTotalsRevealed = false;
@@ -1162,7 +1178,9 @@ public static class SessionEndpoints
     // and the leading elect candidate so the client can render either kind; see SessionLogKind.AgendaResult.
     private static void LogAgendaResult(Ti4DbContext db, GameSession session)
     {
-        if (session.CurrentAgendaId is null) return;
+        // A free vote has no agenda id; summarise it under its title so the log still shows the outcome.
+        var subject = session.CurrentAgendaId ?? session.CustomVoteTitle;
+        if (subject is null) return;
         var locked = session.AgendaVotes.Where(v => v.Locked).ToList();
         if (locked.Count == 0) return;
         var forVotes = locked.Where(v => v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
@@ -1173,7 +1191,7 @@ public static class SessionEndpoints
         var topKey = (tally.Count > 0 ? tally[0].Key : "").Replace("|", "/");
         var topVotes = tally.Count > 0 ? tally[0].Votes : 0;
         var runnerUp = tally.Count > 1 ? tally[1].Votes : 0;
-        var detail = $"{session.CurrentAgendaId}|{forVotes}|{againstVotes}|{topKey}|{topVotes}|{runnerUp}";
+        var detail = $"{subject.Replace("|", "/")}|{forVotes}|{againstVotes}|{topKey}|{topVotes}|{runnerUp}";
         Log(db, session, SessionLogKind.AgendaResult, null, detail: detail);
     }
 

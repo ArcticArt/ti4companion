@@ -358,10 +358,27 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         get
         {
             var s = Session;
-            if (s is null || s.CurrentAgendaId is null) return AgendaStage.Influence;
+            // A free vote (no agenda card) counts as "something is on the table" just like an agenda.
+            if (s is null || (s.CurrentAgendaId is null && string.IsNullOrEmpty(s.CustomVoteTitle)))
+                return AgendaStage.Influence;
             if (!s.VotingStarted) return AgendaStage.AgendaRevealed;
             if (!s.AgendaVotesHidden) return AgendaStage.VotingOpen;
             return s.AgendaTotalsRevealed ? AgendaStage.VotingHiddenTotals : AgendaStage.VotingHidden;
+        }
+    }
+
+    /// <summary>True while a free vote (no agenda card) is on the table.</summary>
+    public bool CustomVoteActive => !string.IsNullOrEmpty(Session?.CustomVoteTitle);
+
+    /// <summary>What the thing on the table elects — from the agenda, or from the free vote. One place, so
+    /// the control view and the wall can never disagree about which pickers to show.</summary>
+    public ElectType AgendaElectKind
+    {
+        get
+        {
+            if (Session is not { } s) return ElectType.ForAgainst;
+            if (!string.IsNullOrEmpty(s.CustomVoteTitle)) return s.CustomVoteElect ?? ElectType.ForAgainst;
+            return Agenda(s.CurrentAgendaId) is { } a ? AgendaDisplay.ElectKind(a) : ElectType.ForAgainst;
         }
     }
 

@@ -129,6 +129,9 @@ public class Ti4ApiClient(HttpClient http)
         => http.DeleteAsync($"api/sessions/{id}/players/{playerId}/technologies/{Uri.EscapeDataString(techId)}");
 
     // ---- Agenda phase ----
+    /// <summary>Start a free vote: no agenda card, just a headline and what it elects.</summary>
+    public Task<SessionStateDto?> StartFreeVoteAsync(Guid id, string title, ElectType elect)
+        => PostFor($"api/sessions/{id}/agenda", new SetAgendaRequest(null, title, elect));
     public Task<SessionStateDto?> SetAgendaAsync(Guid id, string? agendaId)
         => PostFor($"api/sessions/{id}/agenda", new SetAgendaRequest(agendaId));
     public Task<SessionStateDto?> StartVotingAsync(Guid id, bool hidden)

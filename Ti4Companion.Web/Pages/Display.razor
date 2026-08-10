@@ -34,9 +34,17 @@ else
         @if (isAgenda && s.DisplayMode != DisplayMode.Statistics)
         {
             @* Agenda phase: the agenda + a portrait per player with their votes above and influence below. *@
-            var elect = agenda is null ? ElectType.ForAgainst : AgendaDisplay.ElectKind(agenda);
+            var elect = Store.AgendaElectKind;
             <div class="agenda-stage">
-                @if (agenda is null)
+                @if (agenda is null && Store.CustomVoteActive)
+                {
+                    @* A free vote has no card, so the headline the host typed stands in its place. Everything
+                       below — tally, result, portraits — keys off the elect kind and needs no special case. *@
+                    <div><span class="agenda-kind chip">@Loc["agenda.freeVote"]</span></div>
+                    <div class="agenda-headline">@s.CustomVoteTitle</div>
+                    <div class="agenda-elect">@Loc[$"elect.{elect}"]</div>
+                }
+                else if (agenda is null)
                 {
                     <div class="agenda-headline">@Loc["agenda.title"]</div>
                     <div class="agenda-kind">@Loc["agenda.waitingForHost"]</div>
@@ -48,9 +56,15 @@ else
                     </div>
                     <div class="agenda-headline">@Loc.Pick(agenda.Name, agenda.NameDe)</div>
                     <div class="agenda-body">@Loc.Pick(agenda.Text, agenda.TextDe)</div>
+                    <div class="agenda-elect"><b>@Loc["agenda.elect"]:</b> @agenda.Elect</div>
+                }
 
-                    @* Three states for a face-down vote: nothing, then the TOTALS only (server-computed —
-                       the per-player rows stay redacted), then everything. *@
+                @* The tally sits OUTSIDE the branches above, because it depends only on the elect kind and
+                   the votes — an agenda card and a free vote count identically. Three states for a face-down
+                   vote: nothing, then the TOTALS only (server-computed, per-player rows stay redacted), then
+                   everything. *@
+                @if (agenda is not null || Store.CustomVoteActive)
+                {
                     @if (s.AgendaVotesHidden && s.AgendaTotals is null)
                     {
                         <div class="agenda-elect">@Loc["agenda.hidden"]</div>
@@ -69,19 +83,18 @@ else
                     }
                     else
                     {
-                        @* Elect agendas: tally per chosen candidate, leader highlighted. *@
+                        @* Elect: tally per chosen candidate, leader highlighted. *@
                         var tally = s.AgendaTotals is { } tot
                             ? tot.Choices.Select(c => (Choice: c.Choice, Votes: c.Votes)).ToList()
                             : s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
                                 .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
                                 .OrderByDescending(t => t.Votes).ToList();
                         var lead = tally.FirstOrDefault().Votes;
-                        <div class="agenda-elect"><b>@Loc["agenda.elect"]:</b> @agenda.Elect</div>
                         @if (s.AgendaTotals is not null) { <div class="agenda-elect totals-note">@Loc["agenda.totalsOnly"]</div> }
                         <div class="tally-row">
                             @foreach (var t in tally)
                             {
-                                <span class="tally @(t.Votes == lead ? "lead" : "")">@ChoiceLabel(agenda, t.Choice): @t.Votes</span>
+                                <span class="tally @(t.Votes == lead ? "lead" : "")">@AgendaDisplay.ChoiceLabel(Store, Loc, elect, t.Choice): @t.Votes</span>
                             }
                             @if (tally.Count == 0) { <span class="agenda-kind">@Loc["agenda.noVotes"]</span> }
                         </div>
@@ -111,7 +124,7 @@ else
                         var locked = vote?.Locked == true;
                         <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;transform:translateY(-@(lift)cqh);">
                             <div class="vote-top">
-                                @if (agenda is null)
+                                @if (agenda is null && !Store.CustomVoteActive)
                                 {
                                     @* Influence-entry stage: no votes yet. *@
                                 }
@@ -130,7 +143,7 @@ else
                                 else
                                 {
                                     <span class="vote-weight">@vote.Votes @Loc["agenda.votes"]</span>
-                                    <span class="vote-choice @(elect == ElectType.ForAgainst ? (vote.Outcome == VoteOutcome.For ? "v-for" : "v-against") : "")">@VoteLabel(agenda, elect, vote)</span>
+                                    <span class="vote-choice @(elect == ElectType.ForAgainst ? (vote.Outcome == VoteOutcome.For ? "v-for" : "v-against") : "")">@VoteLabel(elect, vote)</span>
                                 }
                             </div>
                             <FactionPortrait Player="p" Faction="Store.Faction(p.FactionId)" Speaker="isSpeaker" />
@@ -517,11 +530,12 @@ else
 
     // Compute the agenda outcome for the wall — only once everyone has locked and (for a face-down vote)
     // the host has revealed. For/Against → passed / rejected / tie (speaker decides); elect → winner / tie.
+    // Free votes pass agenda = null; the outcome depends only on the elect kind and the votes.
     private string? AgendaResult(SessionStateDto s, AgendaDto? agenda, ElectType elect)
     {
         // Still fully face-down → no outcome. Once the TOTALS are public the outcome follows from them,
         // so it is shown even though who voted what is still secret.
-        if (agenda is null || (s.AgendaVotesHidden && s.AgendaTotals is null)) return null;
+        if ((agenda is null && !Store.CustomVoteActive) || (s.AgendaVotesHidden && s.AgendaTotals is null)) return null;
         var allLocked = s.Players.Count > 0 && s.Players.All(p => s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
         if (!allLocked) return null;
         if (elect == ElectType.ForAgainst)
@@ -545,10 +559,11 @@ else
     }
 
     // Resolve a per-player vote into a human label for the display.
-    private string VoteLabel(AgendaDto agenda, ElectType elect, AgendaVoteDto vote)
+    // By elect KIND, not by agenda: a free vote has no card but still shows what each player chose.
+    private string VoteLabel(ElectType elect, AgendaVoteDto vote)
         => elect == ElectType.ForAgainst
             ? Loc[vote.Outcome == VoteOutcome.For ? "agenda.for" : "agenda.against"]
-            : ChoiceLabel(agenda, vote.Choice);
+            : AgendaDisplay.ChoiceLabel(Store, Loc, elect, vote.Choice);
 
     // Resolve an elected candidate key (player id / planet / card number / law / objective) to a label.
     // The invite link the QR encodes. BaseUri already carries scheme/host/port, so this is the same URL a

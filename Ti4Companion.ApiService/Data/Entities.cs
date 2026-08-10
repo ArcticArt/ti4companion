@@ -28,6 +28,15 @@ public class GameSession
     public int? ActiveStrategyCardId { get; set; }
     /// <summary>Agenda currently up for a vote, or null.</summary>
     public string? CurrentAgendaId { get; set; }
+    /// <summary>A FREE vote with no agenda card: the title the host typed (null = none running). Mutually
+    /// exclusive with <see cref="CurrentAgendaId"/> — the whole agenda machinery (influence, hidden/open,
+    /// locking, totals, tally, wall) keys off the elect kind, so a free vote only has to supply that plus a
+    /// headline instead of an agenda.</summary>
+    public string? CustomVoteTitle { get; set; }
+
+    /// <summary>What the free vote elects. Null unless <see cref="CustomVoteTitle"/> is set.</summary>
+    public ElectType? CustomVoteElect { get; set; }
+
     /// <summary>When false (default), a device may only edit its own player; when true, anyone may edit anyone.</summary>
     public bool AllowEditAllPlayers { get; set; }
     /// <summary>Inactivity window after which the auto-wipe worker may delete this session (0 = keep

@@ -239,7 +239,11 @@ public record SessionStateDto(
     /// <summary>Status phase: which of the three stages the table is on (score → reveal → checklist).</summary>
     StatusStage StatusStage = StatusStage.Scoring,
     /// <summary>A strategy action's secondary round is open — the table is working through who takes it.</summary>
-    bool SecondaryOpen = false);
+    bool SecondaryOpen = false,
+    /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
+    string? CustomVoteTitle = null,
+    /// <summary>What the free vote elects (null unless one is running).</summary>
+    ElectType? CustomVoteElect = null);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>
@@ -336,7 +340,9 @@ public record ScoreObjectiveRequest(Guid PlayerId);
 
 public record AddTechnologyRequest(string TechnologyId);
 
-public record SetAgendaRequest(string? AgendaId);
+/// <summary>Reveal an agenda, start a FREE vote, or clear both. Exactly one of <paramref name="AgendaId"/>
+/// and <paramref name="CustomTitle"/> is meaningful; both null means "next agenda" (spends locked votes).</summary>
+public record SetAgendaRequest(string? AgendaId, string? CustomTitle = null, ElectType? CustomElect = null);
 
 /// <summary>A player's available influence for the agenda phase (entered before voting starts). Not a
 /// cap on votes — action cards/abilities can exceed it; it's tracked only for display and the
