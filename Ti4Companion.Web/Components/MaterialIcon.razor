@@ -1,0 +1,40 @@
+@inherits Ti4ComponentBase
+
+@*
+    Google Material Symbols, inlined.
+
+    Inlined rather than loaded as a font or an <img>: the wall display has to work on a LAN with no
+    internet, and the app's CSP blocks fetched resources anyway. Paths are the unmodified 24px outlined
+    symbols from github.com/google/material-design-icons (Apache License 2.0) — hence the odd but
+    original `0 -960 960 960` viewBox. Credited in the footer.
+
+    Sized in `em` so an icon follows the surrounding text, and filled with `currentColor` so it takes
+    the button's colour (including the hover/disabled states) without extra rules.
+*@
+<svg class="micon @Class" viewBox="0 -960 960 960" style="@SizeStyle" fill="currentColor"
+     aria-hidden="true" focusable="false"><path d="@Path" /></svg>
+
+@code {
+    /// <summary>Icon name, one of the keys in <see cref="Paths"/>.</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    /// <summary>Any CSS length; defaults to 1.15em (a shade larger than the text, like Material's own guidance).</summary>
+    [Parameter] public string SizeCss { get; set; } = "1.15em";
+
+    [Parameter] public string? Class { get; set; }
+
+    private string SizeStyle => $"width:{SizeCss};height:{SizeCss};";
+
+    private string Path => Paths.TryGetValue(Name, out var d) ? d : "";
+
+    private static readonly Dictionary<string, string> Paths = new()
+    {
+        ["qr_code"] =
+            "M120-520v-320h320v320H120Zm80-80h160v-160H200v160Zm-80 480v-320h320v320H120Zm80-80h160v-160H200v160Z" +
+            "m320-320v-320h320v320H520Zm80-80h160v-160H600v160Zm160 480v-80h80v80h-80ZM520-360v-80h80v80h-80Zm80 80v-80h80v80h-80Z" +
+            "m-80 80v-80h80v80h-80Zm80 80v-80h80v80h-80Zm80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80 80v-80h80v80h-80Z",
+        ["open_in_new"] =
+            "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Z" +
+            "m188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"
+    };
+}

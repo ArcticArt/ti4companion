@@ -207,6 +207,7 @@ public static class SessionEndpoints
             session.StrategyCardsPerPlayer = cpp is 1 or 2 ? cpp : 0;
         if (req.RedTapeLite is not null) session.RedTapeLite = req.RedTapeLite.Value;
         if (req.PromptTechOnAction is not null) session.PromptTechOnAction = req.PromptTechOnAction.Value;
+        if (req.ShowJoinQr is not null) session.ShowJoinQr = req.ShowJoinQr.Value;
 
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -269,6 +270,9 @@ public static class SessionEndpoints
         // The 2 starting public objectives are chosen physically and recorded by the host during
         // setup (see ObjectivesTab) — they are no longer auto-revealed here.
         session.Phase = GamePhase.Strategy;
+        // Everybody who was going to join has joined: the wall belongs to the game now, so the QR code
+        // goes away. Only a default — the host can switch it back on from the display control.
+        session.ShowJoinQr = false;
         // Timeline markers for the statistics view: the match (and round 1) begin now.
         Log(db, session, SessionLogKind.RoundChange, GetCaller(session, http)?.Id, round: session.CurrentRound);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Strategy, round: session.CurrentRound);

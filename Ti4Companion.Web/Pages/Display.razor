@@ -21,14 +21,18 @@ else
             <div class="b-title">@s.Name</div>
             <div class="b-meta">@Loc["turn.round"] @s.CurrentRound · <span class="b-phase">@Loc[$"phase.{s.Phase}"]</span></div>
             <div class="spacer" style="flex:1"></div>
-            @* Prominent join code so players can join straight off the wall — plus a QR of the invite
-               link, so arriving players just scan instead of typing the code. *@
+            @* Prominent join code so players can join straight off the wall. The QR of the invite link is
+               shown on demand (`ShowJoinQr`, on during setup, off once the game runs) — it took height
+               away from the agenda portraits for the rest of the evening, and nobody joins in round 4. *@
             <div class="b-join">
                 <span class="b-join-lbl">@Loc["common.code"]</span>
                 <span class="b-join-code">@s.JoinCode</span>
                 <span class="dot @(Store.Connected ? "on" : "off")"></span>
             </div>
-            <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="13vh" Class="b-qr" Alt="@Loc["nav.joinQr"]" />
+            @if (s.ShowJoinQr)
+            {
+                <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="13vh" Class="b-qr" Alt="@Loc["nav.joinQr"]" />
+            }
         </div>
 
         @if (isAgenda && s.DisplayMode != DisplayMode.Statistics)

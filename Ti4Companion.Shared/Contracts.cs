@@ -228,7 +228,9 @@ public record SessionStateDto(
     StatusStep StatusStepsDone = StatusStep.None,
     /// <summary>Status phase: whose turn it is to score (initiative order), null when everyone is done.
     /// Derived server-side so the client can't drift from the rule the server enforces.</summary>
-    Guid? StatusScorerId = null);
+    Guid? StatusScorerId = null,
+    /// <summary>Wall display: show the join QR code. On during setup, off once the game starts.</summary>
+    bool ShowJoinQr = true);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>
@@ -264,7 +266,9 @@ public record UpdateSessionRequest(
     /// <summary>Red Tape variant: removable marker on every revealed objective.</summary>
     bool? RedTapeLite = null,
     /// <summary>Offer a technology entry after the Technology strategy action.</summary>
-    bool? PromptTechOnAction = null);
+    bool? PromptTechOnAction = null,
+    /// <summary>Show the join QR code on the wall display (shared state — the wall is shared).</summary>
+    bool? ShowJoinQr = null);
 
 /// <summary>Red Tape variant: take the marker off an objective (or put it back).</summary>
 public record SetObjectiveMarkerRequest(bool Removed);

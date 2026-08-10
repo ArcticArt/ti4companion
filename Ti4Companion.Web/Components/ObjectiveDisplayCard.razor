@@ -20,7 +20,7 @@
         @foreach (var pid in So.ScoredByPlayerIds)
         {
             var pl = Store.Session?.Players.FirstOrDefault(x => x.Id == pid);
-            if (pl is not null) { <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.4rem,3vh,3rem)" Ring="@pl.ColorHex" /> }
+            if (pl is not null) { <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.7rem,3.6vh,3.4rem)" Ring="@pl.ColorHex" /> }
         }
     </div>
 </div>

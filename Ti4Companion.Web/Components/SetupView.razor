@@ -109,8 +109,8 @@
             <label for="cardsPerPlayer">@Loc["cards.perPlayer"]</label>
             <select id="cardsPerPlayer" value="@Store.Session!.StrategyCardsPerPlayer" @onchange="SetCardsPerPlayer">
                 <option value="0">@Loc["cards.auto"]</option>
-                <option value="1">@string.Format(Loc["cards.fixed"], 1)</option>
-                <option value="2">@string.Format(Loc["cards.fixed"], 2)</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
             </select>
             <span class="faint go-hint">@Loc["cards.hint"]</span>
         </div>

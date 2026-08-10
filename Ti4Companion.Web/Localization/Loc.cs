@@ -57,6 +57,8 @@ public class Loc
         ["nav.joinQrHint"] = ("Scan to join this session.", "Scannen, um dieser Session beizutreten."),
         ["display.shows"] = ("Display shows", "Display zeigt"),
         ["display.control"] = ("Display control", "Displaysteuerung"),
+        ["display.qrShow"] = ("Show the join QR code on the display", "QR-Code zum Beitreten auf dem Display zeigen"),
+        ["display.qrHide"] = ("Hide the join QR code", "QR-Code zum Beitreten ausblenden"),
         ["display.objectives"] = ("Objectives", "Aufträge"),
         ["display.secondary"] = ("Secondary abilities", "Sekundärfähigkeiten"),
         ["display.secondaryShort"] = ("Secondary", "Sekundär"),
@@ -104,12 +106,12 @@ public class Loc
         // Host-only game options (setup).
         ["options.title"] = ("Game options", "Spieloptionen"),
         ["cards.perPlayer"] = ("Strategy cards per player", "Strategiekarten pro Spieler"),
-        ["cards.auto"] = ("Automatic (2 with up to 4 players, otherwise 1)",
-                          "Automatisch (2 bei bis zu 4 Spielern, sonst 1)"),
-        ["cards.fixed"] = ("{0} per player", "{0} pro Spieler"),
+        // Short labels on purpose: the rule itself belongs in the hint next to the field, not inside a
+        // <select> option, where the long form was wider than the whole panel on a phone.
+        ["cards.auto"] = ("Automatic", "Automatisch"),
         ["cards.hint"] = (
-            "Pin this to play variants like Feast or Famine, where a four-player table takes a single card each.",
-            "Feste Zahl für Varianten wie Feast or Famine, bei denen eine Vierer-Runde nur eine Karte pro Spieler nimmt."),
+            "Automatic follows the printed rule: 2 cards with up to 4 players, otherwise 1. Pin a number for variants like Feast or Famine, where a four-player table takes a single card each.",
+            "„Automatisch“ folgt der gedruckten Regel: 2 Karten bei bis zu 4 Spielern, sonst 1. Feste Zahl für Varianten wie Feast or Famine, bei denen eine Vierer-Runde nur eine Karte pro Spieler nimmt."),
         // Red Tape variant: a removable marker per objective.
         ["redtape.title"] = ("Red Tape variant", "Red-Tape-Variante"),
         ["redtape.option"] = ("Marker on every objective", "Marker auf jedem Auftrag"),

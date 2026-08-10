@@ -154,6 +154,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .display-ctl { display: flex; flex-direction: column; gap: .35rem; padding: .5rem .7rem; margin-bottom: .6rem;
     border: 1px solid var(--panel-border); border-radius: 10px; background: var(--panel-2); }
 .display-ctl-lbl { font-size: .64rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); font-weight: 700; }
+/* Mode segments and the QR toggle share one line (`.display-ctl` itself is a column: label over row).
+   The segments take the width, the toggle stays as narrow as its icon. */
+.display-ctl-row { display: flex; align-items: stretch; gap: .4rem; }
+.display-ctl-row .seg { flex: 1 1 auto; min-width: 0; }
+.display-ctl-qr { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; }
 .seg { display: flex; border: 1px solid var(--panel-border); border-radius: 8px; overflow: hidden; }
 .seg-btn { flex: 1 1 0; min-width: 0; border: 0; border-right: 1px solid var(--panel-border); background: var(--panel);
     color: var(--text-dim); padding: .4rem .5rem; font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer;
@@ -344,11 +349,14 @@ span.rt-marker { cursor: default; }
 .obj-req { padding: 0 .7rem .4rem; font-size: .82rem; color: var(--text); }
 .obj-markers { display: flex; gap: .35rem; flex-wrap: wrap; padding: .3rem .7rem .6rem; }
 .marker { background: none; border: none; padding: 0; cursor: pointer; opacity: .3; filter: grayscale(.6); transition: .12s; }
-.marker.on { opacity: 1; filter: none; box-shadow: 0 0 0 1.5px var(--gold); border-radius: 7px; }
+/* The gold ring sits on the TOKEN, not on the button around it: on the button it drew a frame
+   noticeably larger than the faction symbol inside, which read as a mis-sized highlight. */
+.marker.on { opacity: 1; filter: none; }
+.marker.on .faction-badge { box-shadow: 0 0 0 2px var(--gold); border-color: var(--gold-dim); }
 .marker:hover { opacity: .85; }
-/* Hairline token outline + tighter symbol padding — the framed look was still too heavy on the markers. */
+/* Hairline token outline; the symbol fills the token almost completely so ring and symbol match. */
 .obj-markers .marker .faction-badge { border-width: 1px; border-radius: 6px; }
-.obj-markers .marker .faction-badge .fb-img { padding: 3%; }
+.obj-markers .marker .faction-badge .fb-img { padding: 1%; }
 
 /* tech rows */
 .tech-row { background: var(--panel-2); border-radius: 8px; padding: .4rem .5rem; }
@@ -563,10 +571,19 @@ span.rt-marker { cursor: default; }
     font-family: 'Orbitron', sans-serif; font-variant-numeric: tabular-nums; font-size: 1.35rem; line-height: 1.2;
     background: var(--panel-2); border: 1px solid var(--panel-border); color: var(--text); }
 .turn-timer .tt-icon { font-size: .8em; opacity: .7; }
+/* Fixed width for the value: tabular-nums alone does not help here because Orbitron carries no tabular
+   figures, so every ticking digit changed the width — and in the wall table that resizes the whole
+   (auto-sized) timer column once a second. 5.5ch covers "10:00" and "−0:07"; an hour-long budget
+   ("1:02:03") widens it once and then stays put. */
+.turn-timer .tt-value { display: inline-block; min-width: 5.5ch; text-align: right; }
 /* Last minute: amber. Budget gone: red, counting up — but nothing is ever blocked. */
 .turn-timer.warn { color: var(--gold); border-color: var(--gold-dim); }
 .turn-timer.over { color: #f1a3ae; border-color: #6b2a35; background: rgba(224,85,106,.16); }
 .turn-timer.compact { padding: 0 .3em; font-size: 1rem; background: none; border: 0; }
+
+/* Material Symbols (see MaterialIcon.razor): inline, sized in em, coloured by currentColor. The
+   baseline nudge keeps a lone icon centred inside a button that has no text beside it. */
+.micon { display: inline-block; vertical-align: -.15em; flex: 0 0 auto; }
 
 /* status chips */
 .chip { font-size: .68rem; padding: .08rem .45rem; border-radius: 999px; border: 1px solid var(--panel-border); }

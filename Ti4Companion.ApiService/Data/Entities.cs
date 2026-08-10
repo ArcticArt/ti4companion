@@ -71,6 +71,12 @@ public class GameSession
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
 
+    /// <summary>Show the join QR code on the wall display. Session state, not per device, because the
+    /// wall is shared: whoever flips it flips it for the room. Starts <c>true</c> so latecomers can scan
+    /// during setup, and <see cref="SessionEndpoints"/> turns it off when the game starts — from then on
+    /// the wall belongs to the game, and the host can switch it back on at any time.</summary>
+    public bool ShowJoinQr { get; set; } = true;
+
     public List<Player> Players { get; set; } = new();
     public List<SessionObjective> Objectives { get; set; } = new();
     public List<StrategyCardState> StrategyCardStates { get; set; } = new();

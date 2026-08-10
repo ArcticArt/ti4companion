@@ -22,8 +22,8 @@
             <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(inviteCopied ? "✓" : "🔗")</button>
             @* A real link, not window.open via interop: popup blockers (and Safari, once an awaited
                interop roundtrip has expired the gesture) would swallow a scripted open. *@
-            <a class="btn btn-sm btn-ghost" href="@($"/display/{s.JoinCode}")" target="_blank" rel="noopener" title='@Loc["nav.openDisplay"]'>🖥</a>
-            <button class="btn btn-sm btn-ghost" @onclick="() => showQr = true" title='@Loc["nav.joinQr"]'>▦</button>
+            <a class="btn btn-sm btn-ghost" href="@($"/display/{s.JoinCode}")" target="_blank" rel="noopener" title='@Loc["nav.openDisplay"]'><MaterialIcon Name="open_in_new" /></a>
+            <button class="btn btn-sm btn-ghost" @onclick="() => showQr = true" title='@Loc["nav.joinQr"]'><MaterialIcon Name="qr_code" /></button>
             <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'><StatIcon /></button>
             <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'>⏸</button>
         <button class="btn btn-sm btn-danger ab-endgame" @onclick="EndGame" title='@Loc["turn.endGame"]'>@Loc["turn.endGame"]</button>
@@ -65,7 +65,9 @@
         @Loc["legal.thanks"]:
         <a href="https://ti4lookup.com" target="_blank" rel="noopener noreferrer">ti4lookup.com</a> ·
         <a href="https://twilight-imperium.fandom.com" target="_blank" rel="noopener noreferrer">TI4 Wiki (Fandom)</a> ·
-        <a href="https://boardgamegeek.com/filepage/180049/ti4-race-and-tech-symbols-vectorized" target="_blank" rel="noopener noreferrer">TI4 Race &amp; Tech Symbols (BGG)</a>
+        <a href="https://boardgamegeek.com/filepage/180049/ti4-race-and-tech-symbols-vectorized" target="_blank" rel="noopener noreferrer">TI4 Race &amp; Tech Symbols (BGG)</a> ·
+        @* Apache 2.0 requires attribution when the icons are redistributed — see MaterialIcon.razor. *@
+        <a href="https://github.com/google/material-design-icons" target="_blank" rel="noopener noreferrer">Google Material Symbols (Apache 2.0)</a>
     </p>
 </footer>
 </div>
