@@ -911,7 +911,15 @@ span.rt-marker { cursor: default; }   /* the wall renders it as a span — displ
 
 /* Each player is a faction portrait, arranged in a shallow arc ("galactic council"). The middle seats
    sit highest (translateY set inline per index); a soft floor glow + faint arc sit behind them. */
-.beamer .votes-grid { flex: 1 1 auto; min-height: 0; position: relative; display: flex; justify-content: center;
+/* The portrait arc lifts the middle seats (see Display.razor). The lift is measured against THIS box
+   (`container-type: size` + cqh in the cards), NOT the viewport: the box shrinks when the header or the
+   result line takes space, and a lift in vh then pushed the middle portraits straight out of the
+   `overflow: hidden` — reported as "the portraits are cut off once a candidate is elected".
+   The headroom stays in vh on purpose: the maximum lift is 7% of THIS box, which is never taller than the
+   viewport, so 7vh always covers it. (Writing the padding in cqh would look symmetric but resolves against
+   the viewport anyway — container units on the container itself query the next container OUT.) */
+.beamer .votes-grid { flex: 1 1 auto; min-height: 0; position: relative; container-type: size;
+    display: flex; justify-content: center;
     align-items: flex-end; gap: .6vw; padding: 7vh .8vw 1vh; overflow: hidden; }
 .beamer .votes-grid::before { content: ""; position: absolute; left: 4%; right: 4%; bottom: -34%; height: 72%;
     border-radius: 50%; border: 1px solid rgba(123,160,224,.16);

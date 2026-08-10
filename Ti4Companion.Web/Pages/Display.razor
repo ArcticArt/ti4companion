@@ -106,11 +106,14 @@ else
                     {
                         var p = order[vi];
                         var t = vn <= 1 ? 0.5 : (double)vi / (vn - 1);
-                        var lift = (int)Math.Round(Math.Sin(t * Math.PI) * 7); // 0 at the ends, ~7vh in the middle
+                        // Lift in cqh (percent of the votes-grid height), NOT vh: the grid shrinks when the header or the
+                        // result line takes space, and a viewport-based lift then pushed the middle portraits out of the
+                        // clipped box. See the .votes-grid rule for the matching headroom.
+                        var lift = (int)Math.Round(Math.Sin(t * Math.PI) * 7); // 0 at the ends, ~7cqh in the middle
                         var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
                         var isSpeaker = s.SpeakerPlayerId == p.Id;
                         var locked = vote?.Locked == true;
-                        <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;transform:translateY(-@(lift)vh);">
+                        <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;transform:translateY(-@(lift)cqh);">
                             <div class="vote-top">
                                 @if (agenda is null)
                                 {
