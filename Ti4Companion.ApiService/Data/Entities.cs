@@ -36,7 +36,7 @@ public class GameSession
     public int RetentionHours { get; set; } = 2160;
     public bool ShowTechOverview { get; set; }
     /// <summary>What the wall display currently shows (any player may switch it).</summary>
-    public DisplayMode DisplayMode { get; set; } = DisplayMode.Objectives;
+    public DisplayMode DisplayMode { get; set; } = DisplayMode.JoinQr;   // a fresh session opens on the QR: people are still joining
     /// <summary>When true, agenda votes are cast face-down and only revealed when the host flips them.</summary>
     public bool AgendaVotesHidden { get; set; }
 
@@ -81,10 +81,9 @@ public class GameSession
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
 
-    /// <summary>Show the join QR code on the wall display. Session state, not per device, because the
-    /// wall is shared: whoever flips it flips it for the room. Starts <c>true</c> so latecomers can scan
-    /// during setup, and <see cref="SessionEndpoints"/> turns it off when the game starts — from then on
-    /// the wall belongs to the game, and the host can switch it back on at any time.</summary>
+    /// <summary>Superseded by <c>DisplayMode.JoinQr</c> (the QR became one of the wall areas, so a separate
+    /// flag would be a second source of truth for one screen). Kept only so no migration has to drop a
+    /// column; nothing reads it any more.</summary>
     public bool ShowJoinQr { get; set; } = true;
 
     public List<Player> Players { get; set; } = new();

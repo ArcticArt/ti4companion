@@ -24,17 +24,13 @@ else
                     <button class="seg-btn @(s.DisplayMode == DisplayMode.Objectives ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Objectives)">@Loc["display.objectives"]</button>
                     <button class="seg-btn @(s.DisplayMode == DisplayMode.Secondary ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Secondary)">@Loc["display.secondaryShort"]</button>
                     <button class="seg-btn @(s.DisplayMode == DisplayMode.Tech ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Tech)">@Loc["display.techShort"]</button>
-                </div>
-                @* The QR code is shared state (it hangs on the shared wall), so it lives here rather than
-                   per device. Host-only, like every other setting — the PATCH route is host-gated anyway. *@
-                @if (Store.IsHost)
-                {
-                    <button class="btn btn-sm display-ctl-qr @(s.ShowJoinQr ? "btn-gold" : "btn-ghost")"
-                            @onclick="ToggleJoinQr"
-                            title="@(s.ShowJoinQr ? Loc["display.qrHide"] : Loc["display.qrShow"])">
-                        <MaterialIcon Name="qr_code" />
+                    @* The QR is a wall AREA of its own, so it belongs in this group and behaves like the
+                       others: exactly one is active. It used to be a separate toggle beside the group, which
+                       made two controls for one screen. *@
+                    <button class="seg-btn @(s.DisplayMode == DisplayMode.JoinQr ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.JoinQr)" title='@Loc["nav.joinQr"]'>
+                        <MaterialIcon Name="qr_code" SizeCss="1em" /> @Loc["display.qrShort"]
                     </button>
-                }
+                </div>
             </div>
         </div>
 
@@ -120,7 +116,4 @@ else
 
     private Task SetDisplay(DisplayMode mode) => Store.Mutate(Store.Api.SetDisplayModeAsync(Store.Session!.Id, mode));
 
-    private Task ToggleJoinQr() => Store.Mutate(Store.Api.UpdateSessionAsync(Store.Session!.Id,
-        new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, null,
-            ShowJoinQr: !Store.Session!.ShowJoinQr)));
 }

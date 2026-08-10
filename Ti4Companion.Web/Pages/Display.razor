@@ -21,18 +21,14 @@ else
             <div class="b-title">@s.Name</div>
             <div class="b-meta">@Loc["turn.round"] @s.CurrentRound · <span class="b-phase">@Loc[$"phase.{s.Phase}"]</span></div>
             <div class="spacer" style="flex:1"></div>
-            @* Prominent join code so players can join straight off the wall. The QR of the invite link is
-               shown on demand (`ShowJoinQr`, on during setup, off once the game runs) — it took height
-               away from the agenda portraits for the rest of the evening, and nobody joins in round 4. *@
+            @* The join code stays in the header always; the QR does NOT. It is its own wall area now
+               (DisplayMode.JoinQr) — as a header strip its height squeezed the agenda view until the
+               per-player vote counts fell off the top of it. *@
             <div class="b-join">
                 <span class="b-join-lbl">@Loc["common.code"]</span>
                 <span class="b-join-code">@s.JoinCode</span>
                 <span class="dot @(Store.Connected ? "on" : "off")"></span>
             </div>
-            @if (s.ShowJoinQr)
-            {
-                <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="13vh" Class="b-qr" Alt="@Loc["nav.joinQr"]" />
-            }
         </div>
 
         @if (isAgenda && s.DisplayMode != DisplayMode.Statistics)
@@ -187,7 +183,7 @@ else
             // list (that is where the glow has to be visible), the other two stages take the panel over.
             // The left player table stays untouched in all cases — you still want to see who is up.
             var statusStage = s.Phase == GamePhase.Status ? s.StatusStage : (StatusStage?)null;
-            if (statusStage == StatusStage.Scoring) mode = DisplayMode.Objectives;
+            if (statusStage == StatusStage.Scoring && mode != DisplayMode.JoinQr) mode = DisplayMode.Objectives;
             // Reveal stage: the newest objective on the table, shown large.
             var justRevealed = statusStage == StatusStage.RevealObjective ? s.Objectives.LastOrDefault() : null;
             // All three modes share a left "player table" (Bereich 1); the right panel (Bereich 2) differs.
@@ -296,7 +292,19 @@ else
                 @* ===== Bereich 2 — right content panel: objectives list / all researched techs as cards /
                    all available strategy-card secondaries. Deduplicated, independent of the player table. ===== *@
                 <div class="panel content-panel">
-                    @if (statusStage == StatusStage.RevealObjective)
+                    @if (mode == DisplayMode.JoinQr)
+                    {
+                        @* The QR as a wall area: same card as the agenda-phase overlay, just in the panel. *@
+                        <div class="panel-body qr-panel">
+                            <div class="qr-card">
+                                <div class="qr-title">@string.Format(Loc["nav.joinQrTitle"], s.Name)</div>
+                                <div class="qr-url">@InviteUrl(s.JoinCode)</div>
+                                <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="min(46vh, 34vw)" Alt="@Loc["nav.joinQr"]" />
+                                <div class="qr-code-big">@s.JoinCode</div>
+                            </div>
+                        </div>
+                    }
+                    else if (statusStage == StatusStage.RevealObjective)
                     {
                         <h3 style="color:var(--gold);">@Loc["status.stage.reveal"]</h3>
                         <div class="panel-body status-reveal">
@@ -405,6 +413,20 @@ else
                             }
                         </div>
                     }
+                </div>
+            </div>
+        }
+
+        @* Agenda phase: the QR is an overlay rather than a header strip. Latecomers can still scan it, and
+           the moment the host switches it off the vote view is whole again — no permanent height cost. *@
+        @if (s.DisplayMode == DisplayMode.JoinQr && isAgenda)
+        {
+            <div class="qr-overlay">
+                <div class="qr-card">
+                    <div class="qr-title">@string.Format(Loc["nav.joinQrTitle"], s.Name)</div>
+                    <div class="qr-url">@InviteUrl(s.JoinCode)</div>
+                    <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="min(46vh, 40vw)" Alt="@Loc["nav.joinQr"]" />
+                    <div class="qr-code-big">@s.JoinCode</div>
                 </div>
             </div>
         }

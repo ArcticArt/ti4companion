@@ -54,6 +54,8 @@ public class Loc
         ["nav.invite"] = ("Invite link", "Einladungslink"),
         ["nav.openDisplay"] = ("Open the wall display in a new tab", "Wandanzeige in neuem Tab öffnen"),
         ["nav.joinQr"] = ("QR code to join", "QR-Code zum Beitreten"),
+        ["display.qrShort"] = ("QR", "QR"),
+        ["nav.joinQrTitle"] = ("Join {0}", "{0} beitreten"),
         ["nav.joinQrHint"] = ("Scan to join this session.", "Scannen, um dieser Session beizutreten."),
         ["display.shows"] = ("Display shows", "Display zeigt"),
         ["display.control"] = ("Display control", "Displaysteuerung"),

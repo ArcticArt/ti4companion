@@ -266,7 +266,10 @@ public enum DisplayMode
     Tech = 2,
     /// <summary>Match statistics (timing). Set ONLY by the host "End game" action — it is deliberately
     /// not offered in the display-control segments, so players can't switch the wall to it mid-game.</summary>
-    Statistics = 3
+    Statistics = 3,
+    /// <summary>The join QR code, large, as its own wall area. In the agenda phase there is no right panel,
+    /// so it renders as a centred overlay instead.</summary>
+    JoinQr = 4
 }
 
 /// <summary>

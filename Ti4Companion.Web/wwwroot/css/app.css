@@ -940,7 +940,12 @@ span.rt-marker { cursor: default; }   /* the wall renders it as a span — displ
 
 /* Faction portrait with a name bar (~a fifth up from the bottom), in the player's chosen colour. */
 .fac-portrait { position: relative; width: 100%; overflow: hidden; border-radius: 8px; }
-.beamer .fac-portrait { aspect-ratio: 3 / 4; max-height: 40vh; }
+/* The portrait is capped against the VOTES ROW as well as the viewport (`cqh`, the row is the query
+   container — see .votes-grid). With only the 40vh cap the card could end up taller than the row, and since
+   the row aligns to the bottom and clips, the first thing to disappear was the line ABOVE the portrait:
+   how many votes that player cast. That number is the point of the screen, so it must never be what gives
+   way. 62cqh leaves room for the vote line, the influence line, the gaps and the arc lift. */
+.beamer .fac-portrait { aspect-ratio: 3 / 4; max-height: min(40vh, 62cqh); }
 .fac-portrait-img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
 .fac-portrait.noimg { display: flex; align-items: flex-start; justify-content: center; padding-top: 8%; background: #0d1426; }
 .fac-portrait-bar { position: absolute; left: 0; right: 0; bottom: 22%; background: var(--player-color, #444); padding: .14em .4em; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
@@ -1061,3 +1066,23 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .sec-chip { display: inline-flex; align-items: center; gap: .4rem; padding: .2rem .5rem .2rem .3rem;
     border-radius: 999px; background: var(--panel-2); font-size: .85rem; font-weight: 600;
     border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+
+/* Join QR as an overlay on the wall during the agenda phase. Everything behind it is blurred, so the code
+   is unmistakably the thing to look at — and unlike the header strip it costs the vote view no height. */
+.beamer .qr-overlay { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center;
+    justify-content: center; background: rgba(4, 7, 15, .72); backdrop-filter: blur(9px); }
+@supports not (backdrop-filter: blur(2px)) {
+    .beamer .qr-overlay { background: rgba(4, 7, 15, .93); }   /* no blur: darken harder instead */
+}
+.beamer .qr-card { display: flex; flex-direction: column; align-items: center; gap: 1.4vh;
+    padding: 2.4vh 3vw; border-radius: 18px; background: var(--panel); border: 1px solid var(--gold-dim);
+    box-shadow: 0 2vh 6vh rgba(0, 0, 0, .6); max-width: 84vw; }
+.beamer .qr-title { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold);
+    font-size: clamp(1.1rem, 2.2vw, 2.6rem); text-align: center; }
+.beamer .qr-url { color: var(--text-dim); font-size: clamp(.8rem, 1.2vw, 1.5rem); word-break: break-all;
+    text-align: center; }
+.beamer .qr-code-big { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--text);
+    font-size: clamp(2rem, 6vw, 6rem); letter-spacing: .12em; line-height: 1; }
+/* QR as a wall AREA (DisplayMode.JoinQr): same card as the agenda overlay, centred in the right panel. */
+.beamer .panel-body.qr-panel { align-items: center; justify-content: center; }
+.beamer .panel-body.qr-panel .qr-card { border: 0; background: transparent; box-shadow: none; padding: 0; }

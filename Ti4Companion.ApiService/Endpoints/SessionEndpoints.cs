@@ -279,9 +279,10 @@ public static class SessionEndpoints
         // The 2 starting public objectives are chosen physically and recorded by the host during
         // setup (see ObjectivesTab) — they are no longer auto-revealed here.
         session.Phase = GamePhase.Strategy;
-        // Everybody who was going to join has joined: the wall belongs to the game now, so the QR code
-        // goes away. Only a default — the host can switch it back on from the display control.
-        session.ShowJoinQr = false;
+        // Everybody who was going to join has joined: the wall belongs to the game now, so it leaves the QR
+        // area for the objectives. Only a default - the QR is one of the four display areas and any player
+        // can switch back to it at any time.
+        if (session.DisplayMode == DisplayMode.JoinQr) session.DisplayMode = DisplayMode.Objectives;
         // Timeline markers for the statistics view: the match (and round 1) begin now.
         Log(db, session, SessionLogKind.RoundChange, GetCaller(session, http)?.Id, round: session.CurrentRound);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Strategy, round: session.CurrentRound);
