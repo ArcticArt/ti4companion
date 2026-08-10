@@ -72,6 +72,11 @@ public static class RedTape
     /// Red Tape Lite: once the fifth Stage I tape is off, the Stage I objectives still taped are purged —
     /// they can never be scored. Returns the ones purged by this call (for the log), empty when nothing
     /// changed. A no-op in Bureaucracy, where all five revealed Stage I are scorable.
+    /// <para>
+    /// The rules call them "Stage I #6 and #7", which needs no numbering here: they are whatever is still
+    /// taped at that moment, so this scales with however many the table laid out (seven → two purged, six →
+    /// one) instead of assuming a count.
+    /// </para>
     /// </summary>
     public static List<SessionObjective> ApplyPurge(GameSession s)
     {
