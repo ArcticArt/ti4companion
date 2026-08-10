@@ -1124,21 +1124,38 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .push-note { max-width: 22rem; white-space: normal; line-height: 1.25; cursor: pointer;
     background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
 
-/* ---- Start page: the galactic senate behind everything ---------------------------------------------- */
+/* ---- Start page: the senate chamber behind everything ----------------------------------------------- */
 /* Fixed and BEHIND the shell (z-index 0 vs. the content's own stacking), never interactive. */
 .senate { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-    perspective: 46vmin; perspective-origin: 50% 50%; }
-/* The camera sits in the middle of the sphere and the whole dome turns around it — one very slow revolution,
-   so it reads as depth rather than motion. */
+    perspective: 70vmin; perspective-origin: 50% 45%; }
+/* The bowl: pushed back far enough that the WHOLE ring stays behind the perspective plane (a ring that
+   crosses it has a seat magnified without limit — the first attempt produced seats 15557px wide), and tipped
+   forward so we look down INTO the funnel. The near half of every ring faces away from us and is dropped by
+   `backface-visibility`, so no portrait is ever seen from behind; what is left is the far side stepping up,
+   ring by ring. The shift and the tilt must be repeated in every keyframe, or the animation would drop them. */
 .senate-scene { position: absolute; inset: 0; transform-style: preserve-3d;
-    animation: senate-spin 300s linear infinite; }
-@keyframes senate-spin { to { transform: rotateY(360deg); } }
-/* Each seat is placed by its own transform (see SenateBackdrop); this only sizes and fades it. */
-.senate-seat { position: absolute; left: 50%; top: 50%; width: 11vmin; height: 14vmin;
-    margin: -7vmin 0 0 -5.5vmin; transform-style: preserve-3d; }
-.senate-seat img { width: 100%; height: 100%; object-fit: cover; border-radius: 12% 12% 40% 40%;
-    opacity: .18; filter: grayscale(.35) contrast(.9); mix-blend-mode: screen;
-    box-shadow: 0 0 3vmin rgba(120, 160, 255, .12); }
+    animation: senate-spin 320s linear infinite; }
+@keyframes senate-spin {
+    from { transform: translateZ(-58vmin) rotateX(27deg) rotateY(0deg); }
+    to   { transform: translateZ(-58vmin) rotateX(27deg) rotateY(360deg); }
+}
+/* Each seat is placed by its own transform (see SenateBackdrop); this only sizes it. */
+.senate-seat { position: absolute; left: 50%; top: 50%; width: 15vmin; height: 11vmin;
+    margin: -5.5vmin 0 0 -7.5vmin; transform-style: preserve-3d; backface-visibility: hidden; }
+/* The pod: a dark shell, flattened and wider than tall, with a lit rim along its lower edge and the delegate
+   sitting inside it. Faint on purpose — this is a backdrop, and the buttons in front have to win. */
+.pod { position: absolute; inset: 0; overflow: hidden; opacity: .5;
+    border-radius: 46% 46% 26% 26% / 62% 62% 38% 38%;
+    background: linear-gradient(180deg, #16203a 0%, #0a1120 55%, #070b16 100%);
+    border: 1px solid rgba(140, 170, 220, .16);
+    box-shadow: inset 0 .3vmin .8vmin rgba(0, 0, 0, .8), 0 0 1.6vmin rgba(90, 130, 200, .1); }
+.pod-face { position: absolute; left: 50%; top: 14%; width: 46%; height: 56%; transform: translateX(-50%);
+    object-fit: cover; border-radius: 50% 50% 35% 35%; opacity: .45;
+    filter: grayscale(.45) contrast(.95); mix-blend-mode: screen; }
+/* The lit strip along the rim — the one bright thing on a senate pod. */
+.pod-rim { position: absolute; left: 8%; right: 8%; bottom: 9%; height: 7%; border-radius: 999px;
+    background: linear-gradient(90deg, transparent 0%, rgba(200, 222, 255, .5) 25%, rgba(200, 222, 255, .6) 75%, transparent 100%);
+    box-shadow: 0 0 1.1vmin rgba(150, 190, 255, .5); }
 /* A vignette so the dome sinks into the page instead of competing with the buttons in front of it. */
 .senate::after { content: ""; position: absolute; inset: 0;
     background: radial-gradient(ellipse at 50% 45%, rgba(7, 11, 22, .35) 0%, rgba(7, 11, 22, .82) 55%, rgba(7, 11, 22, .96) 100%); }
@@ -1146,10 +1163,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 @media (prefers-reduced-motion: reduce) { .senate-scene { animation: none; } }
 /* The content has to sit above the backdrop; the shell is transparent, so give it its own layer. */
 .home-view { position: relative; z-index: 1; }
-/* Activity counters under the start buttons: two numbers, quietly. */
-.activity { display: flex; gap: 1.4rem; justify-content: center; flex-wrap: wrap; margin-top: 1.2rem; }
+/* Activity counters: a notice BELOW the panel, not a field inside it. Blue and glowing, so the numbers read
+   as a live signal from the instance rather than as part of the form. */
+.activity { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin: 1.6rem 0 .5rem; }
 .activity-item { text-align: center; }
-.activity-num { display: block; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--gold); }
+.activity-num { display: block; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.7rem;
+    color: var(--accent); text-shadow: 0 0 10px rgba(79, 195, 247, .75), 0 0 24px rgba(79, 195, 247, .4); }
 .activity-lbl { font-size: .7rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .08em; }
 
 /* ---- Combat ---------------------------------------------------------------------------------------- */

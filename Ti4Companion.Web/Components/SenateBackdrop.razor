@@ -1,38 +1,62 @@
 @inherits Ti4ComponentBase
 
 @*
-    The start page's backdrop: a galactic senate. Rows of faction portraits on the INSIDE of a sphere, seen
-    from its centre, turning very slowly.
+    The start page's backdrop: a senate chamber seen FROM THE MIDDLE, turning very slowly.
 
-    How the geometry works: the scene has a `perspective` and the camera sits at the middle. Every seat is
-    placed with `rotateY(yaw) rotateX(pitch) translateZ(-R)` — the rotations turn the seat's own axes first,
-    so pushing it back by R lands it on the sphere's surface already facing the centre. Rows use a pitch,
-    columns a yaw, and each row after the first is offset by half a step so the seats interlock:
+    Two things make it read as "standing in the middle" rather than "looking at a ball":
+
+    1. The camera really is at the centre. `.senate-scene` is pushed forward by exactly the perspective
+       distance, so the scene's origin sits ON the camera; a seat at `translateZ(-radius)` is then `radius`
+       in front of the viewer. The seats on the far side of the ring land BEHIND the camera, and CSS does not
+       render anything at or past the perspective plane — so their backs are never drawn. (Before this they
+       were pushed away from the viewer instead, which put half the ring on the far wall facing away: you
+       could see the portraits from behind.) `backface-visibility: hidden` is the belt to that braces.
+
+    2. It is a FUNNEL, not a sphere: each row up sits higher AND further out, is tilted down towards the
+       centre, and is drawn smaller. So the rows fan open above you the way the pods do in the films, instead
+       of wrapping back over your head.
+
+    Rows are offset by half a seat against each other, so the seats interlock:
 
         X X X X X X X
          X X X X X X X
 
     Deliberately faint and `pointer-events: none`: it is a backdrop, and nothing on it may ever eat a tap
-    meant for the buttons in front. Only factions that HAVE a portrait take part (Keleres and the Thunder's
-    Edge factions have none — see FactionPortrait), and the seats are filled by cycling through them, so the
-    dome is full whatever the content bundle holds.
+    meant for the buttons in front.
 *@
 <div class="senate" aria-hidden="true">
     <div class="senate-scene">
         @for (var row = 0; row < Rows; row++)
         {
-            // Rows span the dome from below the horizon to well above it; the middle rows sit at eye level.
-            var pitch = FormattableString.Invariant($"{(row - (Rows - 1) / 2.0) * RowStepDeg:0.##}");
+            // Up and out: the funnel widens with every row, and the seats shrink as they climb.
+            // The Y value is emitted SIGNED (screen coordinates, so negative = up). Writing `-{lift}` instead
+            // produced `translateY(--14vmin)` for the bottom row, which is not a valid transform — the whole
+            // declaration was dropped and that row landed on the camera, filling the screen.
+            var radius = FormattableString.Invariant($"{BaseRadius + row * RadiusStep:0.##}");
+            var lift = FormattableString.Invariant($"{FirstRowDrop - row * HeightStep:0.##}");
+            var tilt = FormattableString.Invariant($"{row * TiltStep:0.##}");
+            var scale = FormattableString.Invariant($"{1.0 - row * ScaleStep:0.###}");
             var offset = row % 2 == 1 ? 0.5 : 0.0;   // every other row shifted by half a seat
             for (var col = 0; col < Cols; col++)
             {
+                // A FULL ring per row. The seats on the near side face the bowl's axis, i.e. away from us, and
+                // `backface-visibility: hidden` drops them — which is what keeps their backs off the screen
+                // while the far side steps up into view.
                 var yaw = FormattableString.Invariant($"{(col + offset) * (360.0 / Cols):0.##}");
                 var slug = Slugs[(row * Cols + col) % Slugs.Count];
+                // Order matters: yaw puts the seat on the ring, translateY lifts it, translateZ pushes it out
+                // along the yawed axis (so it already faces the centre), and rotateX then tilts it in place
+                // towards the viewer below. Scale last, so it doesn't scale the offsets with it.
                 <div class="senate-seat"
-                     style="@FormattableString.Invariant($"transform: rotateY({yaw}deg) rotateX({pitch}deg) translateZ(-42vmin);")">
-                    @* No loading="lazy": the seats are transformed far out of the viewport's own coordinates,
-                       so the browser never considers them near enough to fetch and the dome stayed empty. *@
-                    <img src="@($"portraits/{slug}.jpg")" alt="" />
+                     style="@FormattableString.Invariant($"transform: rotateY({yaw}deg) translateY({lift}vmin) translateZ(-{radius}vmin) rotateX({tilt}deg) scale({scale});")">
+                    @* The pod itself: a dark shell with a lit rim along its lower edge and the delegate inside
+                       it. All CSS — see `.pod*` in app.css. No loading="lazy" on the portrait: the seats are
+                       transformed far outside the viewport's own coordinates, so the browser never considers
+                       them near enough to fetch and the chamber stayed empty. *@
+                    <div class="pod">
+                        <img class="pod-face" src="@($"portraits/{slug}.jpg")" alt="" />
+                        <span class="pod-rim"></span>
+                    </div>
                 </div>
             }
         }
@@ -40,18 +64,26 @@
 </div>
 
 @code {
-    /// <summary>Rows of seats and seats per row. Seven columns is what makes the offset rows read as a dome
-    /// rather than a grid; five rows fill the height without the top row folding over the camera.</summary>
-    private const int Rows = 5;
-    private const int Cols = 7;
-    private const double RowStepDeg = 21;
+    // Funnel geometry, in vmin so it scales with the window.
+    //
+    // The radius is LARGE compared with the perspective distance (55vmin) on purpose: the closer a seat is to
+    // the camera plane, the harder perspective magnifies it, and a chamber you stand in the middle of only
+    // looks right when its wall is genuinely far away — exactly as it is in the films.
+    private const int Rows = 6;
+    private const int Cols = 20;            // a full ring; roughly half of it faces us at any time
+    private const double BaseRadius = 30;   // innermost ring (around the podium)
+    private const double RadiusStep = 11;   // each ring further out …
+    private const double HeightStep = 9;    // … and a step higher: a shallow bowl, as in the reference
+    private const double FirstRowDrop = 0;
+    private const double TiltStep = 6;      // degrees each ring leans in towards the middle
+    private const double ScaleStep = 0.05;  // slightly smaller per ring, on top of what perspective does
 
     /// <summary>
     /// The portrait files used for the seats — file NAMES, not all of them faction slugs (barony/cabal/ghosts).
-    /// Hard-coded because the client cannot stat files, and a missing image would leave a hole in the dome.
+    /// Hard-coded because the client cannot stat files, and a missing image would leave a hole in the chamber.
     /// <para>
     /// Deliberately a SUBSET of the 24 portraits that exist: each is ~50 KB, and this is decoration on a
-    /// landing page — twelve is ~600 KB instead of ~1.2 MB, and nobody can tell that a slowly turning dome
+    /// landing page — twelve is ~600 KB instead of ~1.2 MB, and nobody can tell that a slowly turning chamber
     /// repeats a face. They are the same files the agenda wall uses, so a returning visitor has them cached.
     /// </para>
     /// </summary>

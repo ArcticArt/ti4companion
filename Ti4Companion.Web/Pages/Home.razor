@@ -29,21 +29,22 @@
                     </button>
                 </div>
             }
-            @* How busy it is tonight. Counts only — see ActivityDto. Absent when the server didn't answer. *@
-            @if (activity is { } act)
-            {
-                <div class="activity">
-                    <div class="activity-item">
-                        <span class="activity-num">@act.Active</span>
-                        <span class="activity-lbl">@Loc["home.activeNow"]</span>
-                    </div>
-                    <div class="activity-item">
-                        <span class="activity-num">@act.Last24h</span>
-                        <span class="activity-lbl">@Loc["home.active24h"]</span>
-                    </div>
-                </div>
-            }
         </div>
+        @* How busy it is tonight. OUTSIDE the panel and below it — a notice about the instance, not a control
+           in the form. Counts only, see ActivityDto; absent when the server didn't answer. *@
+        @if (activity is { } act)
+        {
+            <div class="activity">
+                <div class="activity-item">
+                    <span class="activity-num">@act.Active</span>
+                    <span class="activity-lbl">@Loc["home.activeNow"]</span>
+                </div>
+                <div class="activity-item">
+                    <span class="activity-num">@act.Last24h</span>
+                    <span class="activity-lbl">@Loc["home.active24h"]</span>
+                </div>
+            </div>
+        }
     }
     else if (view == View.Create)
     {
