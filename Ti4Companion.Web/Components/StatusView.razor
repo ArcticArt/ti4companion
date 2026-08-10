@@ -104,7 +104,8 @@
                         @foreach (var so in scoreable)
                         {
                             var soId = so.Id;
-                            <ObjectiveDisplayCard So="so" Clickable="Store.CanScoreFor(scorer.Id)"
+                            <ObjectiveDisplayCard So="so"
+                                                  Clickable="Store.CanScoreFor(scorer.Id) && !Store.RedTapeBlocks(so)"
                                                   OnClick="() => Score(soId, scorer.Id)" />
                         }
                     </div>

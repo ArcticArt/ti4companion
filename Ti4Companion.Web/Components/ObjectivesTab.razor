@@ -58,7 +58,7 @@
                         <button class="rt-marker @(so.MarkerRemoved ? "off" : "on")"
                                 @onclick="() => ToggleMarker(so.Id, so.MarkerRemoved)"
                                 title="@(so.MarkerRemoved ? Loc["redtape.putBack"] : Loc["redtape.takeOff"])">
-                            @(so.MarkerRemoved ? "○" : "●")
+                            @(so.MarkerRemoved ? Loc["redtape.clear"] : Loc["redtape.sealed"])
                         </button>
                     }
                     <span class="obj-name">@name</span>
@@ -75,17 +75,21 @@
                 }
                 @if (Scoreable)
                 {
-                    <div class="obj-markers">
+                    @* Red Tape: while the marker is on, the objective is taped off — the markers are
+                       disabled to mirror the server gate exactly, and the tape says why. *@
+                    var taped = Store.RedTapeBlocks(so);
+                    <div class="obj-markers @(taped ? "taped" : "")">
                         @foreach (var p in players)
                         {
                             var scored = so.ScoredByPlayerIds.Contains(p.Id);
                             @* In the status phase only the player whose turn it is can score (host may act
                                for anyone) — the same rule the server enforces, so no button silently fails. *@
-                            <button class="marker @(scored ? "on" : "")" disabled="@(!Store.CanScoreFor(p.Id))"
+                            <button class="marker @(scored ? "on" : "")" disabled="@(taped || !Store.CanScoreFor(p.Id))"
                                     @onclick="() => ToggleScore(so.Id, p.Id, scored)" title="@p.Name">
                                 <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.9" Ring="@p.ColorHex" />
                             </button>
                         }
+                        @if (taped) { <span class="rt-tape">@Loc["redtape.blocked"]</span> }
                     </div>
                 }
             </div>

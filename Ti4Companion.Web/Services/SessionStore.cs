@@ -133,6 +133,12 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         return IsHost || s.StatusScorerId == playerId;
     }
 
+    /// <summary>Red Tape variant: an objective whose marker is still on cannot be scored. Mirrors the
+    /// server gate exactly, so the UI disables what the server would refuse (a 403/400 is a silent no-op
+    /// on this client, which is how a player ends up tapping a dead button).</summary>
+    public bool RedTapeBlocks(SessionObjectiveDto so)
+        => Session is { RedTapeLite: true } && !so.MarkerRemoved;
+
     /// <summary>Whether this device may edit the given player: self always, the host may edit anyone,
     /// or anyone when the session has open editing enabled.</summary>
     public bool CanEdit(Guid playerId)

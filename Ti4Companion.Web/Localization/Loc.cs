@@ -119,6 +119,10 @@ public class Loc
             "Puts a removable token on each revealed objective. Any player can take it off or put it back — the app only tracks the token.",
             "Legt auf jeden aufgedeckten Auftrag einen Marker. Jeder Spieler kann ihn abnehmen oder zurücklegen — die App verwaltet nur den Marker."),
         ["redtape.takeOff"] = ("Take the marker off", "Marker abnehmen"),
+        // Words instead of ●/○: the dots were too quiet to notice across a table.
+        ["redtape.sealed"] = ("SEALED", "VERSIEGELT"),
+        ["redtape.clear"] = ("CLEARED", "FREIGEGEBEN"),
+        ["redtape.blocked"] = ("SEALED — TAKE THE MARKER OFF FIRST", "VERSIEGELT — ERST DEN MARKER ABNEHMEN"),
         ["redtape.putBack"] = ("Put the marker back", "Marker zurücklegen"),
         // Optional technology prompt after the Technology strategy action.
         ["tech.promptOption"] = ("Ask for the technology after the Technology action",

@@ -771,6 +771,12 @@ public static class SessionEndpoints
         {
             return Forbidden();
         }
+        // Red Tape variant: while the marker is still on the objective, it cannot be scored. This is a
+        // deliberate exception to "the app enforces no rules" — the table asked for it and it only applies
+        // when they switched the variant on. The client disables the markers on the same condition, so no
+        // button silently fails.
+        if (session.RedTapeLite && !obj.MarkerRemoved)
+            return Results.BadRequest(new { error = "Red Tape: the marker is still on this objective." });
         if (!obj.Scores.Any(s => s.PlayerId == req.PlayerId))
         {
             obj.Scores.Add(new ObjectiveScore

@@ -235,10 +235,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .game-option .go-check input { accent-color: var(--gold); cursor: pointer; }
 
 /* Red Tape variant: the token on an objective. Filled = still there, hollow = taken off. */
-.rt-marker { background: none; border: 0; padding: 0 .25rem 0 0; font-size: 1rem; line-height: 1; cursor: pointer; color: var(--gold); }
-.rt-marker.off { color: var(--text-faint); opacity: .6; }
-span.rt-marker { cursor: default; }
-.beamer .rt-marker { font-size: clamp(.8rem, 1.6vh, 1.5rem); }
+/* (Red Tape marker styling lives with the tape further down — see `.rt-marker` / `.rt-tape`. It used to be
+   duplicated here, which is exactly the same-specificity collision this file has been bitten by before.) */
 
 /* ---- Join QR ---- */
 /* Always on white with a quiet zone (the component draws both) — a scanner needs the contrast, so the
@@ -333,6 +331,38 @@ span.rt-marker { cursor: default; }
 .obj-card.clickable { cursor: pointer; transition: .12s ease; }
 .obj-card.clickable:hover { border-color: var(--gold-dim); transform: translateY(-1px); }
 .obj-tap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .5rem; }
+
+/* Red Tape: real hazard tape across the player markers while the objective is sealed. The ●/○ dots were
+   reported as too quiet, and the tape carries the reason the markers are dead. */
+.rt-marker { font-family: 'Orbitron', sans-serif; font-size: .58rem; font-weight: 700; letter-spacing: .06em;
+    padding: .1rem .4rem; border-radius: 4px; cursor: pointer; background: none; border: 1px solid; }
+.rt-marker.on { color: #ffd9a0; border-color: #b8721c; background: rgba(184,114,28,.22); }
+.rt-marker.off { color: #8fe0bd; border-color: #2c5e49; background: rgba(70,192,138,.14); }
+span.rt-marker { cursor: default; }   /* the wall renders it as a span — display only */
+.obj-markers.taped { position: relative; min-height: 2.4rem; }
+.obj-markers.taped .marker { opacity: .25; filter: grayscale(1); }
+.rt-tape { position: absolute; left: -2%; right: -2%; top: 50%; transform: translateY(-50%) rotate(-3deg);
+    display: flex; align-items: center; justify-content: center; padding: .18rem 0;
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .6rem; letter-spacing: .1em;
+    color: #2a1400; text-align: center; text-shadow: none; pointer-events: none;
+    background: repeating-linear-gradient(135deg, #e8b23c 0 12px, #1b1205 12px 24px);
+    border-top: 1px solid rgba(0,0,0,.5); border-bottom: 1px solid rgba(0,0,0,.5);
+    -webkit-text-stroke: .5px #e8b23c; }
+.beamer .rt-tape { font-size: clamp(.6rem, .85vw, 1.05rem); }
+.beamer .rt-marker { font-size: clamp(.55rem, .72vw, .95rem); }
+
+/* Player choice as buttons (PlayerPicker) — replaces every <select> of players. */
+.player-picker { display: flex; flex-wrap: wrap; gap: .4rem; }
+.pp-btn { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .6rem .3rem .35rem;
+    border-radius: 999px; background: var(--panel-2); color: var(--text); font: inherit; font-weight: 600;
+    font-size: .85rem; cursor: pointer; transition: .12s ease;
+    border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+.pp-btn:hover:not(:disabled) { border-color: var(--gold-dim); }
+.pp-btn.on { background: color-mix(in srgb, var(--player-color, #888) 22%, var(--panel));
+    border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.pp-btn:disabled { opacity: .45; cursor: default; }
+.pp-name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-check { color: var(--gold); }
 
 /* Status phase stage strip (same idiom as the phase leiste, one level down). */
 .status-stagebar { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
