@@ -116,8 +116,8 @@ iOS "Add to Home Screen" works best over HTTPS, e.g. via the reverse-proxy setup
 
 ## Deployment
 
-See [DEPLOY.md](DEPLOY.md) for the Docker-free Linux host setup (a `publish.ps1` build run as a
-systemd service behind Apache, with Let's Encrypt HTTPS and SQLite backups).
+See [DEPLOY.md](DEPLOY.md) for a Docker-free setup: a `publish.ps1` build run as a systemd
+service behind a reverse proxy, with HTTPS and SQLite backups.
 
 ## Legal & credits
 
