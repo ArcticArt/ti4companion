@@ -1,10 +1,28 @@
-@* The TE "Sprecher" speaker token (wwwroot/speaker.png — the image already contains the word
-   "SPRECHER", so it's shown on its own with no text label beside it). Used wherever the speaker is
-   marked, in place of a star. Size via SizeCss (height; width auto keeps the wide aspect). *@
-<img src="speaker.png" class="speaker-icon" alt="@Loc["players.speaker"]" title='@Loc["players.speaker"]'
+@inherits Ti4ComponentBase
+
+@*
+    The speaker token. The word is part of the artwork, so there is one image per language and no text
+    label beside it: `speaker.png` reads SPEAKER, `speaker_de.png` reads SPRECHER.
+
+    English is the FALLBACK, not one case among equals — a language that has no marker of its own (any
+    future one) gets the English token rather than nothing. So the switch names only the languages that
+    actually have art.
+
+    Inherits Ti4ComponentBase on purpose: the image now depends on the language, and without the base's
+    Loc.OnChange subscription this component would keep the old token after an EN/DE toggle. A parent
+    re-render is not enough — Blazor skips a child whose parameters didn't change, and SizeCss doesn't.
+
+    Sized by height (width auto keeps the wide ~1.69:1 aspect).
+*@
+<img src="@Source" class="speaker-icon" alt="@Loc["players.speaker"]" title='@Loc["players.speaker"]'
      style="@(SizeCss is null ? null : $"height:{SizeCss}")" />
 
 @code {
     [Parameter] public string? SizeCss { get; set; }
-    [Inject] private Loc Loc { get; set; } = default!;
+
+    private string Source => Loc.Lang switch
+    {
+        Language.De => "speaker_de.png",
+        _ => "speaker.png"
+    };
 }
