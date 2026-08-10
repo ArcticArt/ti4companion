@@ -71,6 +71,12 @@ public class GameSession
     /// with <see cref="StatusStepsDone"/>.</summary>
     public StatusStage StatusStage { get; set; }
 
+    /// <summary>Whether a strategy action's secondary round is open: the active player has played the card
+    /// and the table is working through who else takes the secondary. Cleared when the turn moves on.
+    /// Only ever set while the turn timer is in use — without time tracking there is nothing to gain from
+    /// tracking secondaries, and the app should not ask the table for input it has no use for.</summary>
+    public bool SecondaryOpen { get; set; }
+
     /// <summary>Offer to record a technology right after the Technology strategy action was played.
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
@@ -100,6 +106,11 @@ public class Player
     /// <summary>Status phase: this player is done scoring, so the turn moves on in initiative order.
     /// Reset when the status phase begins.</summary>
     public bool StatusDone { get; set; }
+    /// <summary>Strategy action: this player said they take the secondary and has not finished yet, so their
+    /// clock runs alongside the active player's. Cleared by their own "done" and when the turn moves on.
+    /// This is the only point where several players' clocks legitimately run at once — and therefore the
+    /// only place "decision time on secondaries" can be measured without asking the table for extra input.</summary>
+    public bool SecondaryPending { get; set; }
     /// <summary>True once the player has confirmed faction and colour and is ready to start.</summary>
     public bool IsReady { get; set; }
     /// <summary>The session creator. Stable regardless of seat order; grants host privileges.</summary>

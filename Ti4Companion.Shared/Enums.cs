@@ -308,5 +308,14 @@ public enum SessionLogKind
     GameResumed = 23,
     /// <summary>Host published the totals of a face-down vote without the attribution (intermediate step
     /// before <see cref="AgendaReveal2"/>).</summary>
-    AgendaRevealTotals = 24
+    AgendaRevealTotals = 24,
+    /// <summary>A player started working through a strategy card's SECONDARY ability (TargetPlayerId = that
+    /// player, Detail = card number). Ended by <see cref="SecondaryDone"/>.
+    ///
+    /// These intervals OVERLAP each other and the active player's turn by design — that is precisely what
+    /// makes "decision time on secondaries" separable from "time on turn" without asking the table for any
+    /// extra bookkeeping. New numeric values, so no migration was needed; keep them stable, the statistics
+    /// view diffs them.</summary>
+    SecondaryStart = 25,
+    SecondaryDone = 26
 }

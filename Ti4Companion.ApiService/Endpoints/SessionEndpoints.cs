@@ -77,6 +77,8 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
         g.MapPost("/{id:guid}/status-step", SetStatusStep);
         g.MapPost("/{id:guid}/status-stage", SetStatusStage);
+        g.MapPost("/{id:guid}/secondary", SetSecondaryPlayers);
+        g.MapPost("/{id:guid}/players/{playerId:guid}/secondary-done", SetSecondaryDone);
         g.MapPost("/{id:guid}/push", SubscribePush);
         // POST, not DELETE: minimal APIs refuse an inferred body on DELETE ("Body was inferred but the
         // method does not allow inferred body parameters" — it crashes at startup), and the endpoint URL is
@@ -428,6 +430,7 @@ public static class SessionEndpoints
         var overrides = FactionInitiative.Overrides;
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
+        CloseSecondaries(db, session, GetCaller(session, http)?.Id);
         if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
         NotifyTurn(session, push);
         return await SaveAndReturn(db, hub, session, ct, overrides);
@@ -568,6 +571,7 @@ public static class SessionEndpoints
             var overrides = FactionInitiative.Overrides;
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
+            CloseSecondaries(db, session, GetCaller(session, http)?.Id);
             if (session.ActivePlayerId is Guid nxt) Log(db, session, http, SessionLogKind.TurnChange, target: nxt);
                 NotifyTurn(session, push);
             return await SaveAndReturn(db, hub, session, ct, overrides);
@@ -734,6 +738,63 @@ public static class SessionEndpoints
             ? session.StatusStepsDone | req.Step
             : session.StatusStepsDone & ~req.Step;
         return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Who takes the secondary of the strategy action that is running. Set by the ACTIVE player (or the
+    // host) — they are the one announcing the primary and asking the table. Idempotent: the request carries
+    // the whole set, so there is never an intermediate state where two players think they are the last one.
+    private static async Task<IResult> SetSecondaryPlayers(Guid id, SetSecondaryPlayersRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        var isActive = caller is not null && caller.Id == session.ActivePlayerId;
+        if (!isActive && !CallerIsHost(session, http)) return Forbidden();
+        if (session.ActiveStrategyCardId is null)
+            return Results.BadRequest(new { error = "No strategy action is running." });
+
+        var wanted = (req.PlayerIds ?? Array.Empty<Guid>()).ToHashSet();
+        session.SecondaryOpen = true;
+        foreach (var p in session.Players)
+        {
+            // The active player is on the primary, not a secondary — never put them in this set.
+            var take = wanted.Contains(p.Id) && p.Id != session.ActivePlayerId;
+            if (take == p.SecondaryPending) continue;
+            p.SecondaryPending = take;
+            // One log entry per player, per direction: that is what the durations are diffed from.
+            Log(db, session, take ? SessionLogKind.SecondaryStart : SessionLogKind.SecondaryDone,
+                caller?.Id, target: p.Id, detail: session.ActiveStrategyCardId?.ToString());
+        }
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // "Done" for one player's secondary — stops their clock. Self or host: it is their own time.
+    private static async Task<IResult> SetSecondaryDone(Guid id, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var player = session.Players.FirstOrDefault(p => p.Id == playerId);
+        if (player is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (!CallerIsHost(session, http) && caller?.Id != playerId) return Forbidden();
+        if (!player.SecondaryPending) return await SaveAndReturn(db, hub, session, ct);   // already done
+        player.SecondaryPending = false;
+        Log(db, session, SessionLogKind.SecondaryDone, caller?.Id, target: playerId,
+            detail: session.ActiveStrategyCardId?.ToString());
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>Close the secondary round: everybody's clock stops. Called wherever the turn moves on, so a
+    /// forgotten "done" can never keep a clock running into the next player's turn.</summary>
+    private static void CloseSecondaries(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        if (!session.SecondaryOpen && session.Players.All(p => !p.SecondaryPending)) return;
+        foreach (var p in session.Players.Where(p => p.SecondaryPending))
+        {
+            p.SecondaryPending = false;
+            Log(db, session, SessionLogKind.SecondaryDone, actor, target: p.Id);
+        }
+        session.SecondaryOpen = false;
     }
 
     /// <summary>Tell the player who is now up that it is their turn. Only called where a turn really moves

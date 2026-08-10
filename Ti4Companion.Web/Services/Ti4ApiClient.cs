@@ -107,6 +107,10 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/players/{playerId}/status-done", new SetStatusDoneRequest(done));
     public Task<SessionStateDto?> SetStatusStepAsync(Guid id, StatusStep step, bool done)
         => PostFor($"api/sessions/{id}/status-step", new SetStatusStepRequest(step, done));
+    public Task<SessionStateDto?> SetSecondaryPlayersAsync(Guid id, IReadOnlyList<Guid> playerIds)
+        => PostFor($"api/sessions/{id}/secondary", new SetSecondaryPlayersRequest(playerIds));
+    public Task<SessionStateDto?> SetSecondaryDoneAsync(Guid id, Guid playerId)
+        => PostFor($"api/sessions/{id}/players/{playerId}/secondary-done", new { });
     public Task<SessionStateDto?> SetStatusStageAsync(Guid id, StatusStage stage)
         => PostFor($"api/sessions/{id}/status-stage", new SetStatusStageRequest(stage));
     public Task<SessionStateDto?> SetObjectiveMarkerAsync(Guid id, Guid sessionObjectiveId, bool removed)

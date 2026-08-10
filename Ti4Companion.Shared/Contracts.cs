@@ -180,7 +180,9 @@ public record PlayerDto(
     IReadOnlyList<string> TechnologyIds,
     int Influence,
     /// <summary>Status phase: done scoring, so the turn has moved on.</summary>
-    bool StatusDone = false);
+    bool StatusDone = false,
+    /// <summary>Strategy action: this player is taking the secondary and hasn't finished — their clock runs.</summary>
+    bool SecondaryPending = false);
 
 /// <summary><paramref name="CustomName"/>/<paramref name="CustomPoints"/> are set for an objective added
 /// by hand (e.g. a secret made public via "Classified Document Leaks") rather than from the content set.</summary>
@@ -235,7 +237,9 @@ public record SessionStateDto(
     /// <summary>Wall display: show the join QR code. On during setup, off once the game starts.</summary>
     bool ShowJoinQr = true,
     /// <summary>Status phase: which of the three stages the table is on (score → reveal → checklist).</summary>
-    StatusStage StatusStage = StatusStage.Scoring);
+    StatusStage StatusStage = StatusStage.Scoring,
+    /// <summary>A strategy action's secondary round is open — the table is working through who takes it.</summary>
+    bool SecondaryOpen = false);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>
@@ -343,3 +347,7 @@ public record StartVotingRequest(bool Hidden);
 /// transmitted on lock, so in a face-down vote nobody — not even the host — sees it beforehand.
 /// Used for both open and hidden voting (a vote counts only once locked).</summary>
 public record LockVoteRequest(Guid PlayerId, VoteOutcome Outcome, int Votes, string? Choice);
+
+/// <summary>Who takes the secondary of the strategy action that is running. The request carries the WHOLE
+/// set, not a single toggle, so there is never an intermediate state the table could misread.</summary>
+public record SetSecondaryPlayersRequest(IReadOnlyList<Guid>? PlayerIds);
