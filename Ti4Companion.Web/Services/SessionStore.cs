@@ -91,6 +91,11 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     public void ShowTechTab() => OnShowTechTab?.Invoke();
 
+    /// <summary>Same idea for the objectives tab — the Imperial strategy action offers to score one.</summary>
+    public event Action? OnShowObjectivesTab;
+
+    public void ShowObjectivesTab() => OnShowObjectivesTab?.Invoke();
+
     /// <summary>Host is steering other players' turns from this device (the action phase "take over"
     /// toggle). Lives here rather than in the view so switching tabs — Phase → Players → Phase — doesn't
     /// silently drop it, which meant re-tapping it constantly when one person runs the whole table.</summary>

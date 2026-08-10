@@ -451,6 +451,10 @@ public class Loc
         ["common.close"] = ("Close", "Schließen"),
         ["common.back"] = ("Back", "Zurück"),
         // Secondary abilities of a strategy action (only with the turn timer in use).
+        ["politics.speaker"] = ("Appoint the speaker", "Sprecher bestimmen"),
+        ["politics.hint"] = ("The primary of Politics chooses who holds the speaker token.", "Die Primärfähigkeit von Politik bestimmt, wer den Sprechermarker hält."),
+        ["imperial.promptText"] = ("Imperial: you may score a public objective.", "Imperium: du darfst einen öffentlichen Auftrag werten."),
+        ["imperial.promptOpen"] = ("Open objectives", "Aufträge öffnen"),
         ["secondary.title"] = ("Secondary ability", "Sekundärfähigkeit"),
         ["secondary.hint"] = ("Tap whoever is taking it — including yourself for the primary. Each one stops their own clock with \"Done\".",
                              "Antippen, wer sie wahrnimmt — dich selbst für die Primärfähigkeit mit dazu. Jeder stoppt seine Uhr selbst mit „Fertig“."),

@@ -77,6 +77,7 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
         g.MapPost("/{id:guid}/status-step", SetStatusStep);
         g.MapPost("/{id:guid}/status-stage", SetStatusStage);
+        g.MapPost("/{id:guid}/speaker", AppointSpeaker);
         g.MapPost("/{id:guid}/secondary", SetSecondaryPlayers);
         g.MapPost("/{id:guid}/players/{playerId:guid}/secondary-done", SetSecondaryDone);
         g.MapPost("/{id:guid}/push", SubscribePush);
@@ -737,6 +738,25 @@ public static class SessionEndpoints
         session.StatusStepsDone = req.Done
             ? session.StatusStepsDone | req.Step
             : session.StatusStepsDone & ~req.Step;
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Politics: the player who played the card appoints the speaker. Its own route rather than widening the
+    // host-only settings PATCH — the permission is narrow on purpose (only while the Politics action is on
+    // the table, and only for the player who played it), and a widened PATCH would grant far more than that.
+    private static async Task<IResult> AppointSpeaker(Guid id, SetSpeakerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        var isActive = caller is not null && caller.Id == session.ActivePlayerId;
+        if (!isActive && !CallerIsHost(session, http)) return Forbidden();
+        if (session.ActiveStrategyCardId != GameRules.PoliticsStrategyCard && !CallerIsHost(session, http))
+            return Results.BadRequest(new { error = "Politics is not the running strategy action." });
+        if (session.Players.All(p => p.Id != req.PlayerId)) return Results.NotFound();
+        if (session.SpeakerPlayerId == req.PlayerId) return await SaveAndReturn(db, hub, session, ct);
+        session.SpeakerPlayerId = req.PlayerId;
+        Log(db, session, SessionLogKind.SpeakerSet, caller?.Id, target: req.PlayerId);
         return await SaveAndReturn(db, hub, session, ct);
     }
 

@@ -18,4 +18,10 @@ public static class GameRules
     /// <summary>The Technology strategy card's number (cards are keyed by their printed initiative 1–8).
     /// Used for the optional "record your technology" prompt after that action is played.</summary>
     public const int TechnologyStrategyCard = 7;
+
+    /// <summary>Politics: the card whose primary appoints the speaker. Verified against /api/content.</summary>
+    public const int PoliticsStrategyCard = 3;
+
+    /// <summary>Imperial: the card whose primary may score a public objective.</summary>
+    public const int ImperialStrategyCard = 8;
 }

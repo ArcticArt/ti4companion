@@ -325,6 +325,9 @@ public record SetActiveStrategyCardRequest(int? StrategyCardId);
 
 public record SetActivePlayerRequest(Guid? PlayerId);
 
+/// <summary>Politics: appoint this player as the new speaker.</summary>
+public record SetSpeakerRequest(Guid PlayerId);
+
 public record SetPassedRequest(bool Passed);
 
 public record RevealObjectiveRequest(string ObjectiveId);

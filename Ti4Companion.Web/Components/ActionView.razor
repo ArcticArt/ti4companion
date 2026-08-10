@@ -39,14 +39,42 @@
     </div>
 }
 
-@* Optional nudge after the Technology action: offer the tech entry instead of demanding it. Off by
-   default — a table that keeps its tech list loosely never sees this. *@
-@if (s.PromptTechOnAction && s.ActiveStrategyCardId == GameRules.TechnologyStrategyCard && canControl)
+@* Card-specific actions. Only three of the eight have one worth offering; the other five are resolved on
+   the table and the app would only be in the way. All three are offers, never gates. *@
+@if (s.ActiveStrategyCardId == GameRules.PoliticsStrategyCard && canControl)
+{
+    @* Politics: the player who played it appoints the speaker (own route — see AppointSpeaker). *@
+    <div class="panel" style="margin-top:.6rem;">
+        <div class="row-wrap" style="gap:.5rem;align-items:baseline;">
+            <h3 style="margin:0;">@Loc["politics.speaker"]</h3>
+            <span class="faint" style="font-size:.78rem;">@Loc["politics.hint"]</span>
+        </div>
+        <div style="margin-top:.45rem;">
+            <PlayerPicker Players="s.Players.OrderBy(p => p.SeatOrder)"
+                          SelectedIds="s.SpeakerPlayerId is Guid sp ? new[] { sp } : Array.Empty<Guid>()"
+                          OnPick="AppointSpeaker" />
+        </div>
+    </div>
+}
+@* Technology: offer the tech entry. The nudge is a table option; the participants of the secondary get it
+   too, because they are the ones researching alongside the primary. *@
+@if (s.ActiveStrategyCardId == GameRules.TechnologyStrategyCard
+     && (canControl || (Store.MyPlayerId is Guid me2 && s.Players.Any(p => p.Id == me2 && p.SecondaryPending)))
+     && (s.PromptTechOnAction || Store.TurnTimerEnabled))
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">@Loc["tech.promptText"]</span>
         <div class="spacer" style="flex:1"></div>
         <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowTechTab()">@Loc["tech.promptOpen"] ▸</button>
+    </div>
+}
+@* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). *@
+@if (s.ActiveStrategyCardId == GameRules.ImperialStrategyCard && canControl)
+{
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text">@Loc["imperial.promptText"]</span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowObjectivesTab()">@Loc["imperial.promptOpen"] ▸</button>
     </div>
 }
 
@@ -213,6 +241,8 @@ else
         if (!next.Remove(playerId)) next.Add(playerId);
         return Store.Mutate(Store.Api.SetSecondaryPlayersAsync(Sid, next));
     }
+
+    private Task AppointSpeaker(Guid playerId) => Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
 
     private Task SecondaryDone(Guid playerId) => Store.Mutate(Store.Api.SetSecondaryDoneAsync(Sid, playerId));
 }

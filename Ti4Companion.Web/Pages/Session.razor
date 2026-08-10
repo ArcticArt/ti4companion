@@ -84,6 +84,7 @@ else
     {
         base.OnInitialized();
         Store.OnShowTechTab += ShowTechs;
+        Store.OnShowObjectivesTab += ShowObjectives;
     }
 
     // The action view's optional "record your technology" prompt asks the shell to switch tabs.
@@ -93,9 +94,17 @@ else
         StateHasChanged();
     });
 
+    // The Imperial action offers to score an objective; same shell-switch as the technology prompt.
+    private void ShowObjectives() => InvokeAsync(() =>
+    {
+        tab = TabId.Objectives;
+        StateHasChanged();
+    });
+
     public override void Dispose()
     {
         Store.OnShowTechTab -= ShowTechs;
+        Store.OnShowObjectivesTab -= ShowObjectives;
         base.Dispose();
     }
 
