@@ -1089,10 +1089,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .container { width: 100%; box-sizing: border-box; }
 
 /* Legal / IP notice footer (Asmodee/FFG community-use guidelines) */
-.legal-footer { max-width: 1180px; margin: 1.5rem auto 0; padding: .9rem 1rem 1.4rem; border-top: 1px solid var(--panel-border); color: var(--text-faint); font-size: .68rem; line-height: 1.4; }
+/* The footer sits over the start page's backdrop, so it needs its own ground and enough contrast to read
+   against it — over the dark chamber the old faint grey was barely there. */
+.legal-footer { position: relative; z-index: 1; max-width: 1180px; margin: 1.5rem auto 0; padding: .9rem 1rem 1.4rem; border-top: 1px solid var(--panel-border); color: var(--text-dim); font-size: .68rem; line-height: 1.4; background: rgba(7, 11, 22, .72); border-radius: 10px 10px 0 0; }
 .legal-footer p { margin: .15rem 0; }
-.legal-footer .legal-meta { margin-top: .4rem; opacity: .85; }
-.legal-footer a { color: var(--text-dim); text-decoration: underline; }
+.legal-footer .legal-meta { margin-top: .4rem; }
+.legal-footer a { color: var(--accent); text-decoration: underline; }
 .legal-footer a:hover { color: var(--gold); }
 
 /* ===================================================================
@@ -1127,7 +1129,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* ---- Start page: the senate chamber behind everything ----------------------------------------------- */
 /* Fixed and BEHIND the shell (z-index 0 vs. the content's own stacking), never interactive. */
 .senate { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-    perspective: 70vmin; perspective-origin: 50% 45%; }
+    perspective: 92vmin; perspective-origin: 50% 38%; }
 /* The bowl: pushed back far enough that the WHOLE ring stays behind the perspective plane (a ring that
    crosses it has a seat magnified without limit — the first attempt produced seats 15557px wide), and tipped
    forward so we look down INTO the funnel. The near half of every ring faces away from us and is dropped by
@@ -1136,29 +1138,29 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .senate-scene { position: absolute; inset: 0; transform-style: preserve-3d;
     animation: senate-spin 320s linear infinite; }
 @keyframes senate-spin {
-    from { transform: translateZ(-58vmin) rotateX(27deg) rotateY(0deg); }
-    to   { transform: translateZ(-58vmin) rotateX(27deg) rotateY(360deg); }
+    from { transform: translateZ(-30vmin) rotateX(31deg) rotateY(0deg); }
+    to   { transform: translateZ(-30vmin) rotateX(31deg) rotateY(360deg); }
 }
 /* Each seat is placed by its own transform (see SenateBackdrop); this only sizes it. */
-.senate-seat { position: absolute; left: 50%; top: 50%; width: 15vmin; height: 11vmin;
-    margin: -5.5vmin 0 0 -7.5vmin; transform-style: preserve-3d; backface-visibility: hidden; }
+.senate-seat { position: absolute; left: 50%; top: 50%; width: 17vmin; height: 12vmin;
+    margin: -6vmin 0 0 -8.5vmin; transform-style: preserve-3d; backface-visibility: hidden; }
 /* The pod: a dark shell, flattened and wider than tall, with a lit rim along its lower edge and the delegate
    sitting inside it. Faint on purpose — this is a backdrop, and the buttons in front have to win. */
-.pod { position: absolute; inset: 0; overflow: hidden; opacity: .5;
+.pod { position: absolute; inset: 0; overflow: hidden; opacity: .82;
     border-radius: 46% 46% 26% 26% / 62% 62% 38% 38%;
-    background: linear-gradient(180deg, #16203a 0%, #0a1120 55%, #070b16 100%);
-    border: 1px solid rgba(140, 170, 220, .16);
-    box-shadow: inset 0 .3vmin .8vmin rgba(0, 0, 0, .8), 0 0 1.6vmin rgba(90, 130, 200, .1); }
+    background: linear-gradient(180deg, #2b3a5c 0%, #16203a 55%, #0b1220 100%);
+    border: 1px solid rgba(155, 190, 240, .4);
+    box-shadow: inset 0 .3vmin .8vmin rgba(0, 0, 0, .75), 0 0 1.6vmin rgba(90, 140, 220, .28); }
 .pod-face { position: absolute; left: 50%; top: 14%; width: 46%; height: 56%; transform: translateX(-50%);
-    object-fit: cover; border-radius: 50% 50% 35% 35%; opacity: .45;
-    filter: grayscale(.45) contrast(.95); mix-blend-mode: screen; }
+    object-fit: cover; border-radius: 50% 50% 35% 35%; opacity: .72;
+    filter: grayscale(.3) contrast(1.05); }
 /* The lit strip along the rim — the one bright thing on a senate pod. */
 .pod-rim { position: absolute; left: 8%; right: 8%; bottom: 9%; height: 7%; border-radius: 999px;
     background: linear-gradient(90deg, transparent 0%, rgba(200, 222, 255, .5) 25%, rgba(200, 222, 255, .6) 75%, transparent 100%);
     box-shadow: 0 0 1.1vmin rgba(150, 190, 255, .5); }
 /* A vignette so the dome sinks into the page instead of competing with the buttons in front of it. */
 .senate::after { content: ""; position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 50% 45%, rgba(7, 11, 22, .35) 0%, rgba(7, 11, 22, .82) 55%, rgba(7, 11, 22, .96) 100%); }
+    background: radial-gradient(ellipse at 50% 40%, rgba(7, 11, 22, 0) 34%, rgba(7, 11, 22, .5) 72%, rgba(7, 11, 22, .88) 100%); }
 /* Anything that moves this slowly is still motion — honour the preference and just hold still. */
 @media (prefers-reduced-motion: reduce) { .senate-scene { animation: none; } }
 /* The content has to sit above the backdrop; the shell is transparent, so give it its own layer. */

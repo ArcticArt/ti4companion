@@ -1,28 +1,28 @@
 @inherits Ti4ComponentBase
 
 @*
-    The start page's backdrop: a senate chamber seen FROM THE MIDDLE, turning very slowly.
+    The start page's backdrop: the senate chamber as a BOWL, seen from above, turning very slowly.
 
-    Two things make it read as "standing in the middle" rather than "looking at a ball":
+    Three things make it work, and each was got wrong first:
 
-    1. The camera really is at the centre. `.senate-scene` is pushed forward by exactly the perspective
-       distance, so the scene's origin sits ON the camera; a seat at `translateZ(-radius)` is then `radius`
-       in front of the viewer. The seats on the far side of the ring land BEHIND the camera, and CSS does not
-       render anything at or past the perspective plane — so their backs are never drawn. (Before this they
-       were pushed away from the viewer instead, which put half the ring on the far wall facing away: you
-       could see the portraits from behind.) `backface-visibility: hidden` is the belt to that braces.
+    1. It is a funnel, not a sphere: every ring sits higher AND further out than the one below, leans in
+       towards the middle and is drawn a little smaller. That is the shape in the reference cutaway — the rings
+       fan open towards the viewer instead of wrapping back over their head.
 
-    2. It is a FUNNEL, not a sphere: each row up sits higher AND further out, is tilted down towards the
-       centre, and is drawn smaller. So the rows fan open above you the way the pods do in the films, instead
-       of wrapping back over your head.
+    2. The whole ring stays BEHIND the perspective plane (see `.senate-scene` in app.css). CSS magnifies by
+       `perspective / distance`, without bound as a seat approaches the camera plane — and a ring drawn *around*
+       the camera necessarily crosses it. One seat came out 15557px wide that way.
 
-    Rows are offset by half a seat against each other, so the seats interlock:
+    3. No portrait is ever seen from behind: the near half of every ring faces the bowl's axis, i.e. away from
+       us, and `backface-visibility: hidden` simply doesn't paint it. What is left is the far half stepping up.
+
+    Rings are offset by half a seat against each other, so the pods interlock:
 
         X X X X X X X
          X X X X X X X
 
-    Deliberately faint and `pointer-events: none`: it is a backdrop, and nothing on it may ever eat a tap
-    meant for the buttons in front.
+    `pointer-events: none` throughout: it is a backdrop, and nothing on it may ever eat a tap meant for the
+    buttons in front.
 *@
 <div class="senate" aria-hidden="true">
     <div class="senate-scene">
@@ -65,15 +65,11 @@
 
 @code {
     // Funnel geometry, in vmin so it scales with the window.
-    //
-    // The radius is LARGE compared with the perspective distance (55vmin) on purpose: the closer a seat is to
-    // the camera plane, the harder perspective magnifies it, and a chamber you stand in the middle of only
-    // looks right when its wall is genuinely far away — exactly as it is in the films.
-    private const int Rows = 6;
+    private const int Rows = 8;
     private const int Cols = 20;            // a full ring; roughly half of it faces us at any time
-    private const double BaseRadius = 30;   // innermost ring (around the podium)
-    private const double RadiusStep = 11;   // each ring further out …
-    private const double HeightStep = 9;    // … and a step higher: a shallow bowl, as in the reference
+    private const double BaseRadius = 26;   // innermost ring (around the podium)
+    private const double RadiusStep = 13;   // each ring further out …
+    private const double HeightStep = 10;    // … and a step higher: a shallow bowl, as in the reference
     private const double FirstRowDrop = 0;
     private const double TiltStep = 6;      // degrees each ring leans in towards the middle
     private const double ScaleStep = 0.05;  // slightly smaller per ring, on top of what perspective does

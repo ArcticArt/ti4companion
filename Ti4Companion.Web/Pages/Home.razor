@@ -5,12 +5,9 @@
 
 <PageTitle>Twilight Imperium Companion</PageTitle>
 
-@* The senate dome behind everything (see SenateBackdrop). Only on the landing view: once you are filling in
-   a form it is one thing too many to look at. *@
-@if (view == View.Landing)
-{
-    <SenateBackdrop />
-}
+@* The senate chamber behind everything (see SenateBackdrop). On EVERY view of the start page — restricting it
+   to the landing view meant the background simply vanished when you opened "create session". *@
+<SenateBackdrop />
 
 <div class="container home-view">
     @if (view == View.Landing)
