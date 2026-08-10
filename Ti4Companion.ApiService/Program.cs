@@ -6,6 +6,7 @@ using Ti4Companion.ApiService.Data;
 using Ti4Companion.ApiService.Endpoints;
 using Ti4Companion.ApiService.Realtime;
 using Ti4Companion.ApiService.Services;
+using Ti4Companion.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -102,6 +103,11 @@ app.UseStaticFiles();
 app.MapGet("/api/ping", () => Results.Ok(new { status = "ok", time = DateTimeOffset.UtcNow }));
 
 // REST API + real-time hub.
+// Who am I? Empty on production, "TEST" on staging (set via Ti4__InstanceLabel in the systemd unit).
+// Unauthenticated and unmetered on purpose: every client asks once at startup, before any session exists.
+app.MapGet("/api/instance", (IConfiguration cfg) =>
+    Results.Ok(new InstanceDto(cfg["Ti4:InstanceLabel"] ?? "")));
+
 app.MapContentEndpoints();
 app.MapSessionEndpoints();
 app.MapHub<SessionHub>("/hubs/session");

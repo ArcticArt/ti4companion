@@ -351,6 +351,18 @@ span.rt-marker { cursor: default; }   /* the wall renders it as a span — displ
 .beamer .rt-tape { font-size: clamp(.6rem, .85vw, 1.05rem); }
 .beamer .rt-marker { font-size: clamp(.55rem, .72vw, .95rem); }
 
+/* Instance badge (staging). Always on top, never in the way: both parts are pointer-events:none, so no
+   button underneath becomes untappable. The frame is what makes it readable from across the room on the
+   wall display, where a small pill alone would be missed. */
+.instance-badge { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 9999;
+    pointer-events: none; padding: .12rem 1.2rem; border-radius: 0 0 9px 9px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(.72rem, 1.1vw, 1.15rem);
+    letter-spacing: .3em; text-indent: .3em; color: #2a1400;
+    background: repeating-linear-gradient(135deg, #e8b23c 0 10px, #c8871f 10px 20px);
+    box-shadow: 0 2px 12px rgba(0,0,0,.55); }
+.instance-frame { position: fixed; inset: 0; z-index: 9998; pointer-events: none;
+    border: 3px solid #e8b23c; }
+
 /* Player choice as buttons (PlayerPicker) — replaces every <select> of players. */
 .player-picker { display: flex; flex-wrap: wrap; gap: .4rem; }
 .pp-btn { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .6rem .3rem .35rem;

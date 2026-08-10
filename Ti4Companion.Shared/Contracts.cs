@@ -291,6 +291,12 @@ public record SetStatusStepRequest(StatusStep Step, bool Done);
 /// <summary>Move the status phase to a stage. Absolute, not "next": a double tap must not skip a stage.</summary>
 public record SetStatusStageRequest(StatusStage Stage);
 
+/// <summary>Which instance is answering. A non-empty <paramref name="Label"/> is shown as a permanent
+/// badge on every screen — set on the staging instance so a test game is never mistaken for a real one.
+/// Comes from configuration (<c>Ti4:InstanceLabel</c>), not from the hostname: the label has to survive a
+/// LAN address, a renamed subdomain and a second staging box.</summary>
+public record InstanceDto(string Label);
+
 public record SetDisplayModeRequest(DisplayMode Mode);
 
 public record RevealCustomObjectiveRequest(string Name, int Points);

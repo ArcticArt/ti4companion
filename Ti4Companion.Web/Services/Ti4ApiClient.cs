@@ -19,6 +19,9 @@ public class Ti4ApiClient(HttpClient http)
     public Task<ContentBundleDto?> GetContentAsync()
         => http.GetFromJsonAsync<ContentBundleDto>("api/content");
 
+    public Task<InstanceDto?> GetInstanceAsync()
+        => http.GetFromJsonAsync<InstanceDto>("api/instance");
+
     public async Task<SessionStateDto?> GetSessionAsync(string code)
     {
         var resp = await http.GetAsync($"api/sessions/{code}");
