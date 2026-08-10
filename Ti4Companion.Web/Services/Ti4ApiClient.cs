@@ -171,6 +171,14 @@ public class Ti4ApiClient(HttpClient http)
         catch { }
     }
 
+    /// <summary>Activity counts for the start page. Null when unavailable (offline, rate-limited, an older
+    /// server) — the page then simply shows nothing rather than an error.</summary>
+    public async Task<ActivityDto?> GetActivityAsync()
+    {
+        try { return await http.GetFromJsonAsync<ActivityDto>("api/activity"); }
+        catch { return null; }
+    }
+
     // ---- Match log ----
     public async Task<IReadOnlyList<SessionLogEntryDto>> GetLogAsync(string code)
     {

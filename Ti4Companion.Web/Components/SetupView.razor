@@ -1,11 +1,69 @@
 @inherits Ti4ComponentBase
 
+@*
+    Setup, walked through in order: name → variant and options → players → seating and speaker → objectives.
+    It used to be every panel at once, which said nothing about what to do first.
+
+    Only the HOST is stepped. Everyone else always sees the player list, because a joiner has to be able to
+    pick their faction and colour and ready up whenever they arrive — waiting for the host to be on the right
+    step would be absurd. The strip is clickable for the host, so nothing is ever more than one tap away
+    (and a reload, which forgets the step, costs nothing).
+*@
 @{
     var s = Store.Session!;
     var ordered = s.Players.OrderBy(p => p.SeatOrder).ToList();
     var host = Store.IsHost;
+    // Non-hosts only ever see the player step.
+    var step = host ? current : SetupStep.Players;
 }
 
+@if (host)
+{
+    <div class="panel status-stagebar setup-steps">
+        <div class="stage-strip">
+            @foreach (var (st, key) in Steps)
+            {
+                <button class="stage-seg @(step == st ? "on" : step > st ? "done" : "")" @onclick="() => current = st">@Loc[key]</button>
+            }
+        </div>
+        <div class="spacer" style="flex:1"></div>
+        <div class="stage-nav">
+            @if (step > SetupStep.Name)
+            {
+                <button class="btn btn-sm" @onclick="() => current = step - 1">◂ @Loc["common.back"]</button>
+            }
+            @if (step < SetupStep.Objectives)
+            {
+                <button class="btn btn-sm btn-gold" @onclick="() => current = step + 1">@Loc["status.next"] ▸</button>
+            }
+        </div>
+    </div>
+}
+
+@* ---- Step 1: what is this game called (and which expansions are in) ---- *@
+@if (step == SetupStep.Name)
+{
+    <div class="panel" style="margin-top:.6rem;">
+        <h3 style="margin:0 0 .2rem;">@Loc["setup.step.name"]</h3>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.nameHint"]</p>
+        <input type="text" value="@s.Name" @onchange="SetName" placeholder="@NamePlaceholder" style="max-width:24rem;" />
+        <div style="margin-top:.8rem;">
+            <label>@Loc["home.expansions"]</label>
+            <div class="row-wrap" style="gap:.4rem;margin-top:.3rem;">
+                @foreach (var x in new[] { Expansion.ProphecyOfKings, Expansion.Codex, Expansion.ThundersEdge })
+                {
+                    var on = s.ActiveExpansions.HasFlag(x);
+                    <button class="btn btn-sm @(on ? "btn-gold" : "btn-ghost")" @onclick="() => ToggleExpansion(x)">@Loc[$"exp.{x}"]</button>
+                }
+            </div>
+            <span class="faint go-hint">@Loc["setup.expansionsHint"]</span>
+        </div>
+    </div>
+}
+
+@* ---- Step 3: the players (and the only thing a non-host sees) ---- *@
+@if (step == SetupStep.Players)
+{
 <div class="panel">
     <h3>@Loc["setup.title"]</h3>
     <p class="faint">@(host ? Loc["setup.startHint"] : Loc["setup.waiting"])</p>
@@ -98,11 +156,22 @@
         <p class="faint" style="margin-top:1rem;">@Loc["setup.maxPlayers"]</p>
     }
 </div>
+}
 
-@* Table decisions (host only): both are options, never forced defaults. *@
-@if (host)
+@* ---- Step 4: seating order and the speaker ---- *@
+@if (step == SetupStep.Seating)
 {
-    <div class="panel">
+    <div class="panel" style="margin-top:.6rem;">
+        <h3 style="margin:0 0 .2rem;">@Loc["setup.step.seating"]</h3>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.seatingHint"]</p>
+        <SeatOrderList />
+    </div>
+}
+
+@* ---- Step 2: the table's variant and options ---- *@
+@if (step == SetupStep.Options)
+{
+    <div class="panel" style="margin-top:.6rem;">
         <h3 style="margin:0 0 .6rem;">@Loc["options.title"]</h3>
 
         <div class="game-option">
@@ -170,11 +239,12 @@
     </div>
 }
 
-@if (host)
+@* ---- Step 5: record the objectives the table drew ---- *@
+@if (step == SetupStep.Objectives)
 {
-    <div class="panel">
+    <div class="panel" style="margin-top:.6rem;">
         <h3 style="margin:0 0 .2rem;">@Loc["setup.objectives"]</h3>
-        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.objectivesHint"]</p>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc[Store.RedTapeOn ? "setup.objectivesHintRedTape" : "setup.objectivesHint"]</p>
         <ObjectivesTab RevealOnTop="true" Scoreable="false" AllowCustom="false" />
     </div>
 }
@@ -183,6 +253,35 @@
     private Guid Sid => Store.Session!.Id;
     private string newName = "";
     private string AddPlaceholder => Loc["players.add"];
+    private string NamePlaceholder => Loc["home.sessionName"];
+
+    /// <summary>The order the table settles things in. Host-local: it steers this device's view and nothing
+    /// else, so it needs no session state and a reload just lands on the first step.</summary>
+    private enum SetupStep { Name, Options, Players, Seating, Objectives }
+
+    private SetupStep current = SetupStep.Name;
+
+    private static readonly (SetupStep Step, string Key)[] Steps =
+    {
+        (SetupStep.Name, "setup.step.name"),
+        (SetupStep.Options, "setup.step.options"),
+        (SetupStep.Players, "setup.step.players"),
+        (SetupStep.Seating, "setup.step.seating"),
+        (SetupStep.Objectives, "setup.step.objectives"),
+    };
+
+    private Task SetName(ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            e.Value?.ToString(), null, null, null, null, null, null, null)));
+
+    // Base is always in (the server ORs it back in anyway) — these three are the choices.
+    private Task ToggleExpansion(Expansion x)
+    {
+        var now = Store.Session!.ActiveExpansions;
+        var next = now.HasFlag(x) ? now & ~x : now | x;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, next | Expansion.Base, null, null, null, null, null)));
+    }
 
     private string? TakenBy(string hex, Guid exceptId)
         => Store.Session!.Players.FirstOrDefault(p => p.Id != exceptId && string.Equals(p.ColorHex, hex, StringComparison.OrdinalIgnoreCase))?.Name;

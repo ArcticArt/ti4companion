@@ -268,6 +268,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .status-steps .step-box { flex: 0 0 auto; width: 1.15rem; height: 1.15rem; display: inline-flex;
     align-items: center; justify-content: center; border: 1px solid var(--panel-border); border-radius: 4px;
     font-size: .8rem; line-height: 1; }
+/* Setup steps: the same strip as the status phase, but the segments are buttons — the host can jump straight
+   to any step, which is also what makes losing the (device-local) step on a reload a non-event. */
+/* No `font: inherit` here: this selector is more specific than `.stage-seg`, so it would override the
+   Orbitron/size that rule sets and the strip would fall back to the UA button font. */
+.setup-steps .stage-seg { background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
+.setup-steps .stage-seg:hover { color: var(--gold); }
 /* Non-host: the same list without a box — a checkbox nobody may tick is a broken control. */
 .status-steps .step.readonly { cursor: default; }
 .status-steps .step.readonly:hover { border-color: var(--panel-border); }
@@ -1117,6 +1123,34 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Push hint next to the bell: a chip, tappable to dismiss. Wraps rather than stretching the app bar. */
 .push-note { max-width: 22rem; white-space: normal; line-height: 1.25; cursor: pointer;
     background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
+
+/* ---- Start page: the galactic senate behind everything ---------------------------------------------- */
+/* Fixed and BEHIND the shell (z-index 0 vs. the content's own stacking), never interactive. */
+.senate { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    perspective: 46vmin; perspective-origin: 50% 50%; }
+/* The camera sits in the middle of the sphere and the whole dome turns around it — one very slow revolution,
+   so it reads as depth rather than motion. */
+.senate-scene { position: absolute; inset: 0; transform-style: preserve-3d;
+    animation: senate-spin 300s linear infinite; }
+@keyframes senate-spin { to { transform: rotateY(360deg); } }
+/* Each seat is placed by its own transform (see SenateBackdrop); this only sizes and fades it. */
+.senate-seat { position: absolute; left: 50%; top: 50%; width: 11vmin; height: 14vmin;
+    margin: -7vmin 0 0 -5.5vmin; transform-style: preserve-3d; }
+.senate-seat img { width: 100%; height: 100%; object-fit: cover; border-radius: 12% 12% 40% 40%;
+    opacity: .18; filter: grayscale(.35) contrast(.9); mix-blend-mode: screen;
+    box-shadow: 0 0 3vmin rgba(120, 160, 255, .12); }
+/* A vignette so the dome sinks into the page instead of competing with the buttons in front of it. */
+.senate::after { content: ""; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 45%, rgba(7, 11, 22, .35) 0%, rgba(7, 11, 22, .82) 55%, rgba(7, 11, 22, .96) 100%); }
+/* Anything that moves this slowly is still motion — honour the preference and just hold still. */
+@media (prefers-reduced-motion: reduce) { .senate-scene { animation: none; } }
+/* The content has to sit above the backdrop; the shell is transparent, so give it its own layer. */
+.home-view { position: relative; z-index: 1; }
+/* Activity counters under the start buttons: two numbers, quietly. */
+.activity { display: flex; gap: 1.4rem; justify-content: center; flex-wrap: wrap; margin-top: 1.2rem; }
+.activity-item { text-align: center; }
+.activity-num { display: block; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--gold); }
+.activity-lbl { font-size: .7rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .08em; }
 
 /* ---- Combat ---------------------------------------------------------------------------------------- */
 /* Control view: one band while a battle is running. */

@@ -1,0 +1,63 @@
+@inherits Ti4ComponentBase
+
+@*
+    The start page's backdrop: a galactic senate. Rows of faction portraits on the INSIDE of a sphere, seen
+    from its centre, turning very slowly.
+
+    How the geometry works: the scene has a `perspective` and the camera sits at the middle. Every seat is
+    placed with `rotateY(yaw) rotateX(pitch) translateZ(-R)` — the rotations turn the seat's own axes first,
+    so pushing it back by R lands it on the sphere's surface already facing the centre. Rows use a pitch,
+    columns a yaw, and each row after the first is offset by half a step so the seats interlock:
+
+        X X X X X X X
+         X X X X X X X
+
+    Deliberately faint and `pointer-events: none`: it is a backdrop, and nothing on it may ever eat a tap
+    meant for the buttons in front. Only factions that HAVE a portrait take part (Keleres and the Thunder's
+    Edge factions have none — see FactionPortrait), and the seats are filled by cycling through them, so the
+    dome is full whatever the content bundle holds.
+*@
+<div class="senate" aria-hidden="true">
+    <div class="senate-scene">
+        @for (var row = 0; row < Rows; row++)
+        {
+            // Rows span the dome from below the horizon to well above it; the middle rows sit at eye level.
+            var pitch = FormattableString.Invariant($"{(row - (Rows - 1) / 2.0) * RowStepDeg:0.##}");
+            var offset = row % 2 == 1 ? 0.5 : 0.0;   // every other row shifted by half a seat
+            for (var col = 0; col < Cols; col++)
+            {
+                var yaw = FormattableString.Invariant($"{(col + offset) * (360.0 / Cols):0.##}");
+                var slug = Slugs[(row * Cols + col) % Slugs.Count];
+                <div class="senate-seat"
+                     style="@FormattableString.Invariant($"transform: rotateY({yaw}deg) rotateX({pitch}deg) translateZ(-42vmin);")">
+                    @* No loading="lazy": the seats are transformed far out of the viewport's own coordinates,
+                       so the browser never considers them near enough to fetch and the dome stayed empty. *@
+                    <img src="@($"portraits/{slug}.jpg")" alt="" />
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Rows of seats and seats per row. Seven columns is what makes the offset rows read as a dome
+    /// rather than a grid; five rows fill the height without the top row folding over the camera.</summary>
+    private const int Rows = 5;
+    private const int Cols = 7;
+    private const double RowStepDeg = 21;
+
+    /// <summary>
+    /// The portrait files used for the seats — file NAMES, not all of them faction slugs (barony/cabal/ghosts).
+    /// Hard-coded because the client cannot stat files, and a missing image would leave a hole in the dome.
+    /// <para>
+    /// Deliberately a SUBSET of the 24 portraits that exist: each is ~50 KB, and this is decoration on a
+    /// landing page — twelve is ~600 KB instead of ~1.2 MB, and nobody can tell that a slowly turning dome
+    /// repeats a face. They are the same files the agenda wall uses, so a returning visitor has them cached.
+    /// </para>
+    /// </summary>
+    private static readonly List<string> Slugs = new()
+    {
+        "sol", "hacan", "jolnar", "xxcha", "mentak", "naalu",
+        "muaat", "sardakk", "arborec", "yssaril", "nekro", "titans",
+    };
+}

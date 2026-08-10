@@ -328,6 +328,11 @@ public record SetStatusStageRequest(StatusStage Stage);
 /// LAN address, a renamed subdomain and a second staging box.</summary>
 public record InstanceDto(string Label);
 
+/// <summary>How busy the instance is, for the start page. Counts only — never anything that could identify a
+/// session or a player. <paramref name="Active"/> is "last activity within the hour"; the page shows the
+/// number, not the rule.</summary>
+public record ActivityDto(int Last24h, int Active);
+
 /// <summary>A browser's Web Push subscription, exactly as `PushManager.subscribe()` hands it over.
 /// <paramref name="Endpoint"/> is the push service URL and identifies the browser.</summary>
 public record PushSubscribeRequest(string Endpoint, string P256dh, string Auth);

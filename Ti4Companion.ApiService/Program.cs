@@ -119,6 +119,22 @@ app.MapGet("/api/instance", (IConfiguration cfg) =>
 // the client hides the feature. The PRIVATE key never leaves the server (systemd environment, not appsettings).
 app.MapGet("/api/push/key", (PushService push) => Results.Ok(new PushKeyDto(push.PublicKey)));
 
+// How busy is the table tonight? Two COUNTS for the start page, nothing else: no codes, no names, no player
+// numbers — an aggregate can't identify anybody, and the landing page is public. Rate-limited like the other
+// public reads because it is trivially pollable.
+app.MapGet("/api/activity", async (Ti4DbContext db, CancellationToken ct) =>
+{
+    // Counted in MEMORY over one column: the SQLite provider cannot translate a DateTimeOffset comparison
+    // (the same limitation as "no ORDER BY on a DateTimeOffset" — it is stored as TEXT), so a WHERE on
+    // LastActivityUtc throws. One timestamp per session is a handful of rows; the retention worker reads them
+    // the same way.
+    var now = DateTimeOffset.UtcNow;
+    var stamps = await db.Sessions.AsNoTracking().Select(s => s.LastActivityUtc).ToListAsync(ct);
+    var day = stamps.Count(t => t >= now.AddHours(-24));
+    var live = stamps.Count(t => t >= now.AddHours(-1));
+    return Results.Ok(new ActivityDto(day, live));
+}).RequireRateLimiting("session-read");
+
 app.MapContentEndpoints();
 app.MapSessionEndpoints();
 app.MapHub<SessionHub>("/hubs/session");

@@ -5,6 +5,13 @@
 
 <PageTitle>Twilight Imperium Companion</PageTitle>
 
+@* The senate dome behind everything (see SenateBackdrop). Only on the landing view: once you are filling in
+   a form it is one thing too many to look at. *@
+@if (view == View.Landing)
+{
+    <SenateBackdrop />
+}
+
 <div class="container home-view">
     @if (view == View.Landing)
     {
@@ -20,6 +27,20 @@
                     <button class="btn btn-ghost" @onclick="ResumeLast">
                         @Loc["home.resume"] · <span class="codechip" style="font-size:.9rem;">@lastCode</span>
                     </button>
+                </div>
+            }
+            @* How busy it is tonight. Counts only — see ActivityDto. Absent when the server didn't answer. *@
+            @if (activity is { } act)
+            {
+                <div class="activity">
+                    <div class="activity-item">
+                        <span class="activity-num">@act.Active</span>
+                        <span class="activity-lbl">@Loc["home.activeNow"]</span>
+                    </div>
+                    <div class="activity-item">
+                        <span class="activity-num">@act.Last24h</span>
+                        <span class="activity-lbl">@Loc["home.active24h"]</span>
+                    </div>
                 </div>
             }
         </div>
@@ -139,6 +160,7 @@
     private string? error;
     private string? lastCode;
     private SessionStateDto? peek;   // the loaded session whose players you choose an identity from
+    private ActivityDto? activity;   // counts for the landing view; null = the server didn't say
 
     private string NamePlaceholder => Loc["players.you"];
 
@@ -146,6 +168,7 @@
     {
         await Store.InitAsync();
         lastCode = await Store.GetLastCodeAsync();
+        activity = await Store.Api.GetActivityAsync();
         // Arrived via an invite link (/join/{code}) → jump straight to the pre-filled join form.
         if (!string.IsNullOrWhiteSpace(Code))
         {
