@@ -180,6 +180,13 @@ else
         else
         {
             var mode = s.DisplayMode;
+            // Status phase: the right panel follows the stage the table is on. Scoring keeps the objective
+            // list (that is where the glow has to be visible), the other two stages take the panel over.
+            // The left player table stays untouched in all cases — you still want to see who is up.
+            var statusStage = s.Phase == GamePhase.Status ? s.StatusStage : (StatusStage?)null;
+            if (statusStage == StatusStage.Scoring) mode = DisplayMode.Objectives;
+            // Reveal stage: the newest objective on the table, shown large.
+            var justRevealed = statusStage == StatusStage.RevealObjective ? s.Objectives.LastOrDefault() : null;
             // All three modes share a left "player table" (Bereich 1); the right panel (Bereich 2) differs.
             // Objectives right panel: split by stage; collapse to one (half-width) column until a Stage II.
             var objStage2 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageII).ToList() : new();
@@ -286,7 +293,41 @@ else
                 @* ===== Bereich 2 — right content panel: objectives list / all researched techs as cards /
                    all available strategy-card secondaries. Deduplicated, independent of the player table. ===== *@
                 <div class="panel content-panel">
-                    @if (mode == DisplayMode.Objectives)
+                    @if (statusStage == StatusStage.RevealObjective)
+                    {
+                        <h3 style="color:var(--gold);">@Loc["status.stage.reveal"]</h3>
+                        <div class="panel-body status-reveal">
+                            @if (justRevealed is null)
+                            {
+                                <p class="muted">@Loc["status.revealHint"]</p>
+                            }
+                            else
+                            {
+                                <div class="status-reveal-card"><ObjectiveDisplayCard So="justRevealed" Glow="true" /></div>
+                                <p class="status-detail">@Loc["status.detail.reveal"]</p>
+                            }
+                        </div>
+                    }
+                    else if (statusStage == StatusStage.Checklist)
+                    {
+                        @* Short labels live in the host view; here the full step text, so the table can read
+                           what is actually being done. *@
+                        <h3 style="color:var(--gold);">@Loc["status.checklist"]</h3>
+                        <div class="panel-body status-big-list">
+                            @foreach (var (step, key, detail) in WallSteps)
+                            {
+                                var done = s.StatusStepsDone.HasFlag(step);
+                                <div class="big-step @(done ? "done" : "")">
+                                    <span class="step-box">@(done ? "✓" : "")</span>
+                                    <div class="big-step-text">
+                                        <div class="big-step-name">@Loc[key]</div>
+                                        <div class="big-step-detail">@Loc[detail]</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (mode == DisplayMode.Objectives)
                     {
                         <h3 style="color:var(--gold);">@Loc["obj.title"]</h3>
                         @if (s.Objectives.Count == 0)
@@ -298,12 +339,12 @@ else
                             @* Stage I (+ custom) left, Stage II right; --obj-rows drives a uniform card height. *@
                             <div class="panel-body obj-list @(objSingle ? "one" : "two")" style="--obj-rows:@objRows">
                                 <div class="obj-col">
-                                    @foreach (var so in objStage1) { <ObjectiveDisplayCard So="so" /> }
+                                    @foreach (var so in objStage1) { <ObjectiveDisplayCard So="so" Glow="Fresh(statusStage, so)" /> }
                                 </div>
                                 @if (!objSingle)
                                 {
                                     <div class="obj-col">
-                                        @foreach (var so in objStage2) { <ObjectiveDisplayCard So="so" /> }
+                                        @foreach (var so in objStage2) { <ObjectiveDisplayCard So="so" Glow="Fresh(statusStage, so)" /> }
                                     </div>
                                 }
                             </div>
@@ -372,6 +413,22 @@ else
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool _notFound;
+
+    /// <summary>Scored in the current round — highlighted while the table is in the status phase. Which
+    /// round a score belongs to is decided server-side (<c>ObjectiveScore.Round</c>).</summary>
+    private static bool Fresh(StatusStage? stage, SessionObjectiveDto so)
+        => stage is not null && so.ScoredThisRoundPlayerIds is { Count: > 0 };
+
+    // The checklist as the wall shows it: short name + the full step text. Mirrors StatusView.Steps.
+    private static readonly (StatusStep Step, string Key, string Detail)[] WallSteps =
+    {
+        (StatusStep.DrawActionCards, "status.step.drawActionCards", "status.detail.drawActionCards"),
+        (StatusStep.CommandTokens, "status.step.commandTokens", "status.detail.commandTokens"),
+        (StatusStep.ReadyCards, "status.step.readyCards", "status.detail.readyCards"),
+        (StatusStep.RepairUnits, "status.step.repairUnits", "status.detail.repairUnits"),
+        (StatusStep.ReturnStrategyCards, "status.step.returnStrategyCards", "status.detail.returnStrategyCards"),
+        (StatusStep.EndOfStatusAbilities, "status.step.endAbilities", "status.detail.endAbilities"),
+    };
 
     // End-game statistics (loaded from the log when the wall enters Statistics mode).
     private IReadOnlyList<SessionLogEntryDto> _log = Array.Empty<SessionLogEntryDto>();

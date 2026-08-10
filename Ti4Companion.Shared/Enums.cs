@@ -85,12 +85,32 @@ public enum GamePhase
 public enum StatusStep
 {
     None = 0,
+    /// <summary>No longer part of the checklist — revealing is its own stage now
+    /// (<see cref="StatusStage.RevealObjective"/>). The flag is kept (and set when that stage is left) so
+    /// no stored value has to be rewritten.</summary>
     RevealObjective = 1,
     DrawActionCards = 2,
     CommandTokens = 4,
     ReadyCards = 8,
     RepairUnits = 16,
-    ReturnStrategyCards = 32
+    ReturnStrategyCards = 32,
+    /// <summary>Abilities that trigger during or at the end of the status phase (the Sol flagship
+    /// <em>Genesis</em>, for example). Not a rulebook step — a reminder the table asked for, because it is
+    /// the one thing that gets forgotten once the checklist is done.</summary>
+    EndOfStatusAbilities = 64
+}
+
+/// <summary>Where the table is inside the status phase. Advanced by the host with "next" (and back), reset
+/// whenever the phase is entered and on a round change. Scoring itself runs player by player inside
+/// <see cref="Scoring"/> (see <c>TurnService.CurrentScorer</c>).</summary>
+public enum StatusStage
+{
+    /// <summary>Each player in initiative order may score one objective by tapping its card.</summary>
+    Scoring = 0,
+    /// <summary>The next public objective is revealed and shown large on the wall.</summary>
+    RevealObjective = 1,
+    /// <summary>The remaining upkeep steps as a checklist, shown large on the wall.</summary>
+    Checklist = 2
 }
 
 public enum ObjectiveStage

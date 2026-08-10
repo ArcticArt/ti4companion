@@ -67,6 +67,10 @@ public class GameSession
     /// status phase begins.</summary>
     public StatusStep StatusStepsDone { get; set; }
 
+    /// <summary>Status phase: which of the three stages (score → reveal → checklist) the table is on. Reset
+    /// with <see cref="StatusStepsDone"/>.</summary>
+    public StatusStage StatusStage { get; set; }
+
     /// <summary>Offer to record a technology right after the Technology strategy action was played.
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
@@ -154,6 +158,10 @@ public class ObjectiveScore
     public SessionObjective? SessionObjective { get; set; }
     public Guid PlayerId { get; set; }
     public DateTimeOffset ScoredAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>Game round this was scored in, so the wall can glow what was scored *this* round. Stored
+    /// rather than derived from <see cref="ScoredAtUtc"/> — the round boundary only exists in the match
+    /// log, and the display should not have to diff a timeline to draw a highlight.</summary>
+    public int Round { get; set; }
 }
 
 /// <summary>

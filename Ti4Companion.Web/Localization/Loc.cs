@@ -219,6 +219,44 @@ public class Loc
         ["status.step.readyCards"] = ("Ready cards", "Karten bereitmachen"),
         ["status.step.repairUnits"] = ("Repair units", "Einheiten reparieren"),
         ["status.step.returnStrategyCards"] = ("Return strategy cards", "Strategiekarten zurückgeben"),
+        // Not a rulebook step: the thing that gets forgotten once the checklist is ticked (Sol's Genesis).
+        ["status.step.endAbilities"] = ("Abilities that trigger during or at the end of the status phase",
+                                       "Fähigkeiten, die in oder am Ende der Statusphase auslösen"),
+        // The three stages the phase is walked through.
+        ["status.stage.scoring"] = ("Score", "Wertung"),
+        ["status.stage.reveal"] = ("Reveal objective", "Auftrag aufdecken"),
+        ["status.stage.checklist"] = ("Remaining steps", "Restliche Schritte"),
+        ["status.next"] = ("Next", "Weiter"),
+        ["status.scoreFor"] = ("{0} may score", "{0} darf werten"),
+        ["status.tapToScore"] = ("Tap an objective card to score it.", "Auftragskarte antippen, um sie zu werten."),
+        ["status.nothingLeft"] = ("This player has already scored every revealed objective.",
+                                 "Dieser Spieler hat schon alle aufgedeckten Aufträge gewertet."),
+        ["status.revealHint"] = ("The speaker reveals the next public objective; it is shown large on the display.",
+                                "Der Sprecher deckt den nächsten öffentlichen Auftrag auf; er wird groß auf der Anzeige gezeigt."),
+        // Long form for the WALL display. English is transcribed verbatim from the TI4 wiki's Status Phase
+        // article (a verified source, see CLAUDE.md); the German is rendered with the table's own
+        // terminology and STILL WANTS A CHECK against the printed German rulebook.
+        ["status.detail.reveal"] = (
+            "The speaker flips the next unrevealed public objective card face-up. The first stage II objective is not revealed until all stage I objectives have been revealed.",
+            "Der Sprecher deckt die nächste verdeckte öffentliche Auftragskarte auf. Der erste Auftrag der Stufe II wird erst aufgedeckt, wenn alle Aufträge der Stufe I aufgedeckt sind."),
+        ["status.detail.drawActionCards"] = (
+            "In initiative order, each player draws one card from the top of the action card deck.",
+            "In Initiativreihenfolge zieht jeder Spieler eine Karte vom Aktionskartenstapel."),
+        ["status.detail.commandTokens"] = (
+            "Each player removes all of their command tokens from the game board and returns them to their reinforcements. Then each player gains two command tokens and can redistribute the tokens on their command sheet among their strategy, tactic and fleet pools.",
+            "Jeder Spieler nimmt alle seine Kommandomarker vom Spielplan und legt sie in seinen Nachschub zurück. Danach erhält jeder Spieler zwei Kommandomarker und darf die Marker auf seiner Kommandotafel neu auf Strategie-, Taktik- und Flottenpool verteilen."),
+        ["status.detail.readyCards"] = (
+            "Each player readies all of their exhausted cards, including strategy cards.",
+            "Jeder Spieler macht alle seine erschöpften Karten bereit, auch die Strategiekarten."),
+        ["status.detail.repairUnits"] = (
+            "Each player repairs all of their damaged units by turning those units upright.",
+            "Jeder Spieler repariert alle seine beschädigten Einheiten, indem er sie wieder aufrichtet."),
+        ["status.detail.returnStrategyCards"] = (
+            "Each player returns their strategy card to the common play area.",
+            "Jeder Spieler legt seine Strategiekarte in den gemeinsamen Spielbereich zurück."),
+        ["status.detail.endAbilities"] = (
+            "Check for abilities that trigger during or at the end of the status phase — the Sol flagship Genesis, for example.",
+            "Auf Fähigkeiten achten, die in oder am Ende der Statusphase auslösen — zum Beispiel das Sol-Flaggschiff Genesis."),
 
         ["agenda.title"] = ("Agenda phase", "Agendaphase"),
         ["agenda.search"] = ("Search agenda…", "Agenda suchen…"),
@@ -407,6 +445,7 @@ public class Loc
         ["common.save"] = ("Save", "Speichern"),
         ["common.cancel"] = ("Cancel", "Abbrechen"),
         ["common.close"] = ("Close", "Schließen"),
+        ["common.back"] = ("Back", "Zurück"),
         ["common.loading"] = ("Loading…", "Lädt…"),
         ["common.connecting"] = ("Connecting…", "Verbinde…"),
         ["common.code"] = ("Code", "Code"),

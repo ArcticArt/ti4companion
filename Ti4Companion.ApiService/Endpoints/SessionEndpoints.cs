@@ -76,6 +76,7 @@ public static class SessionEndpoints
         // ---- Status phase (scoring order + shared checklist) ----
         g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
         g.MapPost("/{id:guid}/status-step", SetStatusStep);
+        g.MapPost("/{id:guid}/status-stage", SetStatusStage);
 
         // ---- Objectives ----
         g.MapPost("/{id:guid}/objectives", RevealObjective);
@@ -334,8 +335,9 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Status;
         session.ActivePlayerId = null;
         session.ActiveStrategyCardId = null;
-        // Fresh status phase: scoring starts over at the lowest initiative and the checklist is blank.
+        // Fresh status phase: back to stage 1, scoring starts over at the lowest initiative, checklist blank.
         session.StatusStepsDone = StatusStep.None;
+        session.StatusStage = StatusStage.Scoring;
         foreach (var p in session.Players) p.StatusDone = false;
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Status, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
@@ -375,6 +377,7 @@ public static class SessionEndpoints
         session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         session.StatusStepsDone = StatusStep.None;
+        session.StatusStage = StatusStage.Scoring;
         foreach (var p in session.Players)
         {
             p.HasPassed = false;
@@ -725,6 +728,22 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
+    // Status phase: move to a stage (score → reveal → checklist, and back). Host-only, like every other
+    // step through the game. The target stage is absolute, so a double tap can't skip one.
+    private static async Task<IResult> SetStatusStage(Guid id, SetStatusStageRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (!Enum.IsDefined(req.Stage)) return Results.BadRequest(new { error = "Unknown status stage." });
+        // Leaving the reveal stage means the objective for the next round is on the table — record it on the
+        // checklist flag, which is where that step used to live.
+        if (session.StatusStage == StatusStage.RevealObjective && req.Stage > StatusStage.RevealObjective)
+            session.StatusStepsDone |= StatusStep.RevealObjective;
+        session.StatusStage = req.Stage;
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
     // Red Tape variant: take the marker off an objective, or put it back. Open to any device like
     // scoring — it's a token on the table, not a privileged action.
     private static async Task<IResult> SetObjectiveMarker(Guid id, Guid sessionObjectiveId, SetObjectiveMarkerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
@@ -754,7 +773,10 @@ public static class SessionEndpoints
         }
         if (!obj.Scores.Any(s => s.PlayerId == req.PlayerId))
         {
-            obj.Scores.Add(new ObjectiveScore { SessionObjectiveId = obj.Id, PlayerId = req.PlayerId });
+            obj.Scores.Add(new ObjectiveScore
+            {
+                SessionObjectiveId = obj.Id, PlayerId = req.PlayerId, Round = session.CurrentRound
+            });
             Log(db, session, http, SessionLogKind.ObjectiveScore, target: req.PlayerId,
                 detail: string.IsNullOrEmpty(obj.ObjectiveId) ? obj.CustomName : obj.ObjectiveId);
         }

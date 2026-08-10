@@ -1,7 +1,12 @@
-@* One objective card for the wall display (used in both Stage I / Stage II columns). *@
+@* One objective card. Built for the wall display (both Stage I / Stage II columns) and reused in the
+   status phase's scoring stage, where the whole card is the tap target — like taking a strategy card. *@
 @inherits Ti4ComponentBase
 
-<div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1")">
+@* role/tabindex only when it really is a tap target: a bare div with @onclick is invisible to the keyboard
+   and to the accessibility tree (noticed while verifying — the card didn't show up as an element at all). *@
+<div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1") @(Glow ? "glow" : "") @(Clickable ? "clickable" : "")"
+     role="@(Clickable ? "button" : null)" tabindex="@(Clickable ? "0" : null)"
+     @onclick="OnCardClick" @onkeydown="OnCardKey">
     <div class="obj-head">
         @* Red Tape variant: show whether the token is still on this objective. Read-only here — the
            wall is a display, taken off on someone's device. *@
@@ -20,13 +25,36 @@
         @foreach (var pid in So.ScoredByPlayerIds)
         {
             var pl = Store.Session?.Players.FirstOrDefault(x => x.Id == pid);
-            if (pl is not null) { <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.7rem,3.6vh,3.4rem)" Ring="@pl.ColorHex" /> }
+            @* Scored in THIS round: the marker glows along with the card, so the table sees at a glance
+               what just happened rather than what happened four rounds ago. *@
+            var fresh = So.ScoredThisRoundPlayerIds?.Contains(pid) == true;
+            if (pl is not null)
+            {
+                <span class="objm @(fresh ? "fresh" : "")">
+                    <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.7rem,3.6vh,3.4rem)" Ring="@pl.ColorHex" />
+                </span>
+            }
         }
     </div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public SessionObjectiveDto So { get; set; } = default!;
+
+    /// <summary>Highlight the card (scored this round).</summary>
+    [Parameter] public bool Glow { get; set; }
+
+    /// <summary>Make the whole card a tap target. An explicit gate rather than a null check on
+    /// <see cref="OnClick"/> — an EventCallback is a struct and a `cond ? lambda : default` ternary
+    /// doesn't survive Razor's parameter binding.</summary>
+    [Parameter] public bool Clickable { get; set; }
+
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private Task OnCardClick() => Clickable ? OnClick.InvokeAsync() : Task.CompletedTask;
+
+    private Task OnCardKey(KeyboardEventArgs e)
+        => Clickable && (e.Key == "Enter" || e.Key == " ") ? OnClick.InvokeAsync() : Task.CompletedTask;
 
     private ObjectiveDto? Def => So.CustomName is null ? Store.Objective(So.ObjectiveId) : null;
     private bool Stage2 => Def?.Stage == ObjectiveStage.StageII;

@@ -188,7 +188,10 @@ public record SessionObjectiveDto(
     Guid Id, string ObjectiveId, IReadOnlyList<Guid> ScoredByPlayerIds,
     string? CustomName, int? CustomPoints,
     /// <summary>Red Tape variant: the marker on this objective has been taken off.</summary>
-    bool MarkerRemoved = false);
+    bool MarkerRemoved = false,
+    /// <summary>Who scored this in the CURRENT round — the wall glows those. Computed server-side so the
+    /// client doesn't reimplement "this round".</summary>
+    IReadOnlyList<Guid>? ScoredThisRoundPlayerIds = null);
 
 public record StrategyCardStateDto(int StrategyCardId, int TradeGoods);
 
@@ -230,7 +233,9 @@ public record SessionStateDto(
     /// Derived server-side so the client can't drift from the rule the server enforces.</summary>
     Guid? StatusScorerId = null,
     /// <summary>Wall display: show the join QR code. On during setup, off once the game starts.</summary>
-    bool ShowJoinQr = true);
+    bool ShowJoinQr = true,
+    /// <summary>Status phase: which of the three stages the table is on (score → reveal → checklist).</summary>
+    StatusStage StatusStage = StatusStage.Scoring);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>
@@ -282,6 +287,9 @@ public record SetStatusDoneRequest(bool Done);
 
 /// <summary>Status phase: tick one of the shared post-scoring steps off (or back on).</summary>
 public record SetStatusStepRequest(StatusStep Step, bool Done);
+
+/// <summary>Move the status phase to a stage. Absolute, not "next": a double tap must not skip a stage.</summary>
+public record SetStatusStageRequest(StatusStage Stage);
 
 public record SetDisplayModeRequest(DisplayMode Mode);
 

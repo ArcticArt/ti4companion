@@ -325,6 +325,25 @@ span.rt-marker { cursor: default; }
 .obj-card.stage1 { border-top: 4px solid #d98a2b; --ovp: #d98a2b; }
 .obj-card.stage2 { border-top: 4px solid #3a6fd0; --ovp: #3a6fd0; }
 .obj-card.secret { border-top: 4px solid #b01030; --ovp: #b01030; }
+/* Status phase: scored THIS round. The card and its fresh markers glow, so the table sees what just
+   happened rather than the whole history at equal weight. */
+.obj-card.glow { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 18px rgba(217,176,74,.45); }
+.objm.fresh { display: inline-flex; border-radius: 8px; box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(217,176,74,.6); }
+/* Scoring stage: the whole card is the tap target, like taking a strategy card. */
+.obj-card.clickable { cursor: pointer; transition: .12s ease; }
+.obj-card.clickable:hover { border-color: var(--gold-dim); transform: translateY(-1px); }
+.obj-tap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .5rem; }
+
+/* Status phase stage strip (same idiom as the phase leiste, one level down). */
+.status-stagebar { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.stage-strip { display: flex; align-items: baseline; gap: 1.1rem; flex-wrap: wrap; }
+.stage-seg { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .78rem; letter-spacing: .05em;
+    white-space: nowrap; color: var(--text-faint); position: relative; }
+.stage-seg:not(:last-child)::after { content: "›"; position: absolute; right: -.75rem; color: var(--text-faint); opacity: .5; font-weight: 400; }
+.stage-seg.done { color: var(--text-dim); }
+.stage-seg.on { color: var(--accent); text-shadow: 0 0 10px rgba(79,195,247,.75), 0 0 20px rgba(79,195,247,.45); }
+.stage-nav { margin-left: auto; display: flex; gap: .4rem; }
+
 /* Reveal-list stage badge: centred circle. Stage I gold, Stage II blue. */
 .stage-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
     width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 1px solid; font-size: .68rem; font-weight: 700;
@@ -749,6 +768,30 @@ span.rt-marker { cursor: default; }
 .beamer .obj-vp { font-size: clamp(1rem, 1.5vw, 2rem); width: 1.8em; height: 1.8em; }
 .beamer .obj-req { padding: .15vh 0 0; font-size: clamp(.82rem, 1.18vw, 1.5rem); color: var(--text); line-height: 1.16; }
 .beamer .obj-markers { padding: .25vh 0 0; gap: .4vw; }
+
+/* ---- Status phase on the wall: the reveal stage and the checklist take the right panel ---- */
+/* Reveal: one card, as large as the panel allows, with the rules text under it. */
+.beamer .status-reveal { align-items: center; justify-content: center; gap: 2vh; }
+.beamer .status-reveal-card { width: min(100%, 34vw); }
+.beamer .status-reveal-card .obj-card { transform: scale(1); }
+.beamer .status-reveal-card .obj-name { font-size: clamp(1.2rem, 2.2vw, 3rem); }
+.beamer .status-reveal-card .obj-req { font-size: clamp(1rem, 1.6vw, 2.1rem); }
+.beamer .status-detail { max-width: 40vw; text-align: center; color: var(--text-dim);
+    font-size: clamp(.85rem, 1.15vw, 1.5rem); line-height: 1.35; margin: 0; }
+/* Checklist: rows stretch to fill the panel height, so it reads from across the room. */
+.beamer .status-big-list { justify-content: space-between; gap: .6vh; }
+.beamer .big-step { display: flex; align-items: flex-start; gap: 1vw; flex: 1 1 0; min-height: 0;
+    padding: .6vh 1vw; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--panel-border); }
+.beamer .big-step.done { border-color: #2c5e49; background: rgba(70,192,138,.12); }
+.beamer .big-step.done .big-step-name { color: #8fe0bd; text-decoration: line-through; }
+.beamer .big-step .step-box { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    width: 1.7em; height: 1.7em; border: 2px solid var(--panel-border); border-radius: 6px;
+    font-size: clamp(1rem, 1.5vw, 2rem); line-height: 1; color: #8fe0bd; }
+.beamer .big-step.done .step-box { border-color: #2c5e49; }
+.beamer .big-step-text { min-width: 0; }
+.beamer .big-step-name { font-family: 'Orbitron', sans-serif; font-weight: 700;
+    font-size: clamp(.9rem, 1.35vw, 1.8rem); line-height: 1.15; }
+.beamer .big-step-detail { color: var(--text-dim); font-size: clamp(.72rem, 1.02vw, 1.3rem); line-height: 1.25; }
 
 /* Tech overview (compact) */
 .beamer .tech-line { font-size: clamp(.7rem, .95vw, 1.2rem); line-height: 1.4; display: flex; flex-wrap: wrap; gap: .35vw; align-items: center; }

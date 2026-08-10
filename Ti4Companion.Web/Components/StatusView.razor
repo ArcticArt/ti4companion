@@ -1,8 +1,18 @@
 @inherits Ti4ComponentBase
 
+@*
+    The status phase, walked through in three stages (GameSession.StatusStage):
+      1. scoring   — each player in initiative order taps ONE objective card, like taking a strategy card
+      2. reveal    — the next public objective goes on the table, shown large on the wall
+      3. checklist — the remaining upkeep steps, also large on the wall
+
+    Only the host moves between stages, and the target stage is absolute (see SetStatusStage) so a double
+    tap can't skip one. Nothing is enforced: every stage can be left at any time, in either direction.
+*@
 @{
     var s = Store.Session!;
     var host = Store.IsHost;
+    var stage = s.StatusStage;
     var ordered = s.Players.OrderBy(p => p.Initiative ?? int.MaxValue).ThenBy(p => p.SeatOrder).ToList();
     var scorerId = s.StatusScorerId;
     var scorer = ordered.FirstOrDefault(p => p.Id == scorerId);
@@ -10,85 +20,160 @@
     var allDone = scorerId is null;
 }
 
-<div class="panel">
-    <h3 style="margin:0 0 .3rem;">@Loc["status.title"]</h3>
-    <p class="faint" style="margin:0;">@Loc["status.hint"]</p>
-</div>
-
-@* Scoring runs in initiative order — it used to be simultaneous, so nobody could tell who still owed a
-   decision. Purely a guide plus the matching server gate; nothing about the game is enforced. *@
-<div class="panel" style="margin-top:.6rem;">
-    <div class="scoring-head">
-        <h3 style="margin:0;">@Loc["status.scoringOrder"]</h3>
-        @if (allDone)
+@* Stage strip: where the table is, and the host's way forward/back. *@
+<div class="panel status-stagebar">
+    <div class="stage-strip">
+        @foreach (var (st, key) in Stages)
         {
-            <span class="chip chip-done">@Loc["status.allScored"]</span>
-        }
-        else if (scorer is not null)
-        {
-            <span class="faint">@(mine ? Loc["status.yourTurn"] : string.Format(Loc["status.waitingFor"], scorer.Name))</span>
+            <div class="stage-seg @(stage == st ? "on" : stage > st ? "done" : "")">@Loc[key]</div>
         }
     </div>
+    @if (host)
+    {
+        <div class="stage-nav">
+            @if (stage > StatusStage.Scoring)
+            {
+                <button class="btn btn-sm" @onclick="() => GoStage(stage - 1)">◂ @Loc["common.back"]</button>
+            }
+            @if (stage < StatusStage.Checklist)
+            {
+                <button class="btn btn-sm btn-gold" @onclick="() => GoStage(stage + 1)">@Loc["status.next"] ▸</button>
+            }
+        </div>
+    }
+</div>
 
-    <div class="scoring-order">
-        @foreach (var p in ordered)
-        {
-            var isCurrent = p.Id == scorerId;
-            <div class="so-row @(isCurrent ? "current" : "") @(p.StatusDone ? "done" : "")" style="--player-color:@p.ColorHex">
-                <span class="so-init">@(p.Initiative?.ToString() ?? "—")</span>
-                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
-                <span class="so-name">@p.Name</span>
-                @if (p.StatusDone)
+@switch (stage)
+{
+    case StatusStage.Scoring:
+        @* Who is up, in initiative order. It used to be simultaneous, so nobody could tell who still
+           owed a decision. A guide plus the matching server gate — the game itself is not enforced. *@
+        <div class="panel" style="margin-top:.6rem;">
+            <div class="scoring-head">
+                <h3 style="margin:0;">@Loc["status.scoringOrder"]</h3>
+                @if (allDone)
                 {
-                    <span class="chip chip-done">✓</span>
-                    @if (host || p.Id == Store.MyPlayerId)
-                    {
-                        <button class="btn btn-sm btn-ghost" @onclick="() => SetDone(p.Id, false)" title='@Loc["status.undoDone"]'>↺</button>
-                    }
+                    <span class="chip chip-done">@Loc["status.allScored"]</span>
                 }
-                else if (isCurrent && (host || p.Id == Store.MyPlayerId))
+                else if (scorer is not null)
                 {
-                    <button class="btn btn-sm btn-gold" @onclick="() => SetDone(p.Id, true)">@Loc["status.done"] ▸</button>
+                    <span class="faint">@(mine ? Loc["status.yourTurn"] : string.Format(Loc["status.waitingFor"], scorer.Name))</span>
+                }
+            </div>
+
+            <div class="scoring-order">
+                @foreach (var p in ordered)
+                {
+                    var isCurrent = p.Id == scorerId;
+                    <div class="so-row @(isCurrent ? "current" : "") @(p.StatusDone ? "done" : "")" style="--player-color:@p.ColorHex">
+                        <span class="so-init">@(p.Initiative?.ToString() ?? "—")</span>
+                        <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+                        <span class="so-name">@p.Name</span>
+                        @if (p.StatusDone)
+                        {
+                            <span class="chip chip-done">✓</span>
+                            @if (host || p.Id == Store.MyPlayerId)
+                            {
+                                <button class="btn btn-sm btn-ghost" @onclick="() => SetDone(p.Id, false)" title='@Loc["status.undoDone"]'>↺</button>
+                            }
+                        }
+                        else if (isCurrent && (host || p.Id == Store.MyPlayerId))
+                        {
+                            <button class="btn btn-sm btn-gold" @onclick="() => SetDone(p.Id, true)">@Loc["status.done"] ▸</button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Score by tapping the card itself (not via the little markers, as in the action phase). Only the
+           objectives this player hasn't scored yet are offered, so a tap can't be a no-op. *@
+        @if (scorer is not null)
+        {
+            var scoreable = s.Objectives.Where(o => !o.ScoredByPlayerIds.Contains(scorer.Id)).ToList();
+            <div class="panel" style="margin-top:.6rem;">
+                <h3 style="margin:0 0 .2rem;">@string.Format(Loc["status.scoreFor"], scorer.Name)</h3>
+                <p class="faint" style="margin:0 0 .5rem;">@Loc["status.tapToScore"]</p>
+                @if (scoreable.Count == 0)
+                {
+                    <p class="faint" style="margin:0;">@Loc["status.nothingLeft"]</p>
+                }
+                else
+                {
+                    <div class="obj-tap-grid">
+                        @foreach (var so in scoreable)
+                        {
+                            var soId = so.Id;
+                            <ObjectiveDisplayCard So="so" Clickable="Store.CanScoreFor(scorer.Id)"
+                                                  OnClick="() => Score(soId, scorer.Id)" />
+                        }
+                    </div>
                 }
             </div>
         }
-    </div>
-</div>
 
-<ObjectivesTab />
+        @* The full list stays reachable: corrections, secrets made public, Red Tape markers. *@
+        <ObjectivesTab />
+        break;
 
-@* Shared checklist of the steps after scoring, so the table can see what is still outstanding. *@
-<div class="panel" style="margin-top:.6rem;">
-    <h3 style="margin:0 0 .4rem;">@Loc["status.checklist"]</h3>
-    <div class="status-steps">
-        @foreach (var (step, key) in Steps)
-        {
-            var done = s.StatusStepsDone.HasFlag(step);
-            <button class="step @(done ? "done" : "")" @onclick="() => ToggleStep(step, !done)">
-                <span class="step-box">@(done ? "✓" : "")</span>
-                <span>@Loc[key]</span>
-            </button>
-        }
-    </div>
-</div>
+    case StatusStage.RevealObjective:
+        <div class="panel" style="margin-top:.6rem;">
+            <h3 style="margin:0 0 .2rem;">@Loc["status.stage.reveal"]</h3>
+            <p class="faint" style="margin:0;">@Loc["status.revealHint"]</p>
+        </div>
+        <ObjectivesTab RevealOnTop="true" Scoreable="false" />
+        break;
+
+    case StatusStage.Checklist:
+        @* Short wording here, the full rules text on the wall — the host needs a list, the table needs
+           the explanation. *@
+        <div class="panel" style="margin-top:.6rem;">
+            <h3 style="margin:0 0 .4rem;">@Loc["status.checklist"]</h3>
+            <div class="status-steps">
+                @foreach (var (step, key) in Steps)
+                {
+                    var done = s.StatusStepsDone.HasFlag(step);
+                    <button class="step @(done ? "done" : "")" @onclick="() => ToggleStep(step, !done)">
+                        <span class="step-box">@(done ? "✓" : "")</span>
+                        <span>@Loc[key]</span>
+                    </button>
+                }
+            </div>
+        </div>
+        break;
+}
 
 @code {
     private Guid Sid => Store.Session!.Id;
 
+    private static readonly (StatusStage Stage, string Key)[] Stages =
+    {
+        (StatusStage.Scoring, "status.stage.scoring"),
+        (StatusStage.RevealObjective, "status.stage.reveal"),
+        (StatusStage.Checklist, "status.stage.checklist"),
+    };
+
     // The order and wording the user's table uses (command tokens discarded/gained is one entry).
+    // "Reveal objective" is NOT here anymore — it is its own stage. The last entry is not a rulebook step
+    // but the thing that gets forgotten: abilities that fire during or at the end of the phase.
     private static readonly (StatusStep Step, string Key)[] Steps =
     {
-        (StatusStep.RevealObjective, "status.step.revealObjective"),
         (StatusStep.DrawActionCards, "status.step.drawActionCards"),
         (StatusStep.CommandTokens, "status.step.commandTokens"),
         (StatusStep.ReadyCards, "status.step.readyCards"),
         (StatusStep.RepairUnits, "status.step.repairUnits"),
         (StatusStep.ReturnStrategyCards, "status.step.returnStrategyCards"),
+        (StatusStep.EndOfStatusAbilities, "status.step.endAbilities"),
     };
+
+    private Task GoStage(StatusStage stage) => Store.Mutate(Store.Api.SetStatusStageAsync(Sid, stage));
 
     private Task SetDone(Guid playerId, bool done)
         => Store.Mutate(Store.Api.SetStatusDoneAsync(Sid, playerId, done));
 
     private Task ToggleStep(StatusStep step, bool done)
         => Store.Mutate(Store.Api.SetStatusStepAsync(Sid, step, done));
+
+    private Task Score(Guid sessionObjectiveId, Guid playerId)
+        => Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, sessionObjectiveId, playerId));
 }
