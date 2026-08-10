@@ -54,8 +54,8 @@
             </div>
             <div class="modal-body">
                 <p class="faint" style="margin:0 0 .6rem;">@Loc["politics.modalHint"]</p>
-                @* The current speaker is out (the card says "a player other than the speaker"), and so is
-                   the player playing it — the table's own house rule. *@
+                @* Only the CURRENT speaker is out ("choose a player other than the speaker") — you may well
+                   choose yourself, and often want to. *@
                 <PlayerPicker Players="Appointable(s)" OnPick="AppointSpeaker" />
                 @if (!Appointable(s).Any())
                 {
@@ -96,10 +96,6 @@ else if (s.SpeakerPending)
             @Loc[s.RedTapeVariant == RedTapeVariant.Lite ? "redtape.actionLite" : "redtape.actionBureaucracy"]
         </span>
         <div class="spacer" style="flex:1"></div>
-        @if (s.RedTapeVariant == RedTapeVariant.Lite)
-        {
-            <button class="btn btn-sm" title='@Loc["redtape.randomHint"]' disabled="@(!AnyTaped(s))" @onclick="RemoveRandomTape">🎲 @Loc["redtape.random"]</button>
-        }
         <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowObjectivesTab()">@Loc["redtape.openObjectives"] ▸</button>
     </div>
 }
@@ -247,22 +243,11 @@ else
     private Task Pass(Guid playerId, bool passed)
         => Store.Mutate(Store.Api.SetPassedAsync(Sid, playerId, passed));
 
-    /// <summary>Who may be given the speaker token by a Politics action: not the current speaker (the card
-    /// says so) and not the player playing it (the table's own rule).</summary>
+    /// <summary>Who may be given the speaker token by a Politics action: everyone except the player who
+    /// already holds it — "choose a player other than the speaker". Choosing yourself is allowed and is
+    /// usually the point.</summary>
     private static IEnumerable<PlayerDto> Appointable(SessionStateDto s)
-        => s.Players.Where(p => p.Id != s.SpeakerPlayerId && p.Id != s.ActivePlayerId).OrderBy(p => p.SeatOrder);
+        => s.Players.Where(p => p.Id != s.SpeakerPlayerId).OrderBy(p => p.SeatOrder);
 
     private Task AppointSpeaker(Guid playerId) => Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
-
-    private static bool AnyTaped(SessionStateDto s) => s.Objectives.Any(o => !o.MarkerRemoved);
-
-    /// <summary>Red Tape Lite: when nobody took the carrier card, one tape comes off at random. Rolled on
-    /// this device — it is a die roll the table would otherwise do by hand, and the result is what travels.</summary>
-    private Task RemoveRandomTape()
-    {
-        var taped = Store.Session!.Objectives.Where(o => !o.MarkerRemoved).ToList();
-        if (taped.Count == 0) return Task.CompletedTask;
-        var pick = taped[Random.Shared.Next(taped.Count)];
-        return Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, pick.Id, true));
-    }
 }

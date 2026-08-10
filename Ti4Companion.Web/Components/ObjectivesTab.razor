@@ -9,6 +9,19 @@
 }
 
 <div style="display:flex;flex-direction:column;gap:1rem;">
+    @* Red Tape Lite: if NOBODY took the carrier card this round, one tape comes off at random instead of by
+       choice (round 1 right after the strategy phase, afterwards at the end of each status phase). Offered
+       here rather than on the card action, because the trigger is precisely that the card was not taken —
+       the app rolls it, the table decides when. *@
+    @if (s.RedTapeVariant == RedTapeVariant.Lite && NobodyTookCarrier(s) && s.Objectives.Any(o => !o.MarkerRemoved))
+    {
+        <div class="panel tech-prompt" style="order:0;">
+            <span class="tp-text">@Loc["redtape.randomHint"]</span>
+            <div class="spacer" style="flex:1"></div>
+            <button class="btn btn-sm" @onclick="RemoveRandomTape">🎲 @Loc["redtape.random"]</button>
+        </div>
+    }
+
     @* Reveal controls (host) — order flips so they sit above in setup, below in status. *@
     @if (host)
     {
@@ -61,7 +74,9 @@
                     }
                     <span class="obj-name">@name</span>
                     @if (custom) { <span class="chip chip-passed">@Loc["obj.secret"]</span> }
-                    <span class="obj-vp">@pts</span>
+                    @* Taped = the points are covered, exactly as the marker sits on the physical card. *@
+                    @{ var taped0 = Store.RedTapeBlocks(so); }
+                    <span class="obj-vp @(taped0 ? "taped" : "")">@(taped0 ? "?" : pts?.ToString())</span>
                     @if (host)
                     {
                         <button class="btn btn-sm btn-ghost" @onclick="() => Remove(so.Id)" title="@RemoveTitle">✕</button>
@@ -138,6 +153,20 @@
     /// <summary>Red Tape: <paramref name="removed"/> = the tape is off (the objective can be scored).</summary>
     private Task SetMarker(Guid soId, bool removed)
         => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, soId, removed));
+
+    /// <summary>Nobody holds the strategy card that carries the Red Tape ability this round — the condition
+    /// under which Red Tape Lite removes a tape at random instead of by choice.</summary>
+    private static bool NobodyTookCarrier(SessionStateDto s)
+        => s.Players.All(p => p.StrategyCards.All(c => c.StrategyCardId != s.RedTapeCardNumber));
+
+    /// <summary>Roll which tape comes off. Rolled on this device — it is a die roll the table would
+    /// otherwise do by hand, and only the result travels.</summary>
+    private Task RemoveRandomTape()
+    {
+        var taped = Store.Session!.Objectives.Where(o => !o.MarkerRemoved).ToList();
+        if (taped.Count == 0) return Task.CompletedTask;
+        return SetMarker(taped[Random.Shared.Next(taped.Count)].Id, true);
+    }
 
     private Task ToggleScore(Guid soId, Guid playerId, bool scored)
         => scored ? ScoreOff(soId, playerId) : Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, soId, playerId));

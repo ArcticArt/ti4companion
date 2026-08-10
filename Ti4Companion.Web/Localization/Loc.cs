@@ -123,34 +123,47 @@ public class Loc
         ["redtape.bureaucracy"] = ("Bureaucracy: Red Tape", "Bürokratie: Red Tape"),
         ["redtape.lite"] = ("Red Tape Lite", "Red Tape Lite"),
         ["redtape.hint"] = (
-            "Community variants: the public objectives lie face-up from the start, taped over, and one strategy card pulls the tape off. A taped objective cannot be scored.",
-            "Community-Varianten: Die öffentlichen Aufträge liegen von Anfang an offen, aber mit Klebeband versiegelt, und eine Strategiekarte entfernt das Band. Ein versiegelter Auftrag kann nicht gewertet werden."),
+            "Community variants: every public objective lies face-up from the start with its points taped over, and one strategy card pulls the tape off. A taped objective cannot be scored — so everyone can plan ahead, veteran or not.",
+            "Community-Varianten: Alle öffentlichen Aufträge liegen von Anfang an offen, ihre Punkte aber mit einem Band abgedeckt, und eine Strategiekarte entfernt das Band. Ein versiegelter Auftrag kann nicht gewertet werden — so kann jeder vorausplanen, ob Neuling oder Veteran."),
         ["redtape.bureaucracyHint"] = (
-            "Every public objective is revealed at setup and taped. Whoever takes the carrier card removes tape equal to the trade goods on it — so a card nobody took is worth more later. Variant by WildFalkon (BGG).",
-            "Alle öffentlichen Aufträge werden beim Aufbau aufgedeckt und versiegelt. Wer die Trägerkarte nimmt, entfernt so viele Bänder, wie Handelswaren auf ihr liegen — eine Runde ohne Abnehmer ist später also mehr wert. Variante von WildFalkon (BGG)."),
+            "Setup: the speaker lays out five Stage I and five Stage II objectives face-up and puts a marker over the victory point value of every one except the first two, which count as revealed. A taped objective cannot be claimed and counts as unrevealed. Variant by WildFalkon.",
+            "Aufbau: Der Sprecher legt fünf Stufe-I- und fünf Stufe-II-Aufträge offen aus und deckt bei allen außer den ersten zwei — die gelten als aufgedeckt — den Siegpunktwert mit einem Marker ab. Ein versiegelter Auftrag kann nicht gewertet werden und gilt als nicht aufgedeckt. Variante von WildFalkon."),
         ["redtape.liteHint"] = (
-            "Reveal six or seven Stage I and five Stage II objectives; only the first two start untaped. Only five Stage I can ever score, and no Stage II tape comes off before those five are clear. The carrier card removes one of your choice; if nobody took it, one comes off at random. Variant by van nguyen (BGG).",
-            "Sechs oder sieben Stufe-I- und fünf Stufe-II-Aufträge aufdecken; nur die ersten zwei liegen frei. Nur fünf Stufe-I-Aufträge können überhaupt gewertet werden, und kein Stufe-II-Band geht ab, bevor diese fünf frei sind. Die Trägerkarte entfernt eines nach Wahl; nimmt sie niemand, geht ein zufälliges ab. Variante von van nguyen (BGG)."),
+            "Setup: reveal seven (or six) Stage I and five Stage II objectives; the first Stage I objectives start untaped. Only five Stage I can ever score — when the fifth tape comes off, Stage I #6 and #7 are purged — and no Stage II tape comes off before those five are clear. Variant by van nguyen.",
+            "Aufbau: sieben (oder sechs) Stufe-I- und fünf Stufe-II-Aufträge aufdecken; die ersten Stufe-I-Aufträge liegen frei. Nur fünf Stufe-I-Aufträge können überhaupt gewertet werden — sobald das fünfte Band fällt, werden Stufe I Nr. 6 und 7 entfernt — und kein Stufe-II-Band geht ab, bevor diese fünf frei sind. Variante von van nguyen."),
         ["redtape.card"] = ("Card that removes the tape", "Karte, die das Band entfernt"),
         ["redtape.cardHint"] = (
-            "The variant replaces this strategy card with its Red Tape version — the table agrees on which one before the game. Both variants are written for Diplomacy.",
-            "Die Variante ersetzt diese Strategiekarte durch ihre Red-Tape-Fassung — der Tisch legt vor dem Spiel fest, welche. Beide Varianten sind für Diplomatie geschrieben."),
+            "Replace either — but not both — Diplomacy or Imperial with the matching Bureaucracy card. Everything else on it stays the printed card.",
+            "Ersetze entweder Diplomatie oder Imperium — nicht beide — durch die passende Bürokratie-Karte. Alles andere darauf bleibt die gedruckte Karte."),
+        // The addition the variant prints on the carrier card, shown above its base text (see StrategyCardView).
+        ["redtape.cardLabel"] = ("Red Tape", "Red Tape"),
+        ["redtape.cardSpecial"] = (
+            "SPECIAL: After selecting this strategy card, remove Red Tape counters equal to the number of trade goods on this card.",
+            "SPEZIELL: Nachdem du diese Strategiekarte gewählt hast, entferne so viele Red-Tape-Marker, wie Handelswaren auf dieser Karte liegen."),
+        ["redtape.cardPrimary"] = (
+            "Remove 1 Red Tape counter from the public objective of your choice. You may not choose a Stage II objective in the first 3 rounds.",
+            "Entferne 1 Red-Tape-Marker von einem öffentlichen Auftrag deiner Wahl. In den ersten 3 Runden darfst du keinen Stufe-II-Auftrag wählen."),
+        // Bureaucracy replaces the status phase's reveal step (rulebook insert, step 12).
+        ["redtape.stepReplaced"] = ("Check for the end of the game", "Spielende prüfen"),
+        ["redtape.stepReplacedHint"] = (
+            "Red Tape replaces \"reveal public objective\": nothing is revealed — the game ends if there are no unrevealed public objectives at the start of this step.",
+            "Red Tape ersetzt „Öffentlichen Auftrag aufdecken“: Es wird nichts aufgedeckt — das Spiel endet, wenn zu Beginn dieses Schritts kein nicht aufgedeckter öffentlicher Auftrag mehr liegt."),
         // The card action itself (shown while that strategy action is on the table).
         ["redtape.action"] = ("Red Tape: remove tape", "Red Tape: Band entfernen"),
         ["redtape.actionHint"] = (
             "Remove the tape before resolving the rest of the card.",
             "Entferne das Band, bevor der Rest der Karte abgehandelt wird."),
         ["redtape.actionBureaucracy"] = (
-            "Remove one tape per trade good that was on this card.",
-            "Entferne ein Band pro Handelsware, die auf dieser Karte lag."),
+            "Remove one tape of your choice, plus one per trade good that was on this card. No Stage II objective in the first three rounds.",
+            "Entferne ein Band nach Wahl, dazu eines pro Handelsware, die auf dieser Karte lag. In den ersten drei Runden kein Stufe-II-Auftrag."),
         ["redtape.actionLite"] = (
-            "Remove one tape of your choice — no Stage II until the five scorable Stage I are clear.",
-            "Entferne ein Band nach Wahl — kein Stufe II, solange die fünf wertbaren Stufe-I-Aufträge nicht frei sind."),
+            "Remove one tape of your choice — no Stage II until the five scorable Stage I are clear. No random removal this round.",
+            "Entferne ein Band nach Wahl — kein Stufe II, solange die fünf wertbaren Stufe-I-Aufträge nicht frei sind. Diese Runde fällt die Zufallsentnahme weg."),
         ["redtape.openObjectives"] = ("Open objectives", "Aufträge öffnen"),
         ["redtape.random"] = ("Remove one at random", "Zufälliges Band entfernen"),
         ["redtape.randomHint"] = (
-            "Red Tape Lite: nobody took the card this round, so one tape comes off at random.",
-            "Red Tape Lite: Diese Runde hat niemand die Karte genommen, also geht ein zufälliges Band ab."),
+            "Red Tape Lite: nobody took the card this round, so one tape comes off at random — right after the strategy phase in round 1, at the end of the status phase after that.",
+            "Red Tape Lite: Diese Runde hat niemand die Karte genommen, also geht ein zufälliges Band ab — in Runde 1 direkt nach der Strategiephase, danach am Ende der Statusphase."),
         ["redtape.takeOff"] = ("Tap the tape to remove it", "Zum Entfernen auf das Band tippen"),
         // The tape is the only label — a separate "SEALED" chip said the same thing twice.
         ["redtape.blocked"] = ("SEALED — TAP THE TAPE", "VERSIEGELT — AUF DAS BAND TIPPEN"),
@@ -503,8 +516,8 @@ public class Loc
         // Secondary abilities of a strategy action (only with the turn timer in use).
         ["politics.speaker"] = ("Appoint the speaker", "Sprecher bestimmen"),
         ["politics.modalHint"] = (
-            "Politics: choose the new speaker first — the turn can't be ended until you have. Neither the current speaker nor you can be chosen.",
-            "Politik: zuerst den neuen Sprecher wählen — vorher lässt sich der Zug nicht beenden. Der bisherige Sprecher und du selbst sind ausgenommen."),
+            "Politics: choose the new speaker first — the turn can't be ended until you have. Anyone but the current speaker, yourself included.",
+            "Politik: zuerst den neuen Sprecher wählen — vorher lässt sich der Zug nicht beenden. Jeder außer dem bisherigen Sprecher, du selbst eingeschlossen."),
         ["politics.waitingFor"] = ("{0} is appointing the new speaker.", "{0} bestimmt den neuen Sprecher."),
         ["imperial.promptText"] = ("Imperial: you may score a public objective.", "Imperium: du darfst einen öffentlichen Auftrag werten."),
         ["imperial.promptOpen"] = ("Open objectives", "Aufträge öffnen"),

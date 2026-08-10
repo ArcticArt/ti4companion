@@ -1,5 +1,6 @@
 @* A strategy card, colour-coded. Names only by default; ability text renders as ★ bullet points
    (one per line, like the physical cards). Pass OnClick to make the whole card clickable. *@
+@inject SessionStore Store
 
 <div class="strat @(Used ? "used" : "") @(Highlight ? "highlight" : "") @(Big ? "big-strat" : "") @(Clickable ? "clickable" : "")"
      style="--c:@Card.ColorHex" @onclick="HandleClick">
@@ -17,6 +18,17 @@
     </div>
     @if (ShowText)
     {
+        @* Red Tape variant: the card the table replaced with its Bureaucracy version. The printed base text
+           below is untouched (it comes from the master DB and stays the real card) — this is the addition the
+           variant prints on top of it, and the variant puts it BEFORE the original steps. *@
+        @if (IsRedTapeCarrier)
+        {
+            <div class="ability-label rt"><b>@Loc["redtape.cardLabel"]</b></div>
+            <ul class="ability-bullets rt-bullets">
+                <li>@Loc["redtape.cardSpecial"]</li>
+                <li>@Loc["redtape.cardPrimary"]</li>
+            </ul>
+        }
         <div class="ability-label"><b>@Loc["turn.primary"]</b></div>
         @Bullets(Loc.Pick(Card.PrimaryText, Card.PrimaryTextDe))
         <div class="ability-label"><b>@Loc["turn.secondary"]</b></div>
@@ -42,6 +54,9 @@
     [Inject] private Loc Loc { get; set; } = default!;
 
     private string TgTitle => $"{TradeGoods} {Loc["strategy.tradeGoods"]}";
+
+    /// <summary>This is the card the Red Tape variant replaced (Diplomacy or Imperial).</summary>
+    private bool IsRedTapeCarrier => Store.RedTapeOn && Store.Session?.RedTapeCardNumber == Card.Id;
 
     private Task HandleClick() => Clickable && OnClick.HasDelegate ? OnClick.InvokeAsync() : Task.CompletedTask;
 

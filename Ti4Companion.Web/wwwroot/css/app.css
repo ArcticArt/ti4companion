@@ -356,6 +356,12 @@ button.rt-tape:hover { filter: brightness(1.15); }
 /* Armed = one more tap removes it (status phase, where the card itself is a scoring tap target). */
 button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 12px, #2c0a07 12px 24px);
     box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+/* Taped = the points are covered, exactly as the marker sits on the physical card (the requirement text
+   stays readable on purpose — planning ahead is the whole point of the variant). */
+.obj-vp.taped { color: #f1a3ae; border-color: #6b2a35; box-shadow: none; }
+/* The addition the variant prints on the carrier strategy card, above its base text. */
+.ability-label.rt { color: #f1a3ae; }
+.ability-bullets.rt-bullets li { color: var(--text-dim); }
 /* The way back once the tape is off — nothing to tap otherwise. */
 .rt-restore { font-size: .8rem; line-height: 1; padding: .1rem .35rem; border-radius: 4px; cursor: pointer;
     background: none; border: 1px solid var(--panel-border); color: var(--text-faint); }

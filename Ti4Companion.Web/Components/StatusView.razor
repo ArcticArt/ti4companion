@@ -124,9 +124,13 @@
         break;
 
     case StatusStage.RevealObjective:
+        @* Bureaucracy replaces this step outright: everything is already face-up, so nothing is revealed and
+           the step becomes a game-end check ("the game ends if there are no unrevealed public objectives at
+           the start of this step" — rulebook insert). Red Tape Lite keeps revealing, so it keeps the box. *@
+        var bureaucracy = s.RedTapeVariant == RedTapeVariant.Bureaucracy;
         <div class="panel" style="margin-top:.6rem;">
-            <h3 style="margin:0 0 .2rem;">@Loc["status.stage.reveal"]</h3>
-            <p class="faint" style="margin:0;">@Loc["status.revealHint"]</p>
+            <h3 style="margin:0 0 .2rem;">@Loc[bureaucracy ? "redtape.stepReplaced" : "status.stage.reveal"]</h3>
+            <p class="faint" style="margin:0;">@Loc[bureaucracy ? "redtape.stepReplacedHint" : "status.revealHint"]</p>
         </div>
         <ObjectivesTab RevealOnTop="true" Scoreable="false" />
         break;

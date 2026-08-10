@@ -327,7 +327,9 @@ else
                     }
                     else if (statusStage == StatusStage.RevealObjective && revealNew.Count > 0)
                     {
-                        <h3 style="color:var(--gold);">@Loc["status.stage.reveal"]</h3>
+                        @* Bureaucracy replaces this step (nothing is revealed — everything already is), so the
+                           heading says which step the table is on. *@
+                        <h3 style="color:var(--gold);">@Loc[s.RedTapeVariant == RedTapeVariant.Bureaucracy ? "redtape.stepReplaced" : "status.stage.reveal"]</h3>
                         <div class="panel-body status-reveal">
                             @* One card gets the whole panel; several share it, so a double reveal doesn't
                                hide the first one behind the second. *@
@@ -335,6 +337,14 @@ else
                                 @foreach (var so in revealNew) { <ObjectiveDisplayCard So="so" Glow="true" /> }
                             </div>
                             <p class="status-detail">@Loc["status.detail.reveal"]</p>
+                        </div>
+                    }
+                    else if (statusStage == StatusStage.RevealObjective && s.RedTapeVariant == RedTapeVariant.Bureaucracy)
+                    {
+                        @* Nothing to reveal in this variant: the step is the game-end check. *@
+                        <h3 style="color:var(--gold);">@Loc["redtape.stepReplaced"]</h3>
+                        <div class="panel-body status-reveal">
+                            <p class="status-detail">@Loc["redtape.stepReplacedHint"]</p>
                         </div>
                     }
                     else if (statusStage == StatusStage.Checklist)

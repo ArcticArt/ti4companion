@@ -9,17 +9,20 @@
      @onclick="OnCardClick" @onkeydown="OnCardKey">
     <div class="obj-head">
         <span class="obj-name">@Name</span>
-        <span class="obj-vp">@Pts</span>
+        @* The physical variant lays the marker over the VICTORY POINT VALUE, deliberately not over the text —
+           the whole point is that everyone can read what is coming. Same here: the points are hidden while
+           the tape is on, the requirement stays legible. *@
+        <span class="obj-vp @(Taped ? "taped" : "")">@(Taped ? "?" : Pts?.ToString())</span>
     </div>
     @if (Def is not null)
     {
         <div class="obj-req">@Loc.Pick(Def.Requirement, Def.RequirementDe)</div>
     }
-    <div class="obj-markers @(Store.RedTapeBlocks(So) ? "taped" : "")">
+    <div class="obj-markers @(Taped ? "taped" : "")">
         @* Red Tape: the tape IS the control — no separate "sealed" label to read and no second button to
            find. On the wall it stays a plain span (a display can't be tapped); where it can be removed it
            takes two taps, because pulling the tape is exactly the kind of thing a stray touch shouldn't do. *@
-        @if (Store.RedTapeBlocks(So))
+        @if (Taped)
         {
             @if (TapeClickable)
             {
@@ -81,6 +84,8 @@
 
     private Task OnCardKey(KeyboardEventArgs e)
         => Clickable && (e.Key == "Enter" || e.Key == " ") ? OnClick.InvokeAsync() : Task.CompletedTask;
+
+    private bool Taped => Store.RedTapeBlocks(So);
 
     private ObjectiveDto? Def => So.CustomName is null ? Store.Objective(So.ObjectiveId) : null;
     private bool Stage2 => Def?.Stage == ObjectiveStage.StageII;
