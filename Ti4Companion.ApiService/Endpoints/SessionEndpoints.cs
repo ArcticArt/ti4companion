@@ -77,6 +77,8 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
         g.MapPost("/{id:guid}/status-step", SetStatusStep);
         g.MapPost("/{id:guid}/status-stage", SetStatusStage);
+        g.MapPost("/{id:guid}/push", SubscribePush);
+        g.MapDelete("/{id:guid}/push", UnsubscribePush);
 
         // ---- Objectives ----
         g.MapPost("/{id:guid}/objectives", RevealObjective);
@@ -280,7 +282,7 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> StartActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> StartActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -321,6 +323,7 @@ public static class SessionEndpoints
         session.ActivePlayerId = TurnService.FirstActive(session, overrides);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Action, round: session.CurrentRound);
         if (session.ActivePlayerId is Guid first) Log(db, session, SessionLogKind.TurnChange, GetCaller(session, http)?.Id, target: first);
+        NotifyTurn(session, push);
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
@@ -414,7 +417,7 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> AdvanceTurn(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> AdvanceTurn(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -423,6 +426,7 @@ public static class SessionEndpoints
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
         if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
+        NotifyTurn(session, push);
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
@@ -543,7 +547,7 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> SetPassed(Guid id, Guid playerId, SetPassedRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> SetPassed(Guid id, Guid playerId, SetPassedRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
@@ -562,6 +566,7 @@ public static class SessionEndpoints
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
             if (session.ActivePlayerId is Guid nxt) Log(db, session, http, SessionLogKind.TurnChange, target: nxt);
+                NotifyTurn(session, push);
             return await SaveAndReturn(db, hub, session, ct, overrides);
         }
 
@@ -726,6 +731,67 @@ public static class SessionEndpoints
             ? session.StatusStepsDone | req.Step
             : session.StatusStepsDone & ~req.Step;
         return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>Tell the player who is now up that it is their turn. Only called where a turn really moves
+    /// on in play (phase start, advance, pass) — deliberately NOT on the host's "jump to player" or "step
+    /// back", where a buzzing phone would be noise from a correction.</summary>
+    private static void NotifyTurn(GameSession session, PushService push)
+    {
+        if (session.ActivePlayerId is not Guid pid) return;
+        var player = session.Players.FirstOrDefault(x => x.Id == pid);
+        if (player is null) return;
+        push.NotifyTurn(session.Id, pid, player.Name, session.JoinCode, session.CurrentRound);
+    }
+
+    // Register this browser for "you're up" notifications. The caller is resolved from the device token, so
+    // a device can only ever subscribe itself — and the endpoint URL is unique, so re-subscribing the same
+    // browser updates its row instead of adding another.
+    private static async Task<IResult> SubscribePush(Guid id, PushSubscribeRequest req, Ti4DbContext db, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (caller is null) return Forbidden();
+        if (string.IsNullOrWhiteSpace(req.Endpoint) || string.IsNullOrWhiteSpace(req.P256dh) || string.IsNullOrWhiteSpace(req.Auth))
+            return Results.BadRequest(new { error = "Incomplete subscription." });
+        // Push endpoints are long URLs; cap them like every other free-text field reaching the DB.
+        if (req.Endpoint.Length > 500 || req.P256dh.Length > 200 || req.Auth.Length > 100)
+            return Results.BadRequest(new { error = "Subscription too long." });
+
+        var existing = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == req.Endpoint, ct);
+        if (existing is null)
+        {
+            db.PushSubscriptions.Add(new Data.PushSubscription
+            {
+                SessionId = session.Id, PlayerId = caller.Id, DeviceToken = caller.DeviceToken ?? "",
+                Endpoint = req.Endpoint, P256dh = req.P256dh, Auth = req.Auth
+            });
+        }
+        else
+        {
+            // Same browser, possibly a different player or session now (a device can be handed on).
+            existing.SessionId = session.Id;
+            existing.PlayerId = caller.Id;
+            existing.DeviceToken = caller.DeviceToken ?? "";
+            existing.P256dh = req.P256dh;
+            existing.Auth = req.Auth;
+            existing.FailedAtUtc = null;
+        }
+        await db.SaveChangesAsync(ct);
+        return Results.Ok();
+    }
+
+    // The browser dropped its subscription (or the player switched notifications off).
+    private static async Task<IResult> UnsubscribePush(Guid id, PushSubscribeRequest req, Ti4DbContext db, CancellationToken ct)
+    {
+        var row = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == req.Endpoint, ct);
+        if (row is not null)
+        {
+            db.PushSubscriptions.Remove(row);
+            await db.SaveChangesAsync(ct);
+        }
+        return Results.Ok();
     }
 
     // Status phase: move to a stage (score → reveal → checklist, and back). Host-only, like every other

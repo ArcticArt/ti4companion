@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Ti4Companion.ApiService.Data;
 using Ti4Companion.ApiService.Endpoints;
 using Ti4Companion.ApiService.Realtime;
+using Lib.Net.Http.WebPush;
 using Ti4Companion.ApiService.Services;
 using Ti4Companion.Shared;
 
@@ -44,6 +45,12 @@ builder.Services.AddRateLimiter(options =>
 
 // Background worker that wipes inactive sessions after their retention window.
 builder.Services.AddHostedService<SessionCleanupWorker>();
+
+// Web Push ("you're up"). PushServiceClient is an HttpClient, so it goes through the factory; PushService
+// itself is a singleton and opens its own DbContext scope per send, because it runs detached from the
+// request that triggered it. With no VAPID keys configured it reports Enabled=false and does nothing.
+builder.Services.AddHttpClient<PushServiceClient>();
+builder.Services.AddSingleton<PushService>();
 
 var app = builder.Build();
 
@@ -107,6 +114,10 @@ app.MapGet("/api/ping", () => Results.Ok(new { status = "ok", time = DateTimeOff
 // Unauthenticated and unmetered on purpose: every client asks once at startup, before any session exists.
 app.MapGet("/api/instance", (IConfiguration cfg) =>
     Results.Ok(new InstanceDto(cfg["Ti4:InstanceLabel"] ?? "")));
+
+// The VAPID public key a browser needs to subscribe for "you're up". Empty => push is not configured and
+// the client hides the feature. The PRIVATE key never leaves the server (systemd environment, not appsettings).
+app.MapGet("/api/push/key", (PushService push) => Results.Ok(new PushKeyDto(push.PublicKey)));
 
 app.MapContentEndpoints();
 app.MapSessionEndpoints();

@@ -297,6 +297,14 @@ public record SetStatusStageRequest(StatusStage Stage);
 /// LAN address, a renamed subdomain and a second staging box.</summary>
 public record InstanceDto(string Label);
 
+/// <summary>A browser's Web Push subscription, exactly as `PushManager.subscribe()` hands it over.
+/// <paramref name="Endpoint"/> is the push service URL and identifies the browser.</summary>
+public record PushSubscribeRequest(string Endpoint, string P256dh, string Auth);
+
+/// <summary>The VAPID public key a browser needs to subscribe. Empty when push is not configured, which is
+/// the client's signal to hide the feature entirely.</summary>
+public record PushKeyDto(string PublicKey);
+
 public record SetDisplayModeRequest(DisplayMode Mode);
 
 public record RevealCustomObjectiveRequest(string Name, int Points);

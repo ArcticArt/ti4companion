@@ -151,6 +151,35 @@ public class SessionObjective
     public List<ObjectiveScore> Scores { get; set; } = new();
 }
 
+/// <summary>
+/// One Web Push subscription: a browser on one device, for one player in one session. The endpoint URL is
+/// the identity a push service gives out, so it is the unique key — resubscribing the same browser updates
+/// the row instead of piling up duplicates.
+///
+/// Deliberately NOT part of the session graph (no navigation from <see cref="GameSession"/>): it is written
+/// and read on its own, and loading it with every session read would put encryption keys into every DTO
+/// path for no reason. It IS deleted with the session, by the cleanup worker, since the subscription is
+/// worthless afterwards.
+/// </summary>
+public class PushSubscription
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionId { get; set; }
+    public Guid PlayerId { get; set; }
+    /// <summary>Which device this subscription belongs to, so a player who moves phones can be cleaned up.</summary>
+    public string DeviceToken { get; set; } = "";
+    /// <summary>Push service URL. Unique — it identifies the browser instance.</summary>
+    public string Endpoint { get; set; } = "";
+    /// <summary>Client public key (base64url), from the browser's subscription.</summary>
+    public string P256dh { get; set; } = "";
+    /// <summary>Client auth secret (base64url), from the browser's subscription.</summary>
+    public string Auth { get; set; } = "";
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>Set when the push service last rejected this subscription as gone (404/410), so a dead row
+    /// is dropped rather than retried forever.</summary>
+    public DateTimeOffset? FailedAtUtc { get; set; }
+}
+
 public class ObjectiveScore
 {
     public Guid Id { get; set; } = Guid.NewGuid();

@@ -1,0 +1,125 @@
+using System.Security.Cryptography;
+using Lib.Net.Http.WebPush;
+using Lib.Net.Http.WebPush.Authentication;
+using Microsoft.EntityFrameworkCore;
+using Ti4Companion.ApiService.Data;
+
+namespace Ti4Companion.ApiService.Services;
+
+/// <summary>
+/// Sends the "you're up" Web Push notifications.
+///
+/// Web Push rather than anything native: the notification has to reach a locked phone, and the app is a
+/// PWA with a service worker already. On iOS this only works when the site was added to the home screen
+/// (16.4+), which the client has to explain rather than silently do nothing.
+///
+/// Push is OFF unless a VAPID key pair is configured (<c>Ti4:Vapid:PublicKey/PrivateKey/Subject</c>). The
+/// private key is a secret: it belongs in the systemd unit's environment, never in a committed
+/// appsettings.json. With no keys, <see cref="Enabled"/> is false, the public-key endpoint returns empty and
+/// the client hides the whole feature — no half-working state.
+///
+/// Sending is deliberately fire-and-forget from the request's point of view: a push service that is slow or
+/// down must never delay or fail the turn change that triggered it.
+/// </summary>
+public class PushService(
+    PushServiceClient client,
+    IServiceScopeFactory scopes,
+    IConfiguration config,
+    ILogger<PushService> log)
+{
+    private readonly string _publicKey = config["Ti4:Vapid:PublicKey"] ?? "";
+    private readonly string _privateKey = config["Ti4:Vapid:PrivateKey"] ?? "";
+    private readonly string _subject = config["Ti4:Vapid:Subject"] ?? "";
+
+    public bool Enabled => _publicKey.Length > 0 && _privateKey.Length > 0;
+
+    /// <summary>The public key the browser needs to subscribe. Empty when push is not configured.</summary>
+    public string PublicKey => Enabled ? _publicKey : "";
+
+    /// <summary>
+    /// Generate a VAPID key pair (base64url, P-256) — used by the one-off setup, not at runtime. Kept here
+    /// so the format lives next to the code that consumes it: the public key is the uncompressed point
+    /// (0x04 ‖ X ‖ Y), the private key is the raw scalar D.
+    /// </summary>
+    public static (string PublicKey, string PrivateKey) GenerateKeys()
+    {
+        using var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var p = ec.ExportParameters(true);
+        var pub = new byte[65];
+        pub[0] = 0x04;
+        p.Q.X!.CopyTo(pub, 1);
+        p.Q.Y!.CopyTo(pub, 33);
+        return (Base64Url(pub), Base64Url(p.D!));
+    }
+
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    /// <summary>
+    /// Tell a player it is their turn. Runs detached on the thread pool with its own DbContext scope: the
+    /// caller is inside a request that has already saved, and must not wait for a push service.
+    /// </summary>
+    public void NotifyTurn(Guid sessionId, Guid playerId, string playerName, string joinCode, int round)
+    {
+        if (!Enabled) return;
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            title = "TI4 Companion",
+            body = $"{playerName}: du bist dran (Runde {round})",
+            code = joinCode,
+            tag = "turn"
+        });
+        _ = Task.Run(() => SendToPlayerAsync(sessionId, playerId, payload));
+    }
+
+    private async Task SendToPlayerAsync(Guid sessionId, Guid playerId, string payload)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Ti4DbContext>();
+            var subs = await db.PushSubscriptions
+                .Where(s => s.SessionId == sessionId && s.PlayerId == playerId && s.FailedAtUtc == null)
+                .ToListAsync();
+            if (subs.Count == 0) return;
+
+            client.DefaultAuthentication = new VapidAuthentication(_publicKey, _privateKey)
+            {
+                Subject = string.IsNullOrWhiteSpace(_subject) ? "mailto:Frostforgestudio@proton.me" : _subject
+            };
+
+            var message = new PushMessage(payload)
+            {
+                // One pending "your turn" per device is enough — a later one replaces the earlier.
+                Topic = "turn",
+                Urgency = PushMessageUrgency.High,
+                TimeToLive = 600
+            };
+
+            foreach (var sub in subs)
+            {
+                var target = new Lib.Net.Http.WebPush.PushSubscription { Endpoint = sub.Endpoint };
+                target.SetKey(PushEncryptionKeyName.P256DH, sub.P256dh);
+                target.SetKey(PushEncryptionKeyName.Auth, sub.Auth);
+                try
+                {
+                    await client.RequestPushMessageDeliveryAsync(target, message);
+                }
+                catch (Exception ex)
+                {
+                    // 404/410 mean the browser threw the subscription away. Mark it instead of retrying
+                    // forever; anything else is logged and left alone (the push service may just be down).
+                    var gone = ex.Message.Contains("404") || ex.Message.Contains("410");
+                    if (gone) sub.FailedAtUtc = DateTimeOffset.UtcNow;
+                    log.LogWarning(ex, "Push delivery failed ({State})", gone ? "subscription gone" : "transient");
+                }
+            }
+            await db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // Nothing about a notification is worth surfacing into the game.
+            log.LogWarning(ex, "Push send failed");
+        }
+    }
+}

@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Lib.Net.Http.WebPush" Version="3.3.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
     <!-- Direct reference lifts the vulnerable native SQLite in SQLitePCLRaw.lib.e_sqlite3 2.1.11
          (CVE-2025-6965 / GHSA-2m69-gcr7-jv3q, high: SQLite before 3.50.2 can corrupt memory when the
