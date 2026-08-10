@@ -152,6 +152,9 @@
         SessionLogKind.AgendaResult => AgendaResultLine(e.Detail),
         SessionLogKind.GamePaused => Loc["log.gamePaused"],
         SessionLogKind.GameResumed => Loc["log.gameResumed"],
+        // The app pulled a tape or purged an objective on its own — the two entries that say what it did.
+        SessionLogKind.RedTapeRandom => string.Format(Loc["log.redTapeRandom"], ObjName(e.Detail)),
+        SessionLogKind.RedTapePurge => string.Format(Loc["log.redTapePurge"], ObjName(e.Detail)),
         _ => Loc["log.generic"],
     };
 

@@ -28,4 +28,19 @@ public static class GameRules
     /// <summary>Diplomacy: the card the Red Tape variants are published for (the variant replaces either
     /// this one or <see cref="ImperialStrategyCard"/>, and the table picks which at setup).</summary>
     public const int RedTapeDiplomacyCard = 2;
+
+    // ---- Red Tape variants -----------------------------------------------------------------------------
+    // The server enforces these (see RedTape) and the client greys out exactly the same things, so the
+    // numbers live here — written out twice is how the two drift apart.
+
+    /// <summary>Objectives that start UNTAPED: the variants tape everything except the first two Stage I,
+    /// which count as revealed.</summary>
+    public const int RedTapeUntapedAtSetup = 2;
+
+    /// <summary>Red Tape Lite: only this many Stage I objectives can ever score; the rest are purged once
+    /// they are clear.</summary>
+    public const int RedTapeScorableStageI = 5;
+
+    /// <summary>Bureaucracy: "you may not choose a Stage II objective in the first 3 rounds".</summary>
+    public const int RedTapeStageIILockedThrough = 3;
 }

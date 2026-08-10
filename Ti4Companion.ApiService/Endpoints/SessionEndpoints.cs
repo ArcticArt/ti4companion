@@ -343,6 +343,9 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Action;
         session.ActiveStrategyCardId = null;
         session.ActivePlayerId = TurnService.FirstActive(session, overrides);
+        // "In Round 1, do this right after the Strategy Phase" — this is that moment. Later rounds get it
+        // when the status phase ends.
+        if (session.CurrentRound == 1) RedTapeRandom(db, session, http);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Action, round: session.CurrentRound);
         if (session.ActivePlayerId is Guid first) Log(db, session, SessionLogKind.TurnChange, GetCaller(session, http)?.Id, target: first);
         NotifyTurn(session, push);
@@ -377,6 +380,9 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
+        // The status phase is over: Red Tape Lite's random removal is due (idempotent per round, so going
+        // status → agenda → next round does it once).
+        if (session.Phase == GamePhase.Status) RedTapeRandom(db, session, http);
         session.Phase = GamePhase.Agenda;
         // Fresh agenda phase: clear the agenda/votes and reset every player's entered influence.
         session.CurrentAgendaId = null;
@@ -401,6 +407,9 @@ public static class SessionEndpoints
 
         LogAgendaResult(db, session);   // capture the last agenda's result before the round resets
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+        // Same as in StartAgendaPhase — whichever way the table leaves the status phase, the removal is due
+        // once. Still in the OLD round here, which is what the per-round guard keys on.
+        RedTapeRandom(db, session, http);
         session.CurrentRound += 1;
         session.Phase = GamePhase.Strategy;
         session.ActivePlayerId = null;
@@ -689,7 +698,11 @@ public static class SessionEndpoints
         var objectiveId = ClampId(req.ObjectiveId) ?? "";
         if (!session.Objectives.Any(o => o.ObjectiveId == objectiveId))
         {
-            session.Objectives.Add(new SessionObjective { SessionId = session.Id, ObjectiveId = objectiveId });
+            var fresh = new SessionObjective { SessionId = session.Id, ObjectiveId = objectiveId };
+            session.Objectives.Add(fresh);
+            // Red Tape: the layout is taped EXCEPT the first two Stage I, which count as revealed — so the
+            // host doesn't have to pull two tapes by hand right after setting the table up.
+            fresh.MarkerRemoved = RedTape.RevealsUntaped(session, fresh);
             Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: objectiveId);
         }
         return await SaveAndReturn(db, hub, session, ct);
@@ -708,6 +721,8 @@ public static class SessionEndpoints
             ObjectiveId = "",
             CustomName = Clamp(req.Name, 100),
             CustomPoints = Math.Clamp(req.Points, 0, 10),
+            // A hand-added objective was never part of the taped layout (it is usually a secret made public).
+            MarkerRemoved = true,
         });
         Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: Clamp(req.Name, 100));
         return await SaveAndReturn(db, hub, session, ct);
@@ -1004,12 +1019,24 @@ public static class SessionEndpoints
 
     // Red Tape variant: take the marker off an objective, or put it back. Open to any device like
     // scoring — it's a token on the table, not a privileged action.
-    private static async Task<IResult> SetObjectiveMarker(Guid id, Guid sessionObjectiveId, SetObjectiveMarkerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    // Pull a Red Tape marker off an objective (or put it back). Open to any device, like scoring — it is a
+    // token on the table. The VARIANT's gates are enforced here (see RedTape): Stage II is locked for the
+    // first three rounds in Bureaucracy and until the five scorable Stage I are clear in Lite, and a purged
+    // objective is final.
+    private static async Task<IResult> SetObjectiveMarker(Guid id, Guid sessionObjectiveId, SetObjectiveMarkerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
         if (session is null || obj is null) return Results.NotFound();
+        if (req.Removed && RedTape.WhyCannotRemove(session, obj) is { } why)
+            return Results.BadRequest(new { error = why });
+        if (!req.Removed && obj.Purged)
+            return Results.BadRequest(new { error = "This objective was purged — its tape stays on." });
         obj.MarkerRemoved = req.Removed;
+        // Red Tape Lite: the fifth clear Stage I purges the rest of them, right now.
+        foreach (var p in RedTape.ApplyPurge(session))
+            Log(db, session, http, SessionLogKind.RedTapePurge,
+                detail: string.IsNullOrEmpty(p.ObjectiveId) ? p.CustomName : p.ObjectiveId);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1029,10 +1056,13 @@ public static class SessionEndpoints
         {
             return Forbidden();
         }
-        // Red Tape variant: while the tape is still on the objective, it cannot be scored. This is a
-        // deliberate exception to "the app enforces no rules" — the table asked for it and it only applies
-        // when they switched the variant on. The client disables the same thing, so no button silently fails.
-        if (session.RedTapeVariant != RedTapeVariant.None && !obj.MarkerRemoved)
+        // Red Tape variant: while the tape is still on the objective, it cannot be scored, and a purged one
+        // never can. A deliberate exception to "the app enforces no rules" — the table asked for it and it
+        // only applies when they switched the variant on. The client disables the same thing, so no button
+        // silently fails.
+        if (RedTape.On(session) && obj.Purged)
+            return Results.BadRequest(new { error = "Red Tape: this objective was purged." });
+        if (RedTape.On(session) && !obj.MarkerRemoved)
             return Results.BadRequest(new { error = "Red Tape: the tape is still on this objective." });
         if (!obj.Scores.Any(s => s.PlayerId == req.PlayerId))
         {
@@ -1265,6 +1295,19 @@ public static class SessionEndpoints
     /// <summary>Politics is on the table and the speaker has not been appointed — the turn can't end yet.</summary>
     private static IResult SpeakerFirst() =>
         Results.BadRequest(new { error = "Appoint the new speaker before ending the turn." });
+
+    /// <summary>Red Tape Lite: a round in which nobody took the carrier card takes one tape off at random.
+    /// Called at the two moments the variant names — right after the strategy phase in round 1, and when the
+    /// status phase ends — and it is idempotent per round, so both callers are safe.</summary>
+    private static void RedTapeRandom(Ti4DbContext db, GameSession session, HttpContext http)
+    {
+        if (RedTape.RemoveRandomTape(session) is not { } picked) return;
+        Log(db, session, http, SessionLogKind.RedTapeRandom,
+            detail: string.IsNullOrEmpty(picked.ObjectiveId) ? picked.CustomName : picked.ObjectiveId);
+        foreach (var p in RedTape.ApplyPurge(session))
+            Log(db, session, http, SessionLogKind.RedTapePurge,
+                detail: string.IsNullOrEmpty(p.ObjectiveId) ? p.CustomName : p.ObjectiveId);
+    }
 
     // -----------------------------------------------------------------------
     // Match log — append a structured event; persisted by the next SaveChangesAsync (SaveAndReturn).

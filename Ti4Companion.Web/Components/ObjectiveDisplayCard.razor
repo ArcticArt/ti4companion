@@ -4,7 +4,7 @@
 
 @* role/tabindex only when it really is a tap target: a bare div with @onclick is invisible to the keyboard
    and to the accessibility tree (noticed while verifying — the card didn't show up as an element at all). *@
-<div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1") @(Glow ? "glow" : "") @(Clickable ? "clickable" : "")"
+<div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1") @(Glow ? "glow" : "") @(Clickable ? "clickable" : "") @(So.Purged ? "purged" : "")"
      role="@(Clickable ? "button" : null)" tabindex="@(Clickable ? "0" : null)"
      @onclick="OnCardClick" @onkeydown="OnCardKey">
     <div class="obj-head">
@@ -24,7 +24,14 @@
            takes two taps, because pulling the tape is exactly the kind of thing a stray touch shouldn't do. *@
         @if (Taped)
         {
-            @if (TapeClickable)
+            @* Locked by a variant rule (purged, or Stage II too early) → the tape says which rule and cannot
+               be pulled. Otherwise it is the control. *@
+            var lockKey = Store.RedTapeBlockKey(So);
+            @if (lockKey is not null)
+            {
+                <span class="rt-tape locked">@Loc[lockKey]</span>
+            }
+            else if (TapeClickable)
             {
                 <button class="rt-tape @(armed ? "armed" : "")" @onclick="TapeTap" @onclick:stopPropagation="true">
                     @(armed ? Loc["redtape.confirmRemove"] : Loc["redtape.blocked"])

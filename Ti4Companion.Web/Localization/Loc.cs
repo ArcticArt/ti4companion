@@ -160,10 +160,13 @@ public class Loc
             "Remove one tape of your choice — no Stage II until the five scorable Stage I are clear. No random removal this round.",
             "Entferne ein Band nach Wahl — kein Stufe II, solange die fünf wertbaren Stufe-I-Aufträge nicht frei sind. Diese Runde fällt die Zufallsentnahme weg."),
         ["redtape.openObjectives"] = ("Open objectives", "Aufträge öffnen"),
-        ["redtape.random"] = ("Remove one at random", "Zufälliges Band entfernen"),
         ["redtape.randomHint"] = (
-            "Red Tape Lite: nobody took the card this round, so one tape comes off at random — right after the strategy phase in round 1, at the end of the status phase after that.",
-            "Red Tape Lite: Diese Runde hat niemand die Karte genommen, also geht ein zufälliges Band ab — in Runde 1 direkt nach der Strategiephase, danach am Ende der Statusphase."),
+            "Nobody took the card this round, so one tape comes off at random — the app does it right after the strategy phase in round 1, and when the status phase ends after that.",
+            "Diese Runde hat niemand die Karte genommen, also geht ein zufälliges Band ab — die App macht das in Runde 1 direkt nach der Strategiephase, danach jeweils am Ende der Statusphase."),
+        // Why a tape cannot be pulled right now (the server refuses the same, see RedTape).
+        ["redtape.purged"] = ("PURGED — CAN NEVER BE SCORED", "ENTFERNT — NICHT MEHR WERTBAR"),
+        ["redtape.lockedRounds"] = ("STAGE II — LOCKED FOR THE FIRST 3 ROUNDS", "STUFE II — DIE ERSTEN 3 RUNDEN GESPERRT"),
+        ["redtape.lockedStageI"] = ("STAGE II — NOT UNTIL 5 STAGE I ARE CLEAR", "STUFE II — ERST WENN 5 STUFE-I-AUFTRÄGE FREI SIND"),
         ["redtape.takeOff"] = ("Tap the tape to remove it", "Zum Entfernen auf das Band tippen"),
         // The tape is the only label — a separate "SEALED" chip said the same thing twice.
         ["redtape.blocked"] = ("SEALED — TAP THE TAPE", "VERSIEGELT — AUF DAS BAND TIPPEN"),
@@ -419,6 +422,8 @@ public class Loc
         ["log.agendaResult"] = ("Vote result", "Abstimmungsergebnis"),
         ["log.gamePaused"] = ("Game paused", "Spiel pausiert"),
         ["log.gameResumed"] = ("Game resumed", "Spiel fortgesetzt"),
+        ["log.redTapeRandom"] = ("Red Tape removed at random: {0}", "Red Tape zufällig entfernt: {0}"),
+        ["log.redTapePurge"] = ("Purged: {0}", "Entfernt aus dem Spiel: {0}"),
         ["log.generic"] = ("Event", "Ereignis"),
         ["log.system"] = ("System", "System"),
 

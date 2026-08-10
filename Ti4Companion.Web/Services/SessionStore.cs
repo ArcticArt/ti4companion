@@ -152,10 +152,33 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     /// server gate exactly, so the UI disables what the server would refuse (a 403/400 is a silent no-op
     /// on this client, which is how a player ends up tapping a dead button).</summary>
     public bool RedTapeBlocks(SessionObjectiveDto so)
-        => RedTapeOn && !so.MarkerRemoved;
+        => RedTapeOn && (!so.MarkerRemoved || so.Purged);
 
     /// <summary>A Red Tape variant is in play (either of them — the tape behaves the same in both).</summary>
     public bool RedTapeOn => Session is not null && Session.RedTapeVariant != RedTapeVariant.None;
+
+    /// <summary>
+    /// The localization KEY explaining why this tape may not be pulled right now, or null when it may — the
+    /// same gates the server enforces (<c>RedTape.WhyCannotRemove</c>), so the UI never offers a tap the
+    /// server would refuse. A key rather than a sentence, so the store needs no localizer: the stage comes
+    /// from the content bundle, the wording from the component.
+    /// </summary>
+    public string? RedTapeBlockKey(SessionObjectiveDto so)
+    {
+        if (Session is not { } s || !RedTapeOn) return null;
+        if (so.Purged) return "redtape.purged";
+        if (Objective(so.ObjectiveId)?.Stage != ObjectiveStage.StageII) return null;
+        if (s.RedTapeVariant == RedTapeVariant.Bureaucracy && s.CurrentRound <= GameRules.RedTapeStageIILockedThrough)
+            return "redtape.lockedRounds";
+        if (s.RedTapeVariant == RedTapeVariant.Lite && ClearStageI < GameRules.RedTapeScorableStageI)
+            return "redtape.lockedStageI";
+        return null;
+    }
+
+    /// <summary>Stage I objectives whose tape is off (purged ones never score, so they don't count).</summary>
+    public int ClearStageI => Session is null ? 0
+        : Session.Objectives.Count(o => Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageI
+                                        && o.MarkerRemoved && !o.Purged);
 
     /// <summary>Whether this device may edit the given player: self always, the host may edit anyone,
     /// or anyone when the session has open editing enabled.</summary>

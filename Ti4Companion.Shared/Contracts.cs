@@ -191,6 +191,8 @@ public record SessionObjectiveDto(
     string? CustomName, int? CustomPoints,
     /// <summary>Red Tape variant: the marker on this objective has been taken off.</summary>
     bool MarkerRemoved = false,
+    /// <summary>Red Tape Lite: purged — it can never be scored and its tape never comes off.</summary>
+    bool Purged = false,
     /// <summary>Who scored this in the CURRENT round — the wall glows those. Computed server-side so the
     /// client doesn't reimplement "this round".</summary>
     IReadOnlyList<Guid>? ScoredThisRoundPlayerIds = null);
@@ -245,6 +247,9 @@ public record SessionStateDto(
     Guid? SecondaryOwnerId = null,
     /// <summary>Politics is on the table and the new speaker has not been appointed yet.</summary>
     bool SpeakerPending = false,
+    /// <summary>Red Tape Lite: the round its random removal already happened in (0 = never). The client uses
+    /// it to announce that one is still coming this round.</summary>
+    int RedTapeRandomRound = 0,
     /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
     string? CustomVoteTitle = null,
     /// <summary>What the free vote elects (null unless one is running).</summary>

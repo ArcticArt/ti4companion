@@ -105,7 +105,7 @@ public static class Mapping
             .OrderBy(o => o.RevealedAtUtc)
             .Select(o => new SessionObjectiveDto(
                 o.Id, o.ObjectiveId, o.Scores.Select(x => x.PlayerId).ToList(),
-                o.CustomName, o.CustomPoints, o.MarkerRemoved,
+                o.CustomName, o.CustomPoints, o.MarkerRemoved, o.Purged,
                 o.Scores.Where(x => x.Round == s.CurrentRound).Select(x => x.PlayerId).ToList()))
             .ToList();
 
@@ -156,6 +156,6 @@ public static class Mapping
             // Only meaningful in the status phase; null elsewhere so the client can't mistake it for a turn.
             s.Phase == GamePhase.Status ? TurnService.CurrentScorer(s, factionOverrides) : null,
             s.ShowJoinQr, s.StatusStage, s.SecondaryCardId, s.SecondaryOwnerId, s.SpeakerPending,
-            s.CustomVoteTitle, s.CustomVoteElect);
+            s.RedTapeRandomRound, s.CustomVoteTitle, s.CustomVoteElect);
     }
 }

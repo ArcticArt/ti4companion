@@ -353,6 +353,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 span.rt-tape { pointer-events: none; }
 button.rt-tape { cursor: pointer; z-index: 2; }
 button.rt-tape:hover { filter: brightness(1.15); }
+/* Locked by a variant rule (purged, or Stage II too early): darker, and not a control. */
+.rt-tape.locked { pointer-events: none;
+    background: repeating-linear-gradient(135deg, #7a1c16 0 12px, #1a0605 12px 24px); color: #f3cfcb; }
+/* A purged objective is out of the game: dimmed, and its points stay hidden. */
+.obj-card.purged { opacity: .55; filter: grayscale(.5); }
+.obj-card.purged .obj-name { text-decoration: line-through; }
 /* Armed = one more tap removes it (status phase, where the card itself is a scoring tap target). */
 button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 12px, #2c0a07 12px 24px);
     box-shadow: 0 0 0 2px rgba(255,255,255,.5); }

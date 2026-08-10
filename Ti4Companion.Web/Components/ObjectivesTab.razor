@@ -9,16 +9,15 @@
 }
 
 <div style="display:flex;flex-direction:column;gap:1rem;">
-    @* Red Tape Lite: if NOBODY took the carrier card this round, one tape comes off at random instead of by
-       choice (round 1 right after the strategy phase, afterwards at the end of each status phase). Offered
-       here rather than on the card action, because the trigger is precisely that the card was not taken —
-       the app rolls it, the table decides when. *@
-    @if (s.RedTapeVariant == RedTapeVariant.Lite && NobodyTookCarrier(s) && s.Objectives.Any(o => !o.MarkerRemoved))
+    @* Red Tape Lite: if NOBODY took the carrier card this round, the app itself pulls one tape at random at
+       the moment the variant names (round 1 right after the strategy phase, afterwards when the status phase
+       ends) — see RedTape on the server. Announced here so the table knows it is coming and does not go
+       looking for a button. *@
+    @if (s.RedTapeVariant == RedTapeVariant.Lite && s.RedTapeRandomRound < s.CurrentRound
+         && NobodyTookCarrier(s) && s.Objectives.Any(o => !o.MarkerRemoved))
     {
         <div class="panel tech-prompt" style="order:0;">
-            <span class="tp-text">@Loc["redtape.randomHint"]</span>
-            <div class="spacer" style="flex:1"></div>
-            <button class="btn btn-sm" @onclick="RemoveRandomTape">🎲 @Loc["redtape.random"]</button>
+            <span class="tp-text">🎲 @Loc["redtape.randomHint"]</span>
         </div>
     }
 
@@ -62,7 +61,7 @@
             var stage2 = def?.Stage == ObjectiveStage.StageII;
             var name = so.CustomName ?? (def is null ? so.ObjectiveId : Loc.Pick(def.Name, def.NameDe));
             var pts = so.CustomPoints ?? def?.Points;
-            <div class="obj-card @(custom ? "secret" : stage2 ? "stage2" : "stage1")">
+            <div class="obj-card @(custom ? "secret" : stage2 ? "stage2" : "stage1") @(so.Purged ? "purged" : "")">
                 <div class="obj-head">
                     @* Red Tape: the tape across the markers is the control (see below). All that is left up
                        here is the way BACK — mistakes happen, and once the tape is off there is nothing to
@@ -96,7 +95,16 @@
                            tap target for scoring and a stray touch has to be caught by a confirm. *@
                         @if (taped)
                         {
-                            <button class="rt-tape" @onclick="() => SetMarker(so.Id, true)" title="@Loc["redtape.takeOff"]">@Loc["redtape.blocked"]</button>
+                            var lockKey = Store.RedTapeBlockKey(so);
+                            if (lockKey is not null)
+                            {
+                                @* A variant rule holds this one shut — say which, don't offer a dead tap. *@
+                                <span class="rt-tape locked">@Loc[lockKey]</span>
+                            }
+                            else
+                            {
+                                <button class="rt-tape" @onclick="() => SetMarker(so.Id, true)" title="@Loc["redtape.takeOff"]">@Loc["redtape.blocked"]</button>
+                            }
                         }
                         @foreach (var p in players)
                         {
@@ -158,15 +166,6 @@
     /// under which Red Tape Lite removes a tape at random instead of by choice.</summary>
     private static bool NobodyTookCarrier(SessionStateDto s)
         => s.Players.All(p => p.StrategyCards.All(c => c.StrategyCardId != s.RedTapeCardNumber));
-
-    /// <summary>Roll which tape comes off. Rolled on this device — it is a die roll the table would
-    /// otherwise do by hand, and only the result travels.</summary>
-    private Task RemoveRandomTape()
-    {
-        var taped = Store.Session!.Objectives.Where(o => !o.MarkerRemoved).ToList();
-        if (taped.Count == 0) return Task.CompletedTask;
-        return SetMarker(taped[Random.Shared.Next(taped.Count)].Id, true);
-    }
 
     private Task ToggleScore(Guid soId, Guid playerId, bool scored)
         => scored ? ScoreOff(soId, playerId) : Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, soId, playerId));

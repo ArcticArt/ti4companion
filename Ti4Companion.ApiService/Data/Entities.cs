@@ -77,6 +77,11 @@ public class GameSession
     /// or Imperial (8), and the table decides which before the game. 0 until they have.</summary>
     public int RedTapeCardNumber { get; set; }
 
+    /// <summary>The round in which Red Tape Lite's random removal already happened (0 = never). It is due once
+    /// per round at most, and this is what makes that idempotent across the two places the status phase can
+    /// end.</summary>
+    public int RedTapeRandomRound { get; set; }
+
     /// <summary>Status phase: which of the post-scoring steps the table has ticked off. Reset when the
     /// status phase begins.</summary>
     public StatusStep StatusStepsDone { get; set; }
@@ -184,6 +189,10 @@ public class SessionObjective
     /// <see cref="GameSession.RedTapeVariant"/> is set; until then the objective cannot be scored — the one
     /// rule the app does enforce, and only for a table that chose the variant.</summary>
     public bool MarkerRemoved { get; set; }
+
+    /// <summary>Red Tape Lite: purged once five Stage I objectives were clear — it can never be scored and its
+    /// tape never comes off. See <see cref="Services.RedTape.ApplyPurge"/>.</summary>
+    public bool Purged { get; set; }
     public List<ObjectiveScore> Scores { get; set; } = new();
 }
 

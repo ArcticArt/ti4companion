@@ -340,5 +340,14 @@ public enum SessionLogKind
     /// extra bookkeeping. New numeric values, so no migration was needed; keep them stable, the statistics
     /// view diffs them.</summary>
     SecondaryStart = 25,
-    SecondaryDone = 26
+    SecondaryDone = 26,
+
+    /// <summary>Red Tape Lite: nobody took the carrier card, so the app took one tape off at random
+    /// (Detail = the objective). Logged because it is the one game action the app takes on its own —
+    /// the table has to be able to see that it happened, and to which objective.</summary>
+    RedTapeRandom = 27,
+
+    /// <summary>Red Tape Lite: an objective was purged once five Stage I were clear (Detail = the
+    /// objective). It can never be scored afterwards.</summary>
+    RedTapePurge = 28
 }
