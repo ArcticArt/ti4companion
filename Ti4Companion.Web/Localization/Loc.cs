@@ -48,6 +48,14 @@ public class Loc
         ["home.displayHint"] = ("Opens the shared wall view for this code (e.g. on a beamer/TV).", "Öffnet die Wandansicht für diesen Code (z. B. am Beamer/TV)."),
         ["home.openDisplay"] = ("Open display", "Display öffnen"),
         // The start page's list of sessions THIS DEVICE has played (max SessionStore.MaxRecent).
+        // A deploy landed while the app was open; see UpdateNotice.razor.
+        ["update.available"] = ("A new version is available.", "Eine neue Version ist verfügbar."),
+        ["update.reload"] = ("Reload", "Neu laden"),
+        ["update.stuck"] = ("Close every tab of this page, then open it again to finish updating.",
+                            "Schließe alle Tabs dieser Seite und öffne sie neu, um das Update abzuschließen."),
+        // Start page: the senate backdrop can be switched off (and stays off), see SessionStore.SenateEnabled.
+        ["home.senateOff"] = ("Hide the senate", "Senat ausblenden"),
+        ["home.senateOn"] = ("Show the senate", "Senat einblenden"),
         ["home.recent"] = ("Resume a session", "Session fortsetzen"),
         ["home.recentTitle"] = ("Sessions on this device", "Sessions auf diesem Gerät"),
         ["home.recentAs"] = ("as", "als"),

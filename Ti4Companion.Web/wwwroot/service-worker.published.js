@@ -37,6 +37,14 @@ async function onActivate(event) {
         .map(key => caches.delete(key)));
 }
 
+// Switch over NOW, because the app asked. A newly installed worker otherwise waits until every tab of the
+// origin is closed — which is why a deploy kept serving the old app to anyone who just pressed reload. The
+// request only ever comes from the user tapping "reload" on the update bar (see UpdateNotice.razor): the
+// activation below clears the previous cache, so it must not happen behind the back of a running game.
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 async function onFetch(event) {
     let cachedResponse = null;
     if (event.request.method === 'GET') {

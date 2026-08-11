@@ -2,6 +2,13 @@
 // This is because caching would make development more difficult (changes would not
 // be reflected on the first load after each change).
 self.addEventListener('fetch', () => { });
+
+// Take over when the app asks (the update bar's "reload"). Nothing is cached here, but a newly installed
+// worker still waits for every tab to close, so the same hand-over is needed to test the flow at all — and
+// the message must be handled by the WAITING worker, which is the newly deployed script, not the old one.
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 // ---------------------------------------------------------------------------
 // Web Push: "you're up". Payload is the JSON from Services/PushService.cs.
 // A service worker is the only thing that can show a notification while the tab

@@ -17,6 +17,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     private const string KeyPlayer = "ti4.player";  // legacy, see RecentAsync
     private const string KeyRecent = "ti4.recent";
     private const string KeyLang = "ti4.lang";
+    private const string KeySenate = "ti4.senate";
 
     /// <summary>How many sessions the start page offers to pick up again.</summary>
     public const int MaxRecent = 10;
@@ -33,6 +34,21 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public bool Connected => _hub?.State == HubConnectionState.Connected;
 
     public event Action? OnChange;
+
+    /// <summary>
+    /// Whether the start page draws the senate chamber behind itself. Per device and remembered (localStorage
+    /// `ti4.senate`), because it is decoration: it costs about 130 elements and 24 photographs, and on a weak
+    /// phone or a slow connection someone may simply not want it. Defaults to ON.
+    /// </summary>
+    public bool SenateEnabled { get; private set; } = true;
+
+    public async Task SetSenateAsync(bool on)
+    {
+        if (SenateEnabled == on) return;
+        SenateEnabled = on;
+        await storage.SetAsync(KeySenate, on ? "1" : "0");
+        OnChange?.Invoke();
+    }
 
     public PlayerDto? Me => Session?.Players.FirstOrDefault(p => p.Id == MyPlayerId);
 
@@ -227,6 +243,8 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
         var langStr = await storage.GetAsync(KeyLang);
         if (Enum.TryParse<Language>(langStr, out var lang)) loc.SetLanguage(lang);
+
+        SenateEnabled = await storage.GetAsync(KeySenate) != "0";   // absent = on
 
         if (!_langPersistHooked)
         {

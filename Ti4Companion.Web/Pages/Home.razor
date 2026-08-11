@@ -6,8 +6,12 @@
 <PageTitle>Twilight Imperium Companion</PageTitle>
 
 @* The senate chamber behind everything (see SenateBackdrop). On EVERY view of the start page — restricting it
-   to the landing view meant the background simply vanished when you opened "create session". *@
-<SenateBackdrop />
+   to the landing view meant the background simply vanished when you opened "create session" — and off
+   entirely when this device has said so (Store.SenateEnabled, remembered). *@
+@if (Store.SenateEnabled)
+{
+    <SenateBackdrop />
+}
 
 <div class="container home-view">
     @* The application's own name, above the form — it used to be a small link in the app bar, which is not
@@ -31,6 +35,12 @@
                 @* Placeholder for whatever comes next: opens a long, deliberately empty form. *@
                 <button class="btn" @onclick="() => view = View.More">@Loc["home.more"]</button>
             </div>
+            @* The backdrop switch. Deliberately BELOW the stack and small: it is a setting about the page, not
+               one of the ways into a game, and the four rows above should stay the choice. *@
+            <button class="btn btn-ghost btn-sm home-senate-toggle"
+                    @onclick="() => Store.SetSenateAsync(!Store.SenateEnabled)">
+                @Loc[Store.SenateEnabled ? "home.senateOff" : "home.senateOn"]
+            </button>
         </div>
     }
     else if (view == View.Recent)

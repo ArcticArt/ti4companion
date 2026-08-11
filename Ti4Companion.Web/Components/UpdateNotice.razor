@@ -1,0 +1,67 @@
+@inherits Ti4ComponentBase
+@implements IDisposable
+@inject IJSRuntime JS
+
+@*
+    "A new version is available" — a bar at the bottom, with a reload that actually gets the new version.
+
+    Why this has to exist: the published service worker answers every navigation out of its cache, and it does
+    NOT call skipWaiting. So after a deploy the app keeps serving the OLD files to anyone who merely presses
+    reload, until every tab of the origin is closed. That default is right — activating the new worker clears
+    the cache the previous version is still reading from, which could break a game running on someone's phone
+    mid-deploy — but silently serving a stale app is not. So the switch stays the user's decision and this only
+    makes it visible.
+
+    Dismissable, and dismissal holds for the rest of the session: a table in the middle of round four should be
+    able to say "later" once and not be asked again.
+*@
+@if (waiting && !dismissed)
+{
+    <div class="update-bar" role="status">
+        <span class="ub-text">@Loc[stuck ? "update.stuck" : "update.available"]</span>
+        @if (!stuck)
+        {
+            <button class="btn btn-gold btn-sm" @onclick="Apply">@Loc["update.reload"]</button>
+        }
+        <button class="btn btn-ghost btn-sm" @onclick="() => dismissed = true" title='@Loc["common.close"]'>✕</button>
+    </div>
+}
+
+@code {
+    private bool waiting;
+    private bool dismissed;
+    /// <summary>The waiting worker would not hand over (it predates the message), so only closing every tab
+    /// of this page finishes the update — say that instead of offering a reload that changes nothing.</summary>
+    private bool stuck;
+    private DotNetObjectReference<UpdateNotice>? self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        self = DotNetObjectReference.Create(this);
+        // Returns true when a worker was ALREADY waiting when the page loaded (a deploy between two visits);
+        // otherwise `Found` arrives later, when one finishes installing while the app is open.
+        try { waiting = await JS.InvokeAsync<bool>("ti4.update.watch", self); } catch { waiting = false; }
+        if (waiting) StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task Found()
+    {
+        waiting = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Apply()
+    {
+        // On success the page reloads and this never returns; false means the hand-over was refused.
+        try { stuck = !await JS.InvokeAsync<bool>("ti4.update.apply"); }
+        catch { /* the page is about to reload either way */ }
+    }
+
+    public override void Dispose()
+    {
+        self?.Dispose();
+        base.Dispose();
+    }
+}

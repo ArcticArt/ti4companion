@@ -6,6 +6,10 @@
 @inject IJSRuntime JS
 
 <InstanceBadge />
+@* A deploy landed while this page was open (or between two visits): offer the reload that actually picks the
+   new version up. Not on `/display` — that uses EmptyLayout, and a wall nobody stands at cannot tap a bar;
+   the wall is reloaded from the device that runs the table. *@
+<UpdateNotice />
 <div class="app-shell">
 <div class="appbar">
     @if (Store.Session is { } s)

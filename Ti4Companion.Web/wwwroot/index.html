@@ -76,6 +76,42 @@
         // height, collapse the lowest-prerequisite tech to just its name (top-down, one at a time) until it
         // fits. Reset (uncollapse) first so removing techs re-expands the cards. Purely visual (CSS classes).
         window.ti4 = window.ti4 || {};
+        // ---- "a new version is waiting" -------------------------------------------------------------
+        // The published service worker answers every navigation out of its cache and does NOT call
+        // skipWaiting, so after a deploy a reload keeps serving the OLD app until every tab of the origin is
+        // closed. That is the right default — a running game must not have its files pulled out from under
+        // it — but it needs to be VISIBLE, hence the bar the app shows from these two hooks.
+        window.ti4.update = {
+            waiting: false,
+            onFound: null,
+            /// Registers the .NET callback and reports whether an update is already waiting.
+            watch: function (dotNet) {
+                window.ti4.update.onFound = function () { dotNet.invokeMethodAsync('Found'); };
+                return window.ti4.update.waiting;
+            },
+            /// Hand over to the waiting worker and come back on the new files. Only ever called because the
+            /// user tapped "reload": activating clears the old cache, so it must be their decision.
+            /// Returns false when the hand-over did NOT happen — then reloading is pointless and the app says
+            /// what does work instead. That is not a rare case: a worker deployed BEFORE this message existed
+            /// cannot answer it, so the very first update after this change always lands here.
+            apply: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg && reg.waiting) {
+                        const switched = new Promise(function (resolve) {
+                            navigator.serviceWorker.addEventListener('controllerchange',
+                                function () { resolve(true); }, { once: true });
+                            setTimeout(function () { resolve(false); }, 2500);
+                        });
+                        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        if (await switched) { location.reload(); return true; }
+                        return false;
+                    }
+                } catch (e) { /* fall through */ }
+                location.reload();
+                return true;
+            }
+        };
         // Resolves once the page is fully loaded and one frame has been painted. Used by the start page's
         // senate backdrop: ~150 pods with 24 photographs must never be laid out while the browser is still
         // pulling the app down, or the very first visit pays for decoration before it gets a page.
@@ -291,8 +327,24 @@
         // plain-HTTP LAN address `navigator.serviceWorker` is undefined, so the bare call threw a TypeError
         // on exactly the setup the wall display uses.
         if ('serviceWorker' in navigator) {
-            addEventListener('load', function () {
-                navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });
+            addEventListener('load', async function () {
+                try {
+                    const reg = await navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });
+                    // A worker that is INSTALLED but waiting means a deploy has landed and this page is still
+                    // being served the old app out of the cache. Tell the app so it can offer a reload — see
+                    // UpdateNotice.razor. `controller` must exist: on a first visit there is a new worker too,
+                    // and that is not an update, that is the app arriving.
+                    const announce = function () {
+                        if (!reg.waiting || !navigator.serviceWorker.controller) return;
+                        window.ti4.update.waiting = true;
+                        if (window.ti4.update.onFound) window.ti4.update.onFound();
+                    };
+                    announce();                       // it may have been waiting since an earlier visit
+                    reg.addEventListener('updatefound', function () {
+                        const sw = reg.installing;
+                        if (sw) sw.addEventListener('statechange', function () { if (sw.state === 'installed') announce(); });
+                    });
+                } catch (e) { /* no offline support, no update notice — neither is fatal */ }
             });
         }
     </script>

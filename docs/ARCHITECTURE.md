@@ -120,7 +120,16 @@ exception.
   start button first shows a **seat-order confirmation dialog**. Faction changes reconcile starting
   technologies automatically. Maximum 8 players (server-enforced).
 - **Joining:** players join with a 5-character code or an invite link, and can either create a new seat
-  or **take over** an existing non-host seat (e.g. after switching devices).
+  or **take over** an existing one — **including the host's**, which is what lets a host who cleared their
+  browser or switched device pick the role back up instead of leaving the table unable to change phases.
+  The join code is the only thing guarding that, and a device holding it can already score and vote; the
+  take-over is written to the match log so the table can see it. The claiming device gives up any other
+  seat it held (one device, one seat).
+- **Coming back:** each device remembers the sessions it has played in `localStorage` — the last ten with
+  the session name, the code and **which player it was there**. That last part is the reason the record
+  exists: the device token identifies the device and is shared by every session it plays, so a single
+  stored player id could only ever describe one game. Leaving a session keeps its entry; an entry whose
+  code the server no longer knows removes itself on the next attempt.
 - **Strategy:** cards are picked in order — speaker first, then clockwise by seat; with ≤4 players
   everyone picks 2 cards. Unpicked cards gain 1 trade good per round; goods are settled when the action
   phase starts. Initiative = lowest held card number (the Naalu Collective is always 0).
@@ -184,6 +193,14 @@ Enums travel over the wire **as numbers** (no string conversion) — keep numeri
 - The wall display has three player-switchable modes (Objectives / Secondary abilities / Tech overview)
   plus a Statistics mode reachable only through the host's "End game" action. During the agenda phase it
   shows the voting arc ("galactic council") instead.
+- **Updates.** The app is a PWA, and its service worker answers navigations from its own cache. It
+  deliberately does **not** call `skipWaiting()`: activating a new worker clears the cache the running
+  version is still reading from, and its fingerprinted framework files are gone from the server after a
+  deploy, so a game open on somebody's phone would break mid-update. Consequence: a deploy does not reach
+  an open browser by itself. `Components/UpdateNotice.razor` therefore shows a bar when a new worker is
+  waiting and offers a reload that hands over properly (it posts `SKIP_WAITING`, waits for
+  `controllerchange`, then reloads) — and says "close every tab" instead when the waiting worker is old
+  enough not to answer that message.
 
 ## Security & public hosting
 
