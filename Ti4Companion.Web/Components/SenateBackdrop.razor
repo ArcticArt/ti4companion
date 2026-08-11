@@ -38,6 +38,9 @@
             @for (var r = 0; r < Rings.Length; r++)
             {
                 var ring = Rings[r];
+                @* The bottom ring is dropped whole (see Ring.Shown). It stays in the array all the same: the
+                   offsets accumulate through it, so removing the entry would turn every ring above it. *@
+                if (!ring.Shown) { continue; }
                 // Each ring leans to face the camera: the ones below it tip their top towards us, the ones
                 // above tip it away. Only a fraction of the full elevation, or the outer rings turn edge-on.
                 var tilt = -0.6 * Math.Atan2(ring.Lift, ring.Radius) * 180.0 / Math.PI;
@@ -98,18 +101,31 @@
     /// eye compares is seat against seat. It grows with height, and 0.5 is the ceiling that means anything:
     /// half a seat is as staggered as two rows can be, and past a full seat they line up again.
     /// </para>
+    /// <para>
+    /// <c>Shown</c> false drops the ring entirely — but the entry STAYS in this array, because the shifts
+    /// accumulate through it and deleting it would turn every ring above it. <c>Faces</c> is how many
+    /// portraits the ring carries, 0 meaning pods with nobody in them; see <see cref="BuildFaces"/>.
+    /// </para>
     /// </summary>
-    private sealed record Ring(double Radius, double Lift, int Cols, double Shift);
+    private sealed record Ring(double Radius, double Lift, int Cols, double Shift, int Faces, bool Shown = true);
 
     private static readonly Ring[] Rings =
     {
-        new(150, 95.2, 16, 0),      // tips only, at the bottom edge
-        new(168, 47.4, 18, 0.18),
-        new(188, -6.6, 20, 0.26),
-        new(208, -64.1, 22, 0.34),
-        new(226, -121.4, 24, 0.42),
-        new(240, -174.6, 24, 0.48),
-        new(252, -223.9, 26, 0.33),  // cut by the top edge. 0.33 of ITS pitch is what lands half a seat off
+        new(150, 95.2, 16, 0, 0, Shown: false),  // only portrait TIPS ever reached the frame — dropped whole
+        // Seat counts are ≡ 2 (mod Faces), so that exactly TWO gaps let the run close on itself — see
+        // BuildFaces. That leaves 17, 22, 27 … to choose from, and per ring the one closest to the ~59vmin
+        // seat pitch the other rings have (17 → 62, 22 → 54…68 depending on radius).
+        new(168, 47.4, 17, 0.18, 5),
+        new(188, -6.6, 22, 0.26, 5),
+        new(208, -64.1, 22, 0.34, 5),
+        new(226, -121.4, 27, 0.42, 5),
+        new(240, -174.6, 27, 0.48, 4),  // 24 portraits exist, not 25, so the highest manned row runs one
+                                        // short. 27 is ≡ 2 for a run of FIVE but not of four, so BuildFaces
+                                        // gives this one ring a third gap to make its run close. Moving the
+                                        // short run to a 22-seat ring would get two gaps everywhere instead.
+        new(252, -223.9, 26, 0.33, 0),  // cut by the top edge, so pods without delegates: a face sliced in
+                                     // half by the screen edge reads as another copy of itself.
+                                     // 0.33 of ITS pitch is what lands half a seat off
                                      // the ring below, because it holds 26 seats against that ring's 24 —
                                      // the two grids don't line up, so measure the stagger, never assume it.
     };
@@ -159,44 +175,58 @@
     };
 
     /// <summary>
-    /// Which delegate sits in which pod — <c>null</c> means an EMPTY pod, and most of them are.
+    /// Which delegate sits in which pod — <c>null</c> is an empty pod.
     /// <para>
-    /// The requirement is that no portrait is ever visible twice, and that is a counting problem, not a
-    /// shuffling one: about 37 pods are in frame and only 24 portrait files exist, so at most 24 pods can be
-    /// occupied and the rest have to stay empty. Guaranteed rather than made likely, by construction:
+    /// A full chamber and 24 portraits cannot both be had: the earlier version kept every face unique on
+    /// screen and paid for it by leaving two thirds of the pods empty. So the trade is made the other way
+    /// round now, and deliberately: each ring gets its OWN handful of portraits (the counts across the rings
+    /// sum to <c>Slugs.Count</c>, so no face ever appears in two rings) and simply REPEATS that run all the
+    /// way round. Repetition within one row reads as a pattern of seats; the same face twice in different
+    /// rows read as a mistake, which is why the rows stay disjoint.
     /// </para>
-    /// <list type="bullet">
-    /// <item>every portrait belongs to exactly ONE ring (the per-ring counts sum to <c>Slugs.Count</c>), so
-    /// two rings can never show the same face;</item>
-    /// <item>within its ring a portrait sits in exactly TWO pods, at opposite ends of the circle. Half a ring
-    /// is the most that can ever be in view — `backface-visibility` drops the near half, and measured only
-    /// about 40% of a ring is actually in frame — so a pair can never both be on screen.</item>
-    /// </list>
     /// <para>
-    /// Any randomised placement was ruled out first: with 24 faces over 37 visible pods, at least 13 repeats
-    /// are unavoidable, and scattering only pushes them apart (measured: 366px) rather than away.
+    /// Two seats per ring are left empty at random to break the run — a gap, not a removal: the sequence
+    /// continues after it (face, face, gap, face, face …), so a gap costs no portrait.
     /// </para>
     /// </summary>
     private static readonly string?[][] Faces = BuildFaces();
 
+    /// <summary>Empty seats per ring, breaking up the repeating run of portraits.</summary>
+    private const int GapsPerRing = 2;
+
     private static string?[][] BuildFaces()
     {
-        // Portraits per ring, roughly proportional to its size. MUST sum to Slugs.Count — see above.
-        var perRing = new[] { 2, 3, 3, 4, 4, 4, 4 };
+        var rnd = new Random(1408);   // fixed seed: the chamber looks the same on every visit
         var faces = new string?[Rings.Length][];
         var next = 0;
         for (var r = 0; r < Rings.Length; r++)
         {
-            var n = Rings[r].Cols;      // even, so that "opposite" is a real seat and not a rounding
+            var n = Rings[r].Cols;
             faces[r] = new string?[n];
-            var f = perRing[r];
-            for (var i = 0; i < 2 * f; i++)
+            var count = Rings[r].Faces;
+            if (count == 0) continue;                       // pods with nobody in them
+            var mine = Slugs.GetRange(next, count);         // this ring's own portraits
+            next += count;
+
+            // ⚠️ A ring is a CIRCLE, so the run has to close on itself. With `p` portraits placed over a run
+            // of `count`, the sequence only comes full circle when p is a whole number of runs; anything else
+            // and the last seat is followed by face A out of order — read from the screen that is not a
+            // rhythm any more, it is noise, and it was reported as "you randomised the order". So the number
+            // of GAPS is not free: take the smallest one that makes the run divide the ring.
+            // (An earlier version only ruled out p % count == 1, the case of two identical NEIGHBOURS, which
+            // left three of the five rings jumping at the seam.)
+            var gaps = GapsPerRing;
+            while ((n - gaps) % count != 0) gaps++;
+
+            var empty = new HashSet<int>();
+            while (empty.Count < gaps) empty.Add(rnd.Next(n));
+
+            var cursor = 0;
+            for (var c = 0; c < n; c++)
             {
-                // 2f occupied pods, evenly spaced around the whole circle; face j takes i = j and i = j + f,
-                // which sit exactly half a ring apart.
-                faces[r][(int)Math.Round(i * n / (2.0 * f)) % n] = Slugs[next + i % f];
+                if (empty.Contains(c)) continue;            // a gap: leave the pod empty, keep the cursor
+                faces[r][c] = mine[cursor++ % count];
             }
-            next += f;
         }
         return faces;
     }

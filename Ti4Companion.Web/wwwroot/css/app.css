@@ -1141,7 +1141,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
    whole chamber before the FIRST frame is what left the boot screen sitting there on a cold visit. */
 .senate { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
     perspective: 140vmin; perspective-origin: 50% 50%; opacity: 0; transition: opacity 1.4s ease; }
-.senate.in { opacity: 1; }
+/* Not fully opaque even when it is "in": the whole chamber sits a touch below full strength so it reads as
+   backdrop and the panel in front keeps the eye. One knob for the lot — dimming the pods, the portraits and
+   the lit strips separately would be three places to keep in step. */
+.senate.in { opacity: .5; }
 /* The chamber: one ring per row, each higher and a little further out. Two rules must hold.
    (1) The WHOLE ring stays behind the perspective plane — CSS magnifies by `perspective / distance`,
    without bound as a seat approaches the camera plane (a ring drawn AROUND the camera once produced a seat
