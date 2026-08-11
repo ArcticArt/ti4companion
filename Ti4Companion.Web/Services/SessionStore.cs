@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.SignalR.Client;
 using Ti4Companion.Shared;
@@ -12,9 +13,13 @@ namespace Ti4Companion.Web.Services;
 public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, NavigationManager nav) : IAsyncDisposable
 {
     private const string KeyDevice = "ti4.device";
-    private const string KeyCode = "ti4.code";
-    private const string KeyPlayer = "ti4.player";
+    private const string KeyCode = "ti4.code";      // legacy single session; only read now, for the carry-over
+    private const string KeyPlayer = "ti4.player";  // legacy, see RecentAsync
+    private const string KeyRecent = "ti4.recent";
     private const string KeyLang = "ti4.lang";
+
+    /// <summary>How many sessions the start page offers to pick up again.</summary>
+    public const int MaxRecent = 10;
 
     private HubConnection? _hub;
     private string? _joinedCode;
@@ -241,7 +246,51 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         OnChange?.Invoke();
     }
 
-    public Task<string?> GetLastCodeAsync() => storage.GetAsync(KeyCode).AsTask();
+    // --- remembered sessions ----------------------------------------------------------------------
+    // A device plays more than one game over time, and a group often runs a session over several evenings,
+    // so "the last code" was too little: the start page lists the recent ones and each carries the SEAT this
+    // device held there (see RecentSession — the device token alone cannot express that).
+
+    /// <summary>Sessions this device has been in, newest first — at most <see cref="MaxRecent"/>.</summary>
+    public async Task<List<RecentSession>> RecentAsync()
+    {
+        var raw = await storage.GetAsync(KeyRecent);
+        List<RecentSession>? list = null;
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            try { list = JsonSerializer.Deserialize<List<RecentSession>>(raw); } catch { /* unreadable → start over */ }
+        }
+        list ??= new List<RecentSession>();
+        // Before this list existed, one session was remembered under two flat keys. Carry that one over, or
+        // an update mid-game would look to the table like their session had vanished.
+        if (list.Count == 0)
+        {
+            var code = await storage.GetAsync(KeyCode);
+            var player = await storage.GetAsync(KeyPlayer);
+            if (!string.IsNullOrWhiteSpace(code) && Guid.TryParse(player, out var legacy))
+                list.Add(new RecentSession(code, "", "", legacy, DateTimeOffset.UtcNow));
+        }
+        return list.OrderByDescending(r => r.LastSeen).Take(MaxRecent).ToList();
+    }
+
+    /// <summary>Record (or refresh) this device's seat in a session, and drop the oldest beyond the cap.</summary>
+    private async Task RememberAsync(SessionStateDto s, Guid playerId)
+    {
+        var list = await RecentAsync();
+        list.RemoveAll(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
+        var name = s.Players.FirstOrDefault(p => p.Id == playerId)?.Name ?? "";
+        list.Insert(0, new RecentSession(s.JoinCode, s.Name, name, playerId, DateTimeOffset.UtcNow));
+        if (list.Count > MaxRecent) list.RemoveRange(MaxRecent, list.Count - MaxRecent);
+        await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
+    }
+
+    /// <summary>Forget a session — it is gone from the server (archived, wiped) or the code was wrong.</summary>
+    public async Task ForgetRecentAsync(string code)
+    {
+        var list = await RecentAsync();
+        if (list.RemoveAll(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase)) == 0) return;
+        await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
+    }
 
     public async Task<SessionStateDto?> CreateAsync(CreateSessionRequest req)
     {
@@ -273,15 +322,20 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     {
         Content ??= await api.GetContentAsync();
         var s = await api.GetSessionAsync(code);
-        if (s is null) { Session = null; OnChange?.Invoke(); return false; }
+        // Gone from the server (archived, or wiped by the retention worker): drop it from the list here, so
+        // stale entries clean themselves up instead of collecting as dead rows on the start page.
+        if (s is null) { await ForgetRecentAsync(code); Session = null; OnChange?.Invoke(); return false; }
 
         Session = s;
 
-        var storedCode = await storage.GetAsync(KeyCode);
-        var storedPlayer = await storage.GetAsync(KeyPlayer);
-        if (storedCode == s.JoinCode && Guid.TryParse(storedPlayer, out var pid) && s.Players.Any(p => p.Id == pid))
+        // Which seat this device holds HERE — looked up per session, so opening an older game gives you back
+        // the player you were in it rather than making you a stranger.
+        var remembered = (await RecentAsync())
+            .FirstOrDefault(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
+        if (remembered is not null && s.Players.Any(p => p.Id == remembered.PlayerId))
         {
-            MyPlayerId = pid;
+            MyPlayerId = remembered.PlayerId;
+            await RememberAsync(s, remembered.PlayerId);   // refresh the names and move it to the front
         }
 
         ApplySessionLanguageIfUnset(s);
@@ -311,7 +365,11 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         OnChange?.Invoke();
     }
 
-    /// <summary>Fully leave the current session: disconnect, forget identity, clear persistence.</summary>
+    /// <summary>
+    /// Leave the current session on this device: disconnect and drop the live state. The entry in the recent
+    /// list is deliberately KEPT — leaving and coming back later is the whole point of that list (use
+    /// <see cref="ForgetRecentAsync"/> for a session that is really gone).
+    /// </summary>
     public async Task LeaveAsync()
     {
         if (_hub is not null)
@@ -337,8 +395,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         DeviceToken = result.DeviceToken;
         api.SetDeviceToken(result.DeviceToken);
         await storage.SetAsync(KeyDevice, result.DeviceToken);
-        await storage.SetAsync(KeyCode, result.Session.JoinCode);
-        await storage.SetAsync(KeyPlayer, result.PlayerId.ToString());
+        await RememberAsync(result.Session, result.PlayerId);
         ApplySessionLanguageIfUnset(result.Session);
         await EnsureHubAsync(result.Session.JoinCode);
         await RefreshLogAsync();

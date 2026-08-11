@@ -355,5 +355,10 @@ public enum SessionLogKind
     /// interval between the two is excluded from time-on-turn, the same way a pause is — see
     /// <c>MatchStats</c>. Keep the numeric values stable, the statistics read them.</summary>
     CombatStart = 29,
-    CombatEnd = 30
+    CombatEnd = 30,
+
+    /// <summary>A device took over an existing seat, the HOST's seat included (Target = that seat). Worth a
+    /// line in the log precisely because it can hand the host role to another device: the table should be
+    /// able to see when that happened, since there is no account behind it, only the join code.</summary>
+    SeatClaim = 31
 }

@@ -23,17 +23,36 @@
                 <h2>@Loc["home.welcome"]</h2>
                 <button class="btn btn-primary" @onclick="() => view = View.Create">@Loc["home.createSession"]</button>
                 <button class="btn btn-gold" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
+                @* Only offered when there is something to pick up — an empty list is not a choice. *@
+                @if (recent.Count > 0)
+                {
+                    <button class="btn" @onclick="() => view = View.Recent">@Loc["home.recent"]</button>
+                }
                 @* Placeholder for whatever comes next: opens a long, deliberately empty form. *@
                 <button class="btn" @onclick="() => view = View.More">@Loc["home.more"]</button>
             </div>
-            @if (lastCode is not null)
-            {
-                <div style="margin-top:1.2rem;">
-                    <button class="btn btn-ghost" @onclick="ResumeLast">
-                        @Loc["home.resume"] · <span class="codechip" style="font-size:.9rem;">@lastCode</span>
+        </div>
+    }
+    else if (view == View.Recent)
+    {
+        @* The sessions this DEVICE has played, newest first. Each row remembers which seat was ours there, so
+           picking one up puts you back in your own player rather than joining as a stranger. *@
+        <div class="panel home-form">
+            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
+            <h2 style="margin-top:.5rem;">@Loc["home.recentTitle"]</h2>
+            <div class="join-players">
+                @foreach (var r in recent)
+                {
+                    <button class="join-player" disabled="@busy" @onclick="() => Resume(r.Code)">
+                        <span class="rs-name">@(string.IsNullOrWhiteSpace(r.Name) ? Loc["home.recentUnnamed"] : r.Name)</span>
+                        <span class="codechip">@r.Code</span>
+                        @if (!string.IsNullOrWhiteSpace(r.PlayerName))
+                        {
+                            <span class="chip">@Loc["home.recentAs"] @r.PlayerName</span>
+                        }
                     </button>
-                </div>
-            }
+                }
+            </div>
         </div>
     }
     else if (view == View.More)
@@ -106,11 +125,14 @@
                     <div class="join-players">
                         @foreach (var jp in peek.Players.OrderBy(x => x.SeatOrder))
                         {
-                            <button class="join-player" disabled="@(jp.IsHost || busy)" @onclick="() => Claim(jp.Id)">
+                            @* The host's seat is claimable too — a host whose browser lost its storage, or who
+                               wants to carry on from another device, would otherwise leave the table with
+                               nobody able to steer the phases. *@
+                            <button class="join-player" disabled="@busy" @onclick="() => Claim(jp.Id)">
                                 <FactionBadge Faction="Store.Faction(jp.FactionId)" Ring="@jp.ColorHex" />
                                 <span class="jp-name">@jp.Name</span>
                                 @if (jp.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
-                                else { <span class="chip">@Loc["join.takeOver"]</span> }
+                                <span class="chip">@Loc[jp.IsHost ? "join.takeOverHost" : "join.takeOver"]</span>
                             </button>
                         }
                     </div>
@@ -140,13 +162,6 @@
             {
                 <p style="color:var(--danger);margin-top:.6rem;">@error</p>
             }
-            @if (lastCode is not null)
-            {
-                <hr style="border-color:var(--panel-border);margin:1rem 0;" />
-                <button class="btn btn-ghost btn-block" @onclick="ResumeLast">
-                    @Loc["home.resume"] · <span class="codechip" style="font-size:.9rem;">@lastCode</span>
-                </button>
-            }
         </div>
     }
 
@@ -170,7 +185,7 @@
 @code {
     [Parameter] public string? Code { get; set; }
 
-    private enum View { Landing, Create, Join, More }
+    private enum View { Landing, Create, Join, Recent, More }
     private View view = View.Landing;
     private enum JoinMode { Player, Display }
     private JoinMode joinAs = JoinMode.Player;
@@ -182,16 +197,16 @@
     private bool pok = true, codex = true, te = true;
     private bool busy;
     private string? error;
-    private string? lastCode;
     private SessionStateDto? peek;   // the loaded session whose players you choose an identity from
     private ActivityDto? activity;   // counts for the landing view; null = the server didn't say
+    private List<RecentSession> recent = new();   // sessions this device can pick up again
 
     private string NamePlaceholder => Loc["players.you"];
 
     protected override async Task OnInitializedAsync()
     {
         await Store.InitAsync();
-        lastCode = await Store.GetLastCodeAsync();
+        recent = await Store.RecentAsync();
         activity = await Store.Api.GetActivityAsync();
         // Arrived via an invite link (/join/{code}) → jump straight to the pre-filled join form.
         if (!string.IsNullOrWhiteSpace(Code))
@@ -276,8 +291,8 @@
         Nav.NavigateTo($"/display/{code}");
     }
 
-    private void ResumeLast()
-    {
-        if (lastCode is not null) Nav.NavigateTo($"/s/{lastCode}");
-    }
+    // Pick a remembered session back up. Nothing to send: the session page connects by code and the store
+    // looks up which seat this device held there (see SessionStore.ConnectAsync). A code that no longer
+    // exists drops itself from the list on the way in.
+    private void Resume(string code) => Nav.NavigateTo($"/s/{code}");
 }

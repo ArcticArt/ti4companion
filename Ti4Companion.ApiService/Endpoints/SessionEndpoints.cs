@@ -517,16 +517,20 @@ public static class SessionEndpoints
 
         if (req.ClaimPlayerId is Guid claimId)
         {
-            // Take over (claim) an existing seat. Any non-host player may be claimed; the host cannot.
+            // Take over (claim) an existing seat — the HOST's seat included. It used to be refused, which
+            // left a table stranded whenever the host's browser lost its storage or the host wanted to come
+            // back on another device: nobody could steer the phases any more. What guards this is the same
+            // thing that guards everything else here — knowing the join code — and any device with the code
+            // can already score and vote. The take-over is logged (SeatClaim) so the table can see it.
             var claimed = session.Players.FirstOrDefault(p => p.Id == claimId);
             if (claimed is null) return Results.NotFound();
-            if (claimed.IsHost) return Forbidden();
             // One device controls one seat: orphan any other player this device currently held.
             foreach (var other in session.Players.Where(p => p.Id != claimed.Id && p.DeviceToken == deviceToken))
                 other.DeviceToken = Guid.NewGuid().ToString("N");
             claimed.DeviceToken = deviceToken;
             if (!string.IsNullOrWhiteSpace(req.Name)) claimed.Name = Clamp(req.Name);
             target = claimed;
+            Log(db, session, SessionLogKind.SeatClaim, claimed.Id, claimed.Id);
         }
         else
         {

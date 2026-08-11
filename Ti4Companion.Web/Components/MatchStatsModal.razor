@@ -189,6 +189,8 @@
         SessionLogKind.CombatEnd => Loc["log.combatEnd"],
         SessionLogKind.RedTapeRandom => string.Format(Loc["log.redTapeRandom"], ObjName(e.Detail)),
         SessionLogKind.RedTapePurge => string.Format(Loc["log.redTapePurge"], ObjName(e.Detail)),
+        // A device took a seat over — the host's included, which is why it is worth a line.
+        SessionLogKind.SeatClaim => string.Format(Loc["log.seatClaim"], Target(e.TargetPlayerId)),
         _ => Loc["log.generic"],
     };
 

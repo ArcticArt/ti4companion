@@ -47,7 +47,11 @@ public class Loc
         ["home.asDisplay"] = ("As display", "Als Display"),
         ["home.displayHint"] = ("Opens the shared wall view for this code (e.g. on a beamer/TV).", "Öffnet die Wandansicht für diesen Code (z. B. am Beamer/TV)."),
         ["home.openDisplay"] = ("Open display", "Display öffnen"),
-        ["home.resume"] = ("Resume last session", "Letzte Session fortsetzen"),
+        // The start page's list of sessions THIS DEVICE has played (max SessionStore.MaxRecent).
+        ["home.recent"] = ("Resume a session", "Session fortsetzen"),
+        ["home.recentTitle"] = ("Sessions on this device", "Sessions auf diesem Gerät"),
+        ["home.recentAs"] = ("as", "als"),
+        ["home.recentUnnamed"] = ("Session", "Session"),
         ["home.notfound"] = ("No session found for that code.", "Keine Session für diesen Code gefunden."),
         ["home.continue"] = ("Continue", "Weiter"),
         // Activity counters on the landing page. The label says WHAT, never the rule behind it.
@@ -55,6 +59,7 @@ public class Loc
         ["home.active24h"] = ("Played today", "Partien heute"),
         ["join.pickIdentity"] = ("Who are you? Take over a player, or create a new one.", "Wer bist du? Übernimm einen Spieler oder erstelle einen neuen."),
         ["join.takeOver"] = ("Take over", "Übernehmen"),
+        ["join.takeOverHost"] = ("Take over host", "Host übernehmen"),
         ["join.createNew"] = ("Create new player", "Neuen Spieler erstellen"),
 
         ["nav.beamer"] = ("Display", "Display"),
@@ -575,6 +580,7 @@ public class Loc
             "„Zurück zur Aufstellung“ und „Beenden“ archivieren die Partie: Die Zusammenfassung bleibt, alles andere wird gelöscht. Zurück zur Aufstellung behält die Spieler für eine weitere Partie, Beenden schließt die Session."),
         ["log.combatStart"] = ("Combat: {0} against {1}", "Kampf: {0} gegen {1}"),
         ["log.combatEnd"] = ("Combat over", "Kampf beendet"),
+        ["log.seatClaim"] = ("{0}'s seat was taken over by another device", "{0} wurde von einem anderen Gerät übernommen"),
         ["secondary.running"] = ("Clock running", "Uhr läuft"),
         // "You're up" notification (per device).
         ["push.enable"] = ("Notify me when it's my turn", "Benachrichtige mich, wenn ich dran bin"),

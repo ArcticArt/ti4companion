@@ -319,6 +319,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .join-player:hover:not(:disabled) { border-color: var(--gold-dim); transform: translateY(-1px); }
 .join-player:disabled { opacity: .55; cursor: default; }
 .join-player .jp-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Same row, used for the start page's list of sessions to pick up again: session name, code, which player
+   this device was. The name takes the slack so the code and the "as <player>" chip stay put. */
+.join-player .rs-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* seat-order up/down buttons (setup, host) */
 .seat-btns { display: inline-flex; flex-direction: column; gap: .1rem; }

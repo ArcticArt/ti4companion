@@ -140,7 +140,10 @@
         endGame = false;
         if (deleted)
         {
+            // Deleted for good, so it must not linger in the start page's "resume" list either.
+            var code = Store.Session?.JoinCode;
             await Store.LeaveAsync();
+            if (code is not null) await Store.ForgetRecentAsync(code);
             Nav.NavigateTo("/");
             return;
         }
