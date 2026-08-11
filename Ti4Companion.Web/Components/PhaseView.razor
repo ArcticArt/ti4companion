@@ -39,9 +39,10 @@
             switch (s.Phase)
             {
                 case GamePhase.Setup:
-                    @* The speaker is NOT a gate anymore — it is settled in the seat dialog (or later at the
-                       table), so a game can start while that is still being argued about. *@
-                    <button class="btn btn-gold" disabled="@(!allReady)" @onclick="() => showSeatConfirm = true">@Loc["turn.startGame"] ▸</button>
+                    @* No "start" here anymore: it is the last thing on the LAST setup step, so the host cannot
+                       reach it without having passed the seating order and the objectives. That walk is also
+                       what replaced the old "is the seating right?" dialog — it was asking about a step the
+                       host now has to go through anyway. *@
                     break;
                 case GamePhase.Strategy:
                     @if (!allPicked) { <span class="faint">@Loc["strategy.needAllPicks"]</span> }
@@ -61,27 +62,6 @@
         }
     </div>
 </div>
-
-@* Seat-order confirmation before the game actually starts: shows the order around the table so the
-   host double-checks it — and lets them fix it right here by dragging, instead of closing the dialog and
-   going back to the player list. "Change it" just closes (nothing is started). *@
-@if (showSeatConfirm && s.Phase == GamePhase.Setup)
-{
-    <div class="modal-backdrop centered blurred" @onclick="CloseSeatConfirm">
-        <div class="modal seat-confirm" @onclick:stopPropagation>
-            <div class="modal-head">
-                <h3 style="margin:0;">@Loc["setup.confirmSeatTitle"]</h3>
-            </div>
-            <div class="modal-body">
-                <SeatOrderList />
-                <div class="row-wrap" style="gap:.5rem;justify-content:flex-end;margin-top:.8rem;">
-                    <button class="btn" @onclick="CloseSeatConfirm">◂ @Loc["setup.confirmSeatChange"]</button>
-                    <button class="btn btn-gold" @onclick="ConfirmStart">@Loc["setup.confirmSeatOk"] ▸</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
 
 @switch (s.Phase)
 {
@@ -104,14 +84,9 @@
 
 @code {
     private Guid Sid => Store.Session!.Id;
-    private bool showSeatConfirm;
 
-    // The seat list itself (drag, arrows, speaker) is `SeatOrderList` — the setup's seating step shows the
-    // very same component, and two copies of pointer-drag interop is one too many.
-    private void CloseSeatConfirm() => showSeatConfirm = false;
-
-    private async Task ConfirmStart() { CloseSeatConfirm(); await StartGame(); }
-    private Task StartGame() => Store.Mutate(Store.Api.StartGameAsync(Sid));
+    // Starting the game moved to the last setup step (SetupView) together with the seat list, so neither the
+    // button nor the confirmation dialog lives here any more.
     private Task ToAction() => Store.Mutate(Store.Api.StartActionPhaseAsync(Sid));
     private Task EndAction() => Store.Mutate(Store.Api.EndActionPhaseAsync(Sid));
     private Task ToAgenda() => Store.Mutate(Store.Api.StartAgendaPhaseAsync(Sid));

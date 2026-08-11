@@ -20,17 +20,23 @@
         var p = seatOrdered[i];
         var idx = i;
         var pid = p.Id;
-        <div @key="p.Id" class="player-card seat-confirm-row @(dragFrom == idx ? "dragging" : "")"
+        // During a roll the highlight follows `rollAt`, so the token visibly travels; afterwards it is simply
+        // whoever the session says the speaker is.
+        var isSpeaker = rollAt is null ? Store.Session!.SpeakerPlayerId == p.Id : rollAt == p.Id;
+        var landed = rollLanded == p.Id;
+        <div @key="p.Id" class="player-card seat-confirm-row @(dragFrom == idx ? "dragging" : "") @(landed ? "speaker-landed" : "")"
              style="--player-color:@p.ColorHex;" data-seat-idx="@idx">
             <span class="seat-grip" data-seat-grip title='@Loc["setup.dragSeat"]'>⠿</span>
             <span class="seat-no">@(i + 1)</span>
             <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
             <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">@p.Name</strong>
-            @* The speaker decides who picks first, so it belongs on the screen where the order is settled. *@
-            <button class="btn btn-sm seat-speaker @(Store.Session!.SpeakerPlayerId == p.Id ? "btn-gold" : "btn-ghost")"
-                    @onclick="() => SetSpeaker(pid)" title='@Loc["setup.makeSpeaker"]'>
-                @if (Store.Session!.SpeakerPlayerId == p.Id) { <SpeakerIcon SizeCss="1.3em" /> }
-                else { <span class="ss-dash">—</span> }
+            @* The speaker decides who picks first, so it belongs on the screen where the order is settled.
+               Same control as the Players tab: the verb while they are not the speaker, the token once they
+               are — a row of identical dashes said nothing about what tapping one would do. *@
+            <button class="btn btn-sm seat-speaker @(isSpeaker ? "btn-gold" : "")"
+                    disabled="@rolling" @onclick="() => SetSpeaker(pid)" title='@Loc["setup.makeSpeaker"]'>
+                @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> }
+                else { <span class="ss-make">@Loc["setup.makeSpeaker"]</span> }
             </button>
             @* Arrow fallback: always works, including where a drag is awkward. *@
             <span class="seat-arrows">
@@ -40,9 +46,10 @@
         </div>
     }
 </div>
+@* The roll button lives with the step's navigation (see SetupView) — one place for "what do I do on this
+   screen", instead of a control buried under the list. *@
 <div class="row-wrap" style="gap:.5rem;align-items:center;margin:.5rem 0 0;">
     <span class="faint" style="font-size:.78rem;">@Loc[Store.Session!.SpeakerPlayerId is null ? "setup.noSpeakerYet" : "setup.speakerLbl"]</span>
-    <button class="btn btn-sm" @onclick="RandomSpeaker">🎲 @Loc["setup.randomSpeaker"]</button>
 </div>
 <p class="faint" style="font-size:.78rem;margin:.4rem 0 0;">@Loc["setup.confirmSeatDragHint"]</p>
 
@@ -122,13 +129,59 @@
     private Task SetSpeaker(Guid playerId)
         => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, playerId)));
 
-    // Nobody wants to argue about who goes first. Random.Shared is fine — this is a seating decision, not a
-    // shuffle anyone could gain from predicting.
-    private Task RandomSpeaker()
+    // --- rolling for the speaker ------------------------------------------------------------------------
+    // `rollAt` is where the token is right now while it travels; `rollLanded` makes the winning row glow for
+    // a moment afterwards. Both are per-device display state: only this screen animates, the SPEAKER itself
+    // is set once, at the end, through the normal mutation — so nobody else sees the token flickering and no
+    // intermediate value ever reaches the server.
+    private Guid? rollAt;
+    private Guid? rollLanded;
+    private bool rolling;
+
+    /// <summary>
+    /// Roll for the speaker, visibly. The token hops from player to player and slows down before it settles,
+    /// because a name that simply changes reads as a glitch to everyone who blinked. Nobody wants to argue
+    /// about who goes first, and <see cref="Random.Shared"/> is fine for it: a seating decision, not a
+    /// shuffle anyone could gain from predicting.
+    /// </summary>
+    public async Task RollAsync()
     {
-        var players = Store.Session!.Players;
-        if (players.Count == 0) return Task.CompletedTask;
-        return SetSpeaker(players[Random.Shared.Next(players.Count)].Id);
+        var players = Store.Session!.Players.OrderBy(p => p.SeatOrder).ToList();
+        if (players.Count == 0 || rolling) return;
+
+        rolling = true;
+        rollLanded = null;
+        try
+        {
+            var winner = players[Random.Shared.Next(players.Count)];
+            // Land ON the winner: walk whole laps plus the offset to their seat, so the last hop is the win
+            // rather than an arbitrary stop that then jumps.
+            var at = Random.Shared.Next(players.Count);
+            var laps = 2 * players.Count + ((players.IndexOf(winner) - at + players.Count * 3) % players.Count);
+            for (var i = 0; i <= laps; i++)
+            {
+                rollAt = players[at].Id;
+                StateHasChanged();
+                // Ease out: quick at first, dragging at the end. Same shape as a physical spinner.
+                var progress = laps == 0 ? 1d : (double)i / laps;
+                await Task.Delay(45 + (int)(progress * progress * 260));
+                at = (at + 1) % players.Count;
+            }
+            rollAt = winner.Id;
+            rollLanded = winner.Id;
+            StateHasChanged();
+            await SetSpeaker(winner.Id);
+        }
+        finally
+        {
+            rolling = false;
+            rollAt = null;          // the session's own speaker takes over the highlight again
+            StateHasChanged();
+        }
+        // Let the glow be seen, then drop it. Failing to await here would clear it in the same frame.
+        await Task.Delay(1400);
+        rollLanded = null;
+        StateHasChanged();
     }
 
     public async ValueTask DisposeAsync()

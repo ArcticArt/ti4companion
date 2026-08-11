@@ -116,7 +116,8 @@
                                               Clickable="scorer is not null && !already && Store.CanScoreFor(scorer.Id) && !Store.RedTapeBlocks(so)"
                                               OnClick="() => Score(soId, scorer!.Id)"
                                               TapeClickable="true"
-                                              OnRemoveTape="() => RemoveTape(soId)" />
+                                              OnRemoveTape="() => RemoveTape(soId)"
+                                              OnLockedTap="AskLocked" />
                     }
                 </div>
             }
@@ -166,8 +167,26 @@
         break;
 }
 
+@* Same question as in the objectives tab: a tape a timing rule holds shut can be tapped, and overruled. *@
+<RedTapeSealModal Mode="@sealMode" Locked="@lockedAsk" OnClose="CloseSeal" />
+
 @code {
     private Guid Sid => Store.Session!.Id;
+
+    private RedTapeSealModal.SealMode? sealMode;
+    private SessionObjectiveDto? lockedAsk;
+
+    private void AskLocked(SessionObjectiveDto so)
+    {
+        lockedAsk = so;
+        sealMode = RedTapeSealModal.SealMode.Locked;
+    }
+
+    private void CloseSeal()
+    {
+        sealMode = null;
+        lockedAsk = null;
+    }
 
     private static readonly (StatusStage Stage, string Key)[] Stages =
     {

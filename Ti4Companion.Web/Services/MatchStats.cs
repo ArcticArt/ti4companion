@@ -60,10 +60,22 @@ public class MatchStats
         }
         if (combatStart is { } openCombat) combats.Add((openCombat, now));
 
-        // Pauses, and pauses+combats, each MERGED into non-overlapping intervals — a pause declared during a
-        // combat overlaps, and subtracting both would take that time off twice.
+        // Technology-picker intervals, excluded exactly like a combat and for the same reason: hunting for a
+        // technology in a list is the app's overhead, not the player's thinking time. The picker is closed by
+        // every turn/phase boundary server-side, so an open one cannot run away with the clock.
+        var techPicks = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        DateTimeOffset? techStart = null;
+        foreach (var e in ordered)
+        {
+            if (e.Kind == SessionLogKind.TechPickStart) techStart ??= e.TimestampUtc;
+            else if (e.Kind == SessionLogKind.TechPickEnd && techStart is { } ts) { techPicks.Add((ts, e.TimestampUtc)); techStart = null; }
+        }
+        if (techStart is { } openTech) techPicks.Add((openTech, now));
+
+        // Pauses, and everything that stops a turn clock, each MERGED into non-overlapping intervals — a pause
+        // declared during a combat overlaps, and subtracting both would take that time off twice.
         var pauseOnly = Merge(pauses);
-        var pauseAndCombat = Merge(pauses.Concat(combats));
+        var pauseAndCombat = Merge(pauses.Concat(combats).Concat(techPicks));
 
         // Active duration of [from, to] with the excluded intervals taken out.
         static TimeSpan Span(DateTimeOffset from, DateTimeOffset to, List<(DateTimeOffset From, DateTimeOffset To)> exclude)
@@ -93,13 +105,22 @@ public class MatchStats
 
         // Round durations: each round runs until the next round starts (or now), minus pauses.
         var roundChanges = ordered.Where(l => l.Kind == SessionLogKind.RoundChange && l.Round is not null).ToList();
-        var rounds = new List<RoundDuration>();
+        var roundSpans = new List<RoundDuration>();
         for (var i = 0; i < roundChanges.Count; i++)
         {
             var from = roundChanges[i].TimestampUtc;
             var to = i + 1 < roundChanges.Count ? roundChanges[i + 1].TimestampUtc : now;
-            rounds.Add(new RoundDuration(roundChanges[i].Round!.Value, Active(from, to)));
+            roundSpans.Add(new RoundDuration(roundChanges[i].Round!.Value, Active(from, to)));
         }
+        // One row per round NUMBER, not per entry. A host correcting the round by hand (settings) writes a
+        // second RoundChange for a round already played, and two bars labelled "Round 3" read as a bug rather
+        // than as the table having gone back. Summing keeps the total honest and the chart legible; for the
+        // ordinary game this is a no-op, one entry per round.
+        var rounds = roundSpans
+            .GroupBy(r => r.Round)
+            .Select(g => new RoundDuration(g.Key, g.Aggregate(TimeSpan.Zero, (acc, r) => acc + r.Duration)))
+            .OrderBy(r => r.Round)
+            .ToList();
 
         // The round currently being played — the turn timer resets with it.
         var currentRoundStart = roundChanges.Count > 0 ? roundChanges[^1].TimestampUtc : start;

@@ -69,13 +69,24 @@
                     @if (Store.RedTapeOn && so.MarkerRemoved)
                     {
                         <button class="rt-restore" @onclick="() => SetMarker(so.Id, false)"
-                                title="@Loc["redtape.putBack"]">↺</button>
+                                title="@Loc["redtape.seal"]"><MaterialIcon Name="lock" SizeCss="1em" /></button>
                     }
                     <span class="obj-name">@name</span>
                     @if (custom) { <span class="chip chip-passed">@Loc["obj.secret"]</span> }
                     @* Taped = the points are covered, exactly as the marker sits on the physical card. *@
                     @{ var taped0 = Store.RedTapeBlocks(so); }
-                    <span class="obj-vp @(taped0 ? "taped" : "")">@(taped0 ? "?" : pts?.ToString())</span>
+                    <span class="obj-vp @(taped0 ? "taped" : "")">
+                        @if (taped0)
+                        {
+                            @* Same icon as on the card and the wall: the value exists, it is just not to be
+                               seen yet — which a "?" does not say. *@
+                            <MaterialIcon Name="visibility_off" SizeCss="1em" Class="obj-vp-icon" />
+                        }
+                        else
+                        {
+                            @pts?.ToString()
+                        }
+                    </span>
                     @if (host)
                     {
                         <button class="btn btn-sm btn-ghost" @onclick="() => Remove(so.Id)" title="@RemoveTitle">✕</button>
@@ -96,14 +107,21 @@
                         @if (taped)
                         {
                             var lockKey = Store.RedTapeBlockKey(so);
-                            if (lockKey is not null)
+                            var target = so;
+                            if (so.Purged)
                             {
-                                @* A variant rule holds this one shut — say which, don't offer a dead tap. *@
-                                <span class="rt-tape locked">@Loc[lockKey]</span>
+                                @* Purged is not a lock — nothing to ask about, and nothing to tap. *@
+                                <span class="rt-tape locked">@Loc[lockKey ?? "redtape.purged"]</span>
+                            }
+                            else if (lockKey is not null)
+                            {
+                                @* A timing rule holds this one shut. Tappable anyway: it explains WHICH rule
+                                   and offers to overrule it, instead of being a dead label. *@
+                                <button class="rt-tape locked" @onclick="() => AskLocked(target)" title="@Loc["redtape.lockedAskTitle"]">@Loc[lockKey]</button>
                             }
                             else
                             {
-                                <button class="rt-tape" @onclick="() => SetMarker(so.Id, true)" title="@Loc["redtape.takeOff"]">@Loc["redtape.blocked"]</button>
+                                <button class="rt-tape" @onclick="() => SetMarker(so.Id, true)" title="@Loc["redtape.takeOff"]">@Loc["redtape.tapToRemove"]</button>
                             }
                         }
                         @foreach (var p in players)
@@ -123,6 +141,9 @@
     </div>
 </div>
 
+@* A tape held shut by a timing rule was tapped: say which rule, and offer to overrule it. *@
+<RedTapeSealModal Mode="@sealMode" Locked="@lockedAsk" OnClose="CloseSeal" />
+
 @code {
     [Parameter] public bool RevealOnTop { get; set; }
     [Parameter] public bool Scoreable { get; set; } = true;
@@ -134,6 +155,22 @@
     private string customName = "";
     private int customPoints = 1;
     private string RemoveTitle => Loc["obj.remove"];
+
+    // The "this one is sealed by a rule — take it off anyway?" question, per device.
+    private RedTapeSealModal.SealMode? sealMode;
+    private SessionObjectiveDto? lockedAsk;
+
+    private void AskLocked(SessionObjectiveDto so)
+    {
+        lockedAsk = so;
+        sealMode = RedTapeSealModal.SealMode.Locked;
+    }
+
+    private void CloseSeal()
+    {
+        sealMode = null;
+        lockedAsk = null;
+    }
 
     private List<ObjectiveDto> Matches(List<ObjectiveDto> available)
     {

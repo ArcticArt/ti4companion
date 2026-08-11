@@ -38,28 +38,38 @@ else
             </div>
         </div>
 
-        <div class="tabs" style="margin-top:.6rem;">
+        @* Real <button>s, not styled <div>s: a bare div with @onclick is unreachable by keyboard and shows up
+           as nothing in the accessibility tree — the same fix ObjectiveDisplayCard already got. `aria-selected`
+           carries the state the `.active` class only shows visually. Arrow-key roving between tabs is
+           deliberately NOT implemented: every tab is its own tab stop, so Tab + Enter reaches all four, which
+           is what was missing. *@
+        <div class="tabs" role="tablist" style="margin-top:.6rem;">
             @foreach (var t in Tabs)
             {
-                <div class="tab @(tab == t ? "active" : "")" @onclick="() => tab = t">@Loc[TabKey(t)]</div>
+                var isActive = tab == t;
+                <button type="button" class="tab @(isActive ? "active" : "")" role="tab"
+                        id="@($"sessiontab-{t}")" aria-selected="@(isActive ? "true" : "false")"
+                        @onclick="() => tab = t">@Loc[TabKey(t)]</button>
             }
         </div>
 
-        @switch (tab)
-        {
-            case TabId.Phase:
-                <PhaseView />
-                break;
-            case TabId.Players:
-                <PlayersTab />
-                break;
-            case TabId.Objectives:
-                <ObjectivesTab />
-                break;
-            case TabId.Techs:
-                <TechsTab />
-                break;
-        }
+        <div role="tabpanel" aria-labelledby="@($"sessiontab-{tab}")">
+            @switch (tab)
+            {
+                case TabId.Phase:
+                    <PhaseView />
+                    break;
+                case TabId.Players:
+                    <PlayersTab />
+                    break;
+                case TabId.Objectives:
+                    <ObjectivesTab />
+                    break;
+                case TabId.Techs:
+                    <TechsTab />
+                    break;
+            }
+        </div>
     </div>
 }
 

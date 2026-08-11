@@ -28,35 +28,177 @@
         </div>
         <div class="spacer" style="flex:1"></div>
         <div class="stage-nav">
-            @if (step > SetupStep.Name)
+            @if (step > SetupStep.Session)
             {
-                <button class="btn btn-sm" @onclick="() => current = step - 1">◂ @Loc["common.back"]</button>
+                <button class="btn btn-sm" @onclick="() => current = step - 1"><MaterialIcon Name="chevron_left" /> @Loc["common.back"]</button>
+            }
+            @* Rolling for the speaker belongs to the seating step, but it is an action ON that step, not a
+               row in the list — so it sits with the navigation where the eye already is. *@
+            @if (step == SetupStep.Seating)
+            {
+                <button class="btn btn-sm" @onclick="RollSpeaker" disabled="@(rolling || s.Players.Count == 0)">
+                    <MaterialIcon Name="casino" /> @Loc["setup.randomSpeaker"]
+                </button>
             }
             @if (step < SetupStep.Objectives)
             {
-                <button class="btn btn-sm btn-gold" @onclick="() => current = step + 1">@Loc["status.next"] ▸</button>
+                @* Seating gates the way forward: without a speaker nobody knows who picks first, and finding
+                   that out after the game has started is exactly the mess this step exists to prevent. *@
+                var blocked = step == SetupStep.Seating && s.SpeakerPlayerId is null;
+                <button class="btn btn-sm btn-gold" disabled="@(blocked || rolling)" title="@(blocked ? Loc["setup.needSpeaker"] : null)"
+                        @onclick="() => current = step + 1">@Loc["status.next"] <MaterialIcon Name="chevron_right" /></button>
+            }
+            else
+            {
+                @* The one and only "start": you cannot get here without having passed seating and objectives,
+                   which is what the old seat-order confirmation dialog was standing in for. *@
+                <button class="btn btn-sm btn-gold" disabled="@(!AllReady)" title="@(AllReady ? null : Loc["setup.startHint"])"
+                        @onclick="StartGame">@Loc["turn.startGame"] <MaterialIcon Name="chevron_right" /></button>
             }
         </div>
     </div>
+    @if (step == SetupStep.Seating && s.SpeakerPlayerId is null)
+    {
+        <p class="faint" style="margin:.4rem 0 0;font-size:.8rem;">@Loc["setup.needSpeaker"]</p>
+    }
 }
 
-@* ---- Step 1: what is this game called (and which expansions are in) ---- *@
-@if (step == SetupStep.Name)
+@* ---- Step 1: what is this game called, what is in it, and how does the table play it ----
+     Name, expansions and options were three steps' worth of one decision ("what game is this"), so they
+     share a page. The options themselves are a two-column grid so every control lines up under the next
+     (see `.game-option`) instead of each starting wherever its own label happened to end. *@
+@if (step == SetupStep.Session)
 {
     <div class="panel" style="margin-top:.6rem;">
         <h3 style="margin:0 0 .2rem;">@Loc["setup.step.name"]</h3>
         <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.nameHint"]</p>
-        <input type="text" value="@s.Name" @onchange="SetName" placeholder="@NamePlaceholder" style="max-width:24rem;" />
-        <div style="margin-top:.8rem;">
+
+        <div class="game-option">
+            <label for="sessionName">@Loc["home.sessionName"]</label>
+            <input id="sessionName" type="text" value="@s.Name" @onchange="SetName" placeholder="@NamePlaceholder" />
+            <span class="faint go-hint">@Loc["setup.nameHint"]</span>
+        </div>
+
+        <div class="game-option">
             <label>@Loc["home.expansions"]</label>
-            <div class="row-wrap" style="gap:.4rem;margin-top:.3rem;">
+            <div class="go-checks">
+                @* Base is always in and cannot be turned off — shown, disabled, so the set reads complete. *@
+                <label class="opt-check is-fixed">
+                    <input type="checkbox" checked disabled />
+                    <span class="oc-box"></span>
+                    <span>@Loc["exp.Base"]</span>
+                </label>
                 @foreach (var x in new[] { Expansion.ProphecyOfKings, Expansion.Codex, Expansion.ThundersEdge })
                 {
                     var on = s.ActiveExpansions.HasFlag(x);
-                    <button class="btn btn-sm @(on ? "btn-gold" : "btn-ghost")" @onclick="() => ToggleExpansion(x)">@Loc[$"exp.{x}"]</button>
+                    var exp = x;
+                    <label class="opt-check">
+                        <input type="checkbox" checked="@on" @onchange="() => ToggleExpansion(exp)" />
+                        <span class="oc-box"></span>
+                        <span>@Loc[$"exp.{x}"]</span>
+                    </label>
                 }
             </div>
             <span class="faint go-hint">@Loc["setup.expansionsHint"]</span>
+        </div>
+
+        <h3 style="margin:1.2rem 0 .6rem;">@Loc["options.title"]</h3>
+
+        <div class="game-option">
+            <label for="cardsPerPlayer">@Loc["cards.perPlayer"]</label>
+            <select id="cardsPerPlayer" value="@s.StrategyCardsPerPlayer" @onchange="SetCardsPerPlayer">
+                <option value="0">@Loc["cards.auto"]</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+            </select>
+            <span class="faint go-hint">@Loc["cards.hint"]</span>
+        </div>
+
+        <div class="game-option">
+            <label for="turnTimer">@Loc["timer.perRound"]</label>
+            <select id="turnTimer" value="@s.TurnTimerSeconds" @onchange="SetTurnTimer">
+                <option value="0">@Loc["timer.off"]</option>
+                @foreach (var min in new[] { 5, 8, 10, 12, 15, 20, 30 })
+                {
+                    <option value="@(min * 60)">@min min</option>
+                }
+            </select>
+            <span class="faint go-hint">@Loc["timer.hint"]</span>
+        </div>
+
+        @* Secondary tracking has its own option, but it can only do anything while the timer runs: its whole
+           point is separating time spent on a secondary from time on turn. Shown greyed out rather than
+           hidden, so "why is that missing" has an answer on screen. *@
+        <div class="game-option">
+            <label>@Loc["secondary.optionTitle"]</label>
+            <div class="go-checks">
+                <label class="opt-check @(s.TurnTimerSeconds > 0 ? "" : "is-disabled")">
+                    <input type="checkbox" checked="@s.TrackSecondaryAbilities" disabled="@(s.TurnTimerSeconds <= 0)"
+                           @onchange="SetTrackSecondary" />
+                    <span class="oc-box"></span>
+                    <span>@Loc["secondary.optionLabel"]</span>
+                </label>
+            </div>
+            <span class="faint go-hint">@Loc[s.TurnTimerSeconds > 0 ? "secondary.optionHint" : "secondary.optionNeedsTimer"]</span>
+        </div>
+
+        @* Red Tape: two published community variants (see RedTapeVariant). Both put tape on the public
+           objectives; only Bureaucracy REPLACES a strategy card, so only it asks which one. *@
+        <div class="game-option">
+            <label for="redTape">@Loc["redtape.title"]</label>
+            <select id="redTape" value="@((int)s.RedTapeVariant)" @onchange="SetRedTapeVariant">
+                <option value="0">@Loc["redtape.off"]</option>
+                <option value="1">@Loc["redtape.bureaucracy"]</option>
+                <option value="2">@Loc["redtape.lite"]</option>
+            </select>
+            <span class="faint go-hint">@Loc[s.RedTapeVariant switch
+                {
+                    RedTapeVariant.Bureaucracy => "redtape.bureaucracyHint",
+                    RedTapeVariant.Lite => "redtape.liteHint",
+                    _ => "redtape.hint",
+                }]</span>
+        </div>
+
+        @if (s.RedTapeVariant == RedTapeVariant.Bureaucracy)
+        {
+            <div class="game-option">
+                <label>@Loc["redtape.card"]</label>
+                <div class="go-checks">
+                    @foreach (var n in new[] { GameRules.RedTapeDiplomacyCard, GameRules.ImperialStrategyCard })
+                    {
+                        var num = n;
+                        var card = Store.Card(n);
+                        <label class="opt-check">
+                            <input type="radio" name="redTapeCard" checked="@(s.RedTapeCardNumber == n)"
+                                   @onchange="() => SetRedTapeCard(num)" />
+                            <span class="oc-box oc-radio"></span>
+                            <span>@n — @(card is null ? "" : Loc.Pick(card.Name, card.NameDe))</span>
+                        </label>
+                    }
+                </div>
+                <span class="faint go-hint">@Loc["redtape.cardHint"]</span>
+            </div>
+        }
+        else if (s.RedTapeVariant == RedTapeVariant.Lite)
+        {
+            @* Lite replaces no card — it is published for Diplomacy, so there is nothing to choose. *@
+            <div class="game-option">
+                <label>@Loc["redtape.card"]</label>
+                <div class="go-fixed">@GameRules.RedTapeDiplomacyCard — @(Store.Card(GameRules.RedTapeDiplomacyCard) is { } dc ? Loc.Pick(dc.Name, dc.NameDe) : "")</div>
+                <span class="faint go-hint">@Loc["redtape.cardLiteHint"]</span>
+            </div>
+        }
+
+        <div class="game-option">
+            <label>@Loc["tech.promptTitle"]</label>
+            <div class="go-checks">
+                <label class="opt-check">
+                    <input type="checkbox" checked="@s.PromptTechOnAction" @onchange="SetPromptTech" />
+                    <span class="oc-box"></span>
+                    <span>@Loc["tech.promptOption"]</span>
+                </label>
+            </div>
+            <span class="faint go-hint">@Loc["tech.promptHint"]</span>
         </div>
     </div>
 }
@@ -102,9 +244,10 @@
                     <div class="setup-pcard-ctrls">
                         @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
                         @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
-                        <button class="btn btn-sm @(isSpeaker ? "btn-gold" : "")" disabled="@(!host)" @onclick="() => SetSpeaker(p.Id)" title='@Loc["setup.makeSpeaker"]'>
-                            @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> } else { @Loc["setup.makeSpeaker"] }
-                        </button>
+                        @* No speaker control here: this step is about who is playing and as whom. The speaker
+                           decides who picks first, so it belongs with the seating order — offering it in both
+                           places invited the table to settle it before the seats were even in order. *@
+                        @if (isSpeaker) { <span class="chip chip-active"><SpeakerIcon SizeCss="1.1em" /></span> }
                         <span class="chip @(p.IsReady ? "chip-done" : "")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
                         @if (host && p.Id != Store.MyPlayerId)
                         {
@@ -164,82 +307,11 @@
     <div class="panel" style="margin-top:.6rem;">
         <h3 style="margin:0 0 .2rem;">@Loc["setup.step.seating"]</h3>
         <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.seatingHint"]</p>
-        <SeatOrderList />
+        <SeatOrderList @ref="seatOrder" />
     </div>
 }
 
-@* ---- Step 2: the table's variant and options ---- *@
-@if (step == SetupStep.Options)
-{
-    <div class="panel" style="margin-top:.6rem;">
-        <h3 style="margin:0 0 .6rem;">@Loc["options.title"]</h3>
-
-        <div class="game-option">
-            <label for="cardsPerPlayer">@Loc["cards.perPlayer"]</label>
-            <select id="cardsPerPlayer" value="@Store.Session!.StrategyCardsPerPlayer" @onchange="SetCardsPerPlayer">
-                <option value="0">@Loc["cards.auto"]</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-            </select>
-            <span class="faint go-hint">@Loc["cards.hint"]</span>
-        </div>
-
-        <div class="game-option">
-            <label for="turnTimer">@Loc["timer.title"] — @Loc["timer.perRound"]</label>
-            <select id="turnTimer" value="@Store.Session!.TurnTimerSeconds" @onchange="SetTurnTimer">
-                <option value="0">@Loc["timer.off"]</option>
-                @foreach (var min in new[] { 5, 8, 10, 12, 15, 20, 30 })
-                {
-                    <option value="@(min * 60)">@min min</option>
-                }
-            </select>
-            <span class="faint go-hint">@Loc["timer.hint"]</span>
-        </div>
-
-        @* Red Tape: two published community variants (see RedTapeVariant). Both put tape on the public
-           objectives and hand the removal to one strategy card, so the table also picks which card carries
-           it — the variant replaces either Diplomacy or Imperial. *@
-        <div class="game-option">
-            <label for="redTape">@Loc["redtape.title"]</label>
-            <select id="redTape" value="@((int)Store.Session!.RedTapeVariant)" @onchange="SetRedTapeVariant">
-                <option value="0">@Loc["redtape.off"]</option>
-                <option value="1">@Loc["redtape.bureaucracy"]</option>
-                <option value="2">@Loc["redtape.lite"]</option>
-            </select>
-            <span class="faint go-hint">@Loc[Store.Session!.RedTapeVariant switch
-                {
-                    RedTapeVariant.Bureaucracy => "redtape.bureaucracyHint",
-                    RedTapeVariant.Lite => "redtape.liteHint",
-                    _ => "redtape.hint",
-                }]</span>
-        </div>
-
-        @if (Store.RedTapeOn)
-        {
-            <div class="game-option">
-                <label for="redTapeCard">@Loc["redtape.card"]</label>
-                <select id="redTapeCard" value="@Store.Session!.RedTapeCardNumber" @onchange="SetRedTapeCard">
-                    @foreach (var n in new[] { GameRules.RedTapeDiplomacyCard, GameRules.ImperialStrategyCard })
-                    {
-                        var card = Store.Card(n);
-                        <option value="@n">@n — @(card is null ? "" : Loc.Pick(card.Name, card.NameDe))</option>
-                    }
-                </select>
-                <span class="faint go-hint">@Loc["redtape.cardHint"]</span>
-            </div>
-        }
-
-        <div class="game-option">
-            <label class="go-check">
-                <input type="checkbox" id="promptTech" checked="@Store.Session!.PromptTechOnAction" @onchange="SetPromptTech" />
-                @Loc["tech.promptOption"]
-            </label>
-            <span class="faint go-hint">@Loc["tech.promptHint"]</span>
-        </div>
-    </div>
-}
-
-@* ---- Step 5: record the objectives the table drew ---- *@
+@* ---- Last step: record the objectives the table drew, and start ---- *@
 @if (step == SetupStep.Objectives)
 {
     <div class="panel" style="margin-top:.6rem;">
@@ -256,19 +328,45 @@
     private string NamePlaceholder => Loc["home.sessionName"];
 
     /// <summary>The order the table settles things in. Host-local: it steers this device's view and nothing
-    /// else, so it needs no session state and a reload just lands on the first step.</summary>
-    private enum SetupStep { Name, Options, Players, Seating, Objectives }
+    /// else, so it needs no session state and a reload just lands on the first step.
+    /// <para>
+    /// Name and options used to be two steps. They are one question — "what game is this" — and splitting
+    /// them meant the very first thing the host saw was a single text field.
+    /// </para></summary>
+    private enum SetupStep { Session, Players, Seating, Objectives }
 
-    private SetupStep current = SetupStep.Name;
+    private SetupStep current = SetupStep.Session;
 
     private static readonly (SetupStep Step, string Key)[] Steps =
     {
-        (SetupStep.Name, "setup.step.name"),
-        (SetupStep.Options, "setup.step.options"),
+        (SetupStep.Session, "setup.step.session"),
         (SetupStep.Players, "setup.step.players"),
         (SetupStep.Seating, "setup.step.seating"),
         (SetupStep.Objectives, "setup.step.objectives"),
     };
+
+    private SeatOrderList? seatOrder;
+    private bool rolling;
+
+    private bool AllReady => Store.Session!.Players.Count > 0 && Store.Session!.Players.All(p => p.IsReady);
+
+    /// <summary>Roll for the speaker, visibly: the token hops between players before it settles (see
+    /// <see cref="SeatOrderList.RollAsync"/>). A silent jump to a random name looks like a bug to everyone
+    /// who wasn't watching that instant.</summary>
+    private async Task RollSpeaker()
+    {
+        if (seatOrder is null || rolling) return;
+        rolling = true;
+        try { await seatOrder.RollAsync(); }
+        finally { rolling = false; }
+    }
+
+    private Task StartGame() => Store.Mutate(Store.Api.StartGameAsync(Sid));
+
+    private Task SetTrackSecondary(ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null,
+            TrackSecondaryAbilities: e.Value as bool? ?? false)));
 
     private Task SetName(ChangeEventArgs e)
         => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
@@ -315,12 +413,10 @@
             null, null, null, null, null, null, null, null, null, null, RedTapeVariant: v)));
     }
 
-    private Task SetRedTapeCard(ChangeEventArgs e)
-    {
-        var n = int.TryParse(e.Value?.ToString(), out var c) ? c : GameRules.RedTapeDiplomacyCard;
-        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
-            null, null, null, null, null, null, null, null, null, null, RedTapeCardNumber: n)));
-    }
+    // Radio buttons, so the number comes straight from the option rather than out of a change event.
+    private Task SetRedTapeCard(int cardNumber)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, RedTapeCardNumber: cardNumber)));
 
     private Task SetPromptTech(ChangeEventArgs e)
         => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(

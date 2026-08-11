@@ -73,14 +73,29 @@ public class GameSession
     /// objective carries a removable marker and cannot be scored.</summary>
     public RedTapeVariant RedTapeVariant { get; set; }
 
-    /// <summary>Which strategy card carries the Red Tape ability: the variant replaces either Diplomacy (2)
-    /// or Imperial (8), and the table decides which before the game. 0 until they have.</summary>
+    /// <summary>Which strategy card carries the Red Tape ability. <b>Bureaucracy</b> replaces either
+    /// Diplomacy (2) or Imperial (8) and the table decides which; <b>Lite</b> is always Diplomacy (it
+    /// replaces no card, so there is nothing to choose). Settled by
+    /// <see cref="GameRules.RedTapeCarrierCard"/> whenever the variant or the choice changes, so it can never
+    /// disagree with the variant. 0 while no variant is set.</summary>
     public int RedTapeCardNumber { get; set; }
 
-    /// <summary>The round in which Red Tape Lite's random removal already happened (0 = never). It is due once
-    /// per round at most, and this is what makes that idempotent across the two places the status phase can
-    /// end.</summary>
+    /// <summary>Follow who is taking a strategy card's secondary ability, so each of them can stop their own
+    /// clock (see the secondary round). Its own option rather than riding on the turn timer, but only
+    /// offered while the timer is on — without a clock there is nothing for it to separate.</summary>
+    public bool TrackSecondaryAbilities { get; set; }
+
+    /// <summary>The round in which Red Tape Lite's random removal was ANSWERED (0 = never) — confirmed or
+    /// declined, either way it is settled for that round. It is due once per round at most, and this is what
+    /// makes that idempotent across the two places the status phase can end.</summary>
     public int RedTapeRandomRound { get; set; }
+
+    /// <summary>The round a random removal is currently being ASKED about (0 = nothing pending). The app no
+    /// longer takes the tape off by itself: it proposes, the table confirms (see
+    /// <see cref="Services.RedTape.ProposeRandom"/>). Stored as the round rather than a bool because the
+    /// proposal outlives the round change — <c>NextRound</c> raises it while still in the old round, so
+    /// answering it afterwards must settle THAT round, not the new one.</summary>
+    public int RedTapeRandomPendingRound { get; set; }
 
     /// <summary>Status phase: which of the post-scoring steps the table has ticked off. Reset when the
     /// status phase begins.</summary>
@@ -116,6 +131,12 @@ public class GameSession
     /// <summary>Offer to record a technology right after the Technology strategy action was played.
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
+
+    /// <summary>Who currently has the technology picker open (null = nobody). Session state rather than a
+    /// per-device flag for one reason: while it is open, that player's TIME ON TURN stops, exactly as a combat
+    /// stops it — hunting for a technology in a list is the app's overhead, not the player's thinking time.
+    /// A clock that only stopped on the device holding the popup would disagree with the wall.</summary>
+    public Guid? TechPickPlayerId { get; set; }
 
     /// <summary>Superseded by <c>DisplayMode.JoinQr</c> (the QR became one of the wall areas, so a separate
     /// flag would be a second source of truth for one screen). Kept only so no migration has to drop a
@@ -197,8 +218,17 @@ public class SessionObjective
     public bool MarkerRemoved { get; set; }
 
     /// <summary>Red Tape Lite: purged once five Stage I objectives were clear — it can never be scored and its
-    /// tape never comes off. See <see cref="Services.RedTape.ApplyPurge"/>.</summary>
+    /// tape never comes off. See <see cref="Services.RedTape.ConfirmPurge"/>.</summary>
     public bool Purged { get; set; }
+
+    /// <summary>Red Tape Lite: proposed for purging, awaiting the table's confirmation. Flagged at the moment
+    /// the fifth Stage I tape came off and cleared either way when the question is answered.
+    /// <para>
+    /// This flag is the whole reason a purge cannot sweep up an objective revealed LATER: only what was
+    /// already on the table when the fifth came clear is ever marked, so a later reveal can never be part of
+    /// the set no matter how long the question goes unanswered.
+    /// </para></summary>
+    public bool PurgePending { get; set; }
     public List<ObjectiveScore> Scores { get; set; } = new();
 }
 

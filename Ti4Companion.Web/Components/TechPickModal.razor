@@ -1,0 +1,131 @@
+@inherits Ti4ComponentBase
+@inject SessionStore Store
+
+@*
+    Recording a researched technology, as a popup.
+
+    It used to send the player off to the Technology tab — away from the action they were in the middle of,
+    and back again afterwards. This is the same catalogue (colour filter, search, click a card to take it),
+    only where the action is.
+
+    While it is open the player's own clock is STOPPED, server-side (see SetTechPick): looking a technology up
+    in a list is the app's overhead, not their thinking time. That is also why closing it goes through
+    `OnClose` rather than a plain `showX = false` — the server has to hear about it, or the clock stays stopped.
+*@
+@if (Store.Session is { } s && Store.PlayerById(PlayerId) is { } target)
+{
+    var owned = target.TechnologyIds.Count;
+    <div class="modal-backdrop centered blurred" @onclick="Close">
+        <div class="modal techpick-modal" @onclick:stopPropagation>
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["tech.pickTitle"]</h3>
+                <FactionBadge Faction="Store.Faction(target.FactionId)" Size="1.6" Ring="@target.ColorHex" />
+                <span class="chip">@target.Name</span>
+                @if (Store.TurnTimerEnabled)
+                {
+                    @* Say it, or stopping the clock looks like the timer is broken. *@
+                    <span class="chip chip-done">@Loc["tech.pickClockStopped"]</span>
+                }
+            </div>
+            <div class="modal-body">
+                <div class="row-wrap" style="gap:.5rem;align-items:center;">
+                    <input type="text" @bind="search" @bind:event="oninput" placeholder="@Loc["tech.search"]" style="flex:1 1 180px;" />
+                    <label class="opt-check">
+                        <input type="checkbox" @bind="allFactions" />
+                        <span class="oc-box"></span>
+                        <span>@Loc["tech.allFactions"]</span>
+                    </label>
+                </div>
+                <div class="color-picker" style="margin-top:.5rem;">
+                    @foreach (var c in Colors)
+                    {
+                        var col = c;
+                        <button class="color-btn @(selColor == c ? "sel" : "")" style="--cc:@TechHex(c)" @onclick="() => Toggle(col)">
+                            <TechIcon Color="c" Size="22" /> @Loc[$"color.{c}"]
+                        </button>
+                    }
+                </div>
+
+                @if (selColor is null && string.IsNullOrWhiteSpace(search))
+                {
+                    <p class="faint" style="margin:.7rem 0 0;">@Loc["tech.pickHint"]</p>
+                }
+                else
+                {
+                    var list = Catalog(target);
+                    @if (list.Count == 0)
+                    {
+                        <p class="faint" style="margin:.7rem 0 0;">@Loc["tech.noneFound"]</p>
+                    }
+                    else
+                    {
+                        <div class="tech-cat" style="margin-top:.6rem;">
+                            @foreach (var t in list)
+                            {
+                                var tech = t;
+                                <TechCard Tech="t" OnClick="() => Add(tech.Id)" />
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-actions">
+                <span class="faint" style="font-size:.78rem;">@string.Format(Loc["tech.pickOwned"], owned)</span>
+                <div class="spacer" style="flex:1"></div>
+                <button class="btn btn-gold" @onclick="Close">@Loc["common.done"]</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Whose technologies are being recorded.</summary>
+    [Parameter, EditorRequired] public Guid PlayerId { get; set; }
+
+    /// <summary>Raised when the popup should go away — the caller closes it AND tells the server, so the
+    /// player's clock starts again.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private static readonly TechColor[] Colors =
+        { TechColor.Biotic, TechColor.Cybernetic, TechColor.Propulsion, TechColor.Warfare, TechColor.Unit };
+
+    private Guid Sid => Store.Session!.Id;
+    private string search = "";
+    private TechColor? selColor;
+    private bool allFactions;
+
+    private void Toggle(TechColor c) => selColor = selColor == c ? null : c;
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    // Taking a technology does NOT close the popup: a Technology action can bring in two, and a player who
+    // just researched one usually knows whether they are done.
+    private Task Add(string techId) => Store.Mutate(Store.Api.AddTechnologyAsync(Sid, PlayerId, techId));
+
+    /// <summary>Same filter as the Technology tab: this player's own faction techs unless "all faction techs"
+    /// is on (Nekro), never one they already have, and only once a colour or a search narrows it down —
+    /// ninety-six cards at once is not a choice.</summary>
+    private List<TechnologyDto> Catalog(PlayerDto target)
+    {
+        var q = search.Trim();
+        var searching = q.Length > 0;
+        return Store.ActiveTechnologies()
+            .Where(t => t.FactionId is null || allFactions || t.FactionId == target.FactionId)
+            .Where(t => !target.TechnologyIds.Contains(t.Id))
+            .Where(t => searching
+                ? (Loc.Pick(t.Name, t.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase)
+                   || Loc.Pick(t.Text, t.TextDe).Contains(q, StringComparison.OrdinalIgnoreCase))
+                : (selColor is not null && t.Color == selColor))
+            .OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ThenBy(t => Loc.Pick(t.Name, t.NameDe))
+            .Take(60).ToList();
+    }
+
+    private static string TechHex(TechColor c) => c switch
+    {
+        TechColor.Biotic => "#4caf50",
+        TechColor.Propulsion => "#4a78d6",
+        TechColor.Cybernetic => "#e0c341",
+        TechColor.Warfare => "#d6534a",
+        _ => "#9aa7c0",
+    };
+}

@@ -130,8 +130,18 @@ public class Ti4ApiClient(HttpClient http)
     }
     public Task<SessionStateDto?> SetStatusStageAsync(Guid id, StatusStage stage)
         => PostFor($"api/sessions/{id}/status-stage", new SetStatusStageRequest(stage));
-    public Task<SessionStateDto?> SetObjectiveMarkerAsync(Guid id, Guid sessionObjectiveId, bool removed)
-        => PostFor($"api/sessions/{id}/objectives/{sessionObjectiveId}/marker", new SetObjectiveMarkerRequest(removed));
+    public Task<SessionStateDto?> SetObjectiveMarkerAsync(Guid id, Guid sessionObjectiveId, bool removed, bool over = false)
+        => PostFor($"api/sessions/{id}/objectives/{sessionObjectiveId}/marker", new SetObjectiveMarkerRequest(removed, over));
+    /// <summary>Open or close a player's technology picker — while it is open their time on turn stops.</summary>
+    public Task<SessionStateDto?> SetTechPickAsync(Guid id, Guid playerId, bool open)
+        => PostFor($"api/sessions/{id}/players/{playerId}/tech-pick", new SetTechPickRequest(open));
+
+    // Red Tape Lite's two questions. The app proposes, the table answers — nothing is removed or purged until
+    // one of these is called with confirm: true.
+    public Task<SessionStateDto?> AnswerRedTapePurgeAsync(Guid id, bool confirm)
+        => PostFor($"api/sessions/{id}/redtape/purge", new RedTapeAnswerRequest(confirm));
+    public Task<SessionStateDto?> AnswerRedTapeRandomAsync(Guid id, bool confirm)
+        => PostFor($"api/sessions/{id}/redtape/random", new RedTapeAnswerRequest(confirm));
     public Task<SessionStateDto?> ScoreObjectiveAsync(Guid id, Guid sessionObjectiveId, Guid playerId)
         => PostFor($"api/sessions/{id}/objectives/{sessionObjectiveId}/scores", new ScoreObjectiveRequest(playerId));
     public Task UnscoreObjectiveAsync(Guid id, Guid sessionObjectiveId, Guid playerId)

@@ -96,10 +96,13 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/objectives/custom", RevealCustomObjective); // secret made public / hand-added
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}", RemoveObjective);
         g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/marker", SetObjectiveMarker); // Red Tape variant
+        g.MapPost("/{id:guid}/redtape/purge", AnswerRedTapePurge);   // Lite: confirm/decline the purge the app proposed
+        g.MapPost("/{id:guid}/redtape/random", AnswerRedTapeRandom); // Lite: confirm/decline the random removal
         g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores", ScoreObjective);
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores/{playerId:guid}", UnscoreObjective);
 
         // ---- Technologies (per player) ----
+        g.MapPost("/{id:guid}/players/{playerId:guid}/tech-pick", SetTechPick); // picker open/closed → clock stops
         g.MapPost("/{id:guid}/players/{playerId:guid}/technologies", AddTechnology);
         g.MapDelete("/{id:guid}/players/{playerId:guid}/technologies/{techId}", RemoveTechnology);
 
@@ -149,7 +152,7 @@ public static class SessionEndpoints
             Name = string.IsNullOrWhiteSpace(req.Name) ? "Twilight Imperium" : Clamp(req.Name),
             DefaultLanguage = req.Language,
             ActiveExpansions = (req.ActiveExpansions ?? AllExpansions) | Expansion.Base,
-            RetentionHours = config.GetValue("Ti4:DefaultRetentionHours", 168),
+            RetentionHours = config.GetValue("Ti4:DefaultRetentionHours", GameRules.DefaultRetentionHours),
             Phase = GamePhase.Setup,
         };
 
@@ -205,8 +208,19 @@ public static class SessionEndpoints
         if (req.ActiveExpansions is not null) session.ActiveExpansions = req.ActiveExpansions.Value | Expansion.Base;
         if (req.ShowTechOverview is not null) session.ShowTechOverview = req.ShowTechOverview.Value;
         if (req.AllowEditAllPlayers is not null) session.AllowEditAllPlayers = req.AllowEditAllPlayers.Value;
+        // A host correcting the phase or the round by hand is a real move on the timeline, so it has to be
+        // logged like the ordinary transitions are — MatchStats builds its per-round and per-phase figures
+        // ONLY from these two kinds. Without them a corrected round simply vanished from the statistics and
+        // its time was absorbed by the round before it (measured: rounds 1, 2, 3, 5 with round 4's nine
+        // minutes inside round 3). Only on an actual change, or re-sending the same settings would spam the log.
+        var roundChanged = req.CurrentRound is > 0 && req.CurrentRound.Value != session.CurrentRound;
+        var phaseChanged = req.Phase is not null && req.Phase.Value != session.Phase;
         if (req.Phase is not null) session.Phase = req.Phase.Value;
         if (req.CurrentRound is > 0) session.CurrentRound = req.CurrentRound.Value;
+        // Round first, then phase — the same order NextRound writes them in, so a reader diffing the timeline
+        // sees the round open before the phase inside it.
+        if (roundChanged) Log(db, session, http, SessionLogKind.RoundChange, round: session.CurrentRound);
+        if (phaseChanged) Log(db, session, http, SessionLogKind.PhaseChange, phase: session.Phase, round: session.CurrentRound);
         if (req.SpeakerPlayerId is not null && req.SpeakerPlayerId != session.SpeakerPlayerId)
         {
             session.SpeakerPlayerId = req.SpeakerPlayerId;
@@ -223,17 +237,21 @@ public static class SessionEndpoints
         if (req.StrategyCardsPerPlayer is { } cpp)
             session.StrategyCardsPerPlayer = cpp is 1 or 2 ? cpp : 0;
         if (req.RedTapeVariant is { } rtv && Enum.IsDefined(rtv))
-        {
             session.RedTapeVariant = rtv;
-            // Turning a variant on without a carrier card would leave the ability nowhere. Diplomacy is what
-            // both variants are written around; the table can move it to Imperial.
-            if (rtv != RedTapeVariant.None && session.RedTapeCardNumber == 0)
-                session.RedTapeCardNumber = GameRules.RedTapeDiplomacyCard;
-        }
         // Only the two cards the variant is published for.
         if (req.RedTapeCardNumber is { } rtc && (rtc == GameRules.RedTapeDiplomacyCard || rtc == GameRules.ImperialStrategyCard))
             session.RedTapeCardNumber = rtc;
+        // Settle the carrier in ONE place, after both may have changed: only Bureaucracy replaces a card and
+        // therefore offers the choice — Lite is published for Diplomacy, full stop. Doing it here also means a
+        // table that picked Imperial and then switched to Lite cannot be left pointing at a card Lite has no
+        // rule for, which is otherwise invisible: Lite's random removal keys on "nobody holds the carrier".
+        if (session.RedTapeVariant != RedTapeVariant.None)
+            session.RedTapeCardNumber = GameRules.RedTapeCarrierCard(session.RedTapeVariant, session.RedTapeCardNumber);
         if (req.PromptTechOnAction is not null) session.PromptTechOnAction = req.PromptTechOnAction.Value;
+        if (req.TrackSecondaryAbilities is not null) session.TrackSecondaryAbilities = req.TrackSecondaryAbilities.Value;
+        // Turning the timer off takes the secondary round with it — it has nothing left to measure, and an
+        // option left on that silently does nothing is worse than one that visibly turns itself off.
+        if (session.TurnTimerSeconds <= 0) session.TrackSecondaryAbilities = false;
         if (req.ShowJoinQr is not null) session.ShowJoinQr = req.ShowJoinQr.Value;
 
         return await SaveAndReturn(db, hub, session, ct);
@@ -348,7 +366,7 @@ public static class SessionEndpoints
         session.ActivePlayerId = TurnService.FirstActive(session, overrides);
         // "In Round 1, do this right after the Strategy Phase" — this is that moment. Later rounds get it
         // when the status phase ends.
-        if (session.CurrentRound == 1) RedTapeRandom(db, session, http);
+        if (session.CurrentRound == 1) RedTapeRandom(session);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Action, round: session.CurrentRound);
         if (session.ActivePlayerId is Guid first) Log(db, session, SessionLogKind.TurnChange, GetCaller(session, http)?.Id, target: first);
         NotifyTurn(session, push);
@@ -371,6 +389,7 @@ public static class SessionEndpoints
         // evening.
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
         CloseCombat(db, session, GetCaller(session, http)?.Id);
+        CloseTechPick(db, session, GetCaller(session, http)?.Id);
         session.SpeakerPending = false;
         // Fresh status phase: back to stage 1, scoring starts over at the lowest initiative, checklist blank.
         session.StatusStepsDone = StatusStep.None;
@@ -387,7 +406,7 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
         // The status phase is over: Red Tape Lite's random removal is due (idempotent per round, so going
         // status → agenda → next round does it once).
-        if (session.Phase == GamePhase.Status) RedTapeRandom(db, session, http);
+        if (session.Phase == GamePhase.Status) RedTapeRandom(session);
         session.Phase = GamePhase.Agenda;
         // Fresh agenda phase: clear the agenda/votes and reset every player's entered influence.
         session.CurrentAgendaId = null;
@@ -413,9 +432,16 @@ public static class SessionEndpoints
         LogAgendaResult(db, session);   // capture the last agenda's result before the round resets
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
         CloseCombat(db, session, GetCaller(session, http)?.Id);
+        CloseTechPick(db, session, GetCaller(session, http)?.Id);
+        // A random-removal question nobody answered in an EARLIER round is stale — the moment has passed, and
+        // leaving it open would wedge every later one (only one question is ever open). Same reasoning as the
+        // escape hatches on the Politics block. A question raised in the round now ending stays open: the host
+        // answers it during the next strategy phase, which is exactly the normal case.
+        if (session.RedTapeRandomPendingRound != 0 && session.RedTapeRandomPendingRound < session.CurrentRound)
+            RedTape.DeclineRandom(session);
         // Same as in StartAgendaPhase — whichever way the table leaves the status phase, the removal is due
         // once. Still in the OLD round here, which is what the per-round guard keys on.
-        RedTapeRandom(db, session, http);
+        RedTapeRandom(session);
         session.CurrentRound += 1;
         session.Phase = GamePhase.Strategy;
         session.ActivePlayerId = null;
@@ -479,8 +505,10 @@ public static class SessionEndpoints
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
         if (session.SpeakerPending) return SpeakerFirst();
         var overrides = FactionInitiative.Overrides;
-        // A new turn begins: a combat from the last one is over whether or not anybody said so.
+        // A new turn begins: a combat from the last one is over whether or not anybody said so, and so is a
+        // technology picker somebody left open.
         CloseCombat(db, session, GetCaller(session, http)?.Id);
+        CloseTechPick(db, session, GetCaller(session, http)?.Id);
         // The turn is over → this player's clock stops and the others' can start (see OpenSecondaries).
         OpenSecondaries(session);
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
@@ -811,7 +839,9 @@ public static class SessionEndpoints
         session.SecondaryOwnerId = null;
         session.CombatAId = null;
         session.CombatBId = null;
+        session.TechPickPlayerId = null;
         session.RedTapeRandomRound = 0;
+        session.RedTapeRandomPendingRound = 0;      // no open question carries into the next match
         session.DisplayMode = DisplayMode.JoinQr;   // a fresh table starts on the join code again
         foreach (var p in session.Players)
         {
@@ -940,6 +970,39 @@ public static class SessionEndpoints
         Log(db, session, SessionLogKind.CombatEnd, actor, target: b);
     }
 
+    /// <summary>Close an open technology picker. Called from the same places as <see cref="CloseCombat"/> and
+    /// for the same reason: it stops a clock, so a popup somebody walked away from must not stop it for the
+    /// rest of the evening.</summary>
+    private static void CloseTechPick(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        if (session.TechPickPlayerId is not Guid who) return;
+        session.TechPickPlayerId = null;
+        Log(db, session, SessionLogKind.TechPickEnd, actor, target: who);
+    }
+
+    // Open or close the technology picker for one player. Self or host — it is that player's own clock, and
+    // the host runs the table device. Idempotent: opening it for whoever already has it changes nothing.
+    private static async Task<IResult> SetTechPick(Guid id, Guid playerId, SetTechPickRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (session.Players.All(p => p.Id != playerId)) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (caller is null || (caller.Id != playerId && !caller.IsHost)) return Forbidden();
+
+        if (req.Open)
+        {
+            if (session.TechPickPlayerId == playerId) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
+            // Only one picker at a time: two open clocks would both claim the same seconds.
+            CloseTechPick(db, session, caller.Id);
+            session.TechPickPlayerId = playerId;
+            Log(db, session, SessionLogKind.TechPickStart, caller.Id, target: playerId);
+        }
+        else CloseTechPick(db, session, caller.Id);
+
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
     // Who takes the secondary of the strategy action on the table. Announced by the player who played the
     // primary (or the host). Idempotent: the request carries the whole set, so there is never an intermediate
     // state where two players think they are the last one.
@@ -1004,7 +1067,10 @@ public static class SessionEndpoints
     /// the popup would just be in the way.</summary>
     private static void OpenSecondaries(GameSession session)
     {
-        if (session.TurnTimerSeconds <= 0) return;
+        // Its own option now, because "the popup never came" is exactly how the old timer-only gate read from
+        // the table's side. Still requires the timer: the round's whole purpose is separating decision time on
+        // a secondary from time on turn, and there is no clock to separate without it.
+        if (!session.TrackSecondaryAbilities || session.TurnTimerSeconds <= 0) return;
         if (session.ActiveStrategyCardId is not int card) return;
         if (session.SecondaryCardId is not null) return;        // one is still running
         session.SecondaryCardId = card;
@@ -1151,15 +1217,71 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
         if (session is null || obj is null) return Results.NotFound();
-        if (req.Removed && RedTape.WhyCannotRemove(session, obj) is { } why)
+        // A purged objective is not "locked", it is out of the game — that one is never overridable.
+        if (req.Removed && obj.Purged)
+            return Results.BadRequest(new { error = "This objective was purged — its tape stays on." });
+        // The variant's TIMING rules (Bureaucracy's first three rounds, Lite's five clear Stage I) can be
+        // overridden by an explicit ask: the app enforces the variant so nobody has to remember it, but the
+        // table is still the authority on its own game, and it may have a reason the app cannot know. Without
+        // the override the answer is still no — the UI only sends it after the host confirmed a dialog.
+        if (req.Removed && !req.Override && RedTape.WhyCannotRemove(session, obj) is { } why)
             return Results.BadRequest(new { error = why });
+        if (req.Removed && req.Override && !CallerIsHost(session, http)) return Forbidden();
+        // Logged only when a rule really was in the way — the table has to be able to see that the app was
+        // overruled, and by whom.
+        if (req.Removed && req.Override && RedTape.WhyCannotRemove(session, obj) is not null)
+            Log(db, session, http, SessionLogKind.RedTapeOverride, round: session.CurrentRound,
+                phase: session.Phase, detail: string.IsNullOrEmpty(obj.ObjectiveId) ? obj.CustomName : obj.ObjectiveId);
         if (!req.Removed && obj.Purged)
             return Results.BadRequest(new { error = "This objective was purged — its tape stays on." });
         obj.MarkerRemoved = req.Removed;
-        // Red Tape Lite: the fifth clear Stage I purges the rest of them, right now.
-        foreach (var p in RedTape.ApplyPurge(session))
-            Log(db, session, http, SessionLogKind.RedTapePurge,
-                detail: string.IsNullOrEmpty(p.ObjectiveId) ? p.CustomName : p.ObjectiveId);
+        // Red Tape Lite: if that was the fifth clear Stage I, ASK about the rest — purging is irreversible, so
+        // the app proposes and the table answers (POST /redtape/purge).
+        RedTape.ProposePurge(session);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Red Tape Lite: answer the purge question the app raised when the fifth Stage I tape came off. Host only —
+    // it decides who can still win. A no-op when nothing is pending, so a double tap is harmless.
+    private static async Task<IResult> AnswerRedTapePurge(Guid id, RedTapeAnswerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (!session.Objectives.Any(o => o.PurgePending)) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
+
+        if (req.Confirm)
+        {
+            foreach (var p in RedTape.ConfirmPurge(session))
+                Log(db, session, http, SessionLogKind.RedTapePurge, round: session.CurrentRound,
+                    phase: session.Phase, detail: string.IsNullOrEmpty(p.ObjectiveId) ? p.CustomName : p.ObjectiveId);
+        }
+        else RedTape.DeclinePurge(session);
+
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Red Tape Lite: answer the random-removal question. Host only, no-op when nothing is pending.
+    private static async Task<IResult> AnswerRedTapeRandom(Guid id, RedTapeAnswerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (session.RedTapeRandomPendingRound == 0) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
+
+        if (req.Confirm)
+        {
+            var round = session.RedTapeRandomPendingRound;
+            if (RedTape.ConfirmRandom(session) is { } picked)
+            {
+                Log(db, session, http, SessionLogKind.RedTapeRandom, round: round, phase: session.Phase,
+                    detail: string.IsNullOrEmpty(picked.ObjectiveId) ? picked.CustomName : picked.ObjectiveId);
+                // That tape may have been the fifth Stage I — then the purge question follows this one.
+                RedTape.ProposePurge(session);
+            }
+        }
+        else RedTape.DeclineRandom(session);
+
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1422,15 +1544,10 @@ public static class SessionEndpoints
     /// <summary>Red Tape Lite: a round in which nobody took the carrier card takes one tape off at random.
     /// Called at the two moments the variant names — right after the strategy phase in round 1, and when the
     /// status phase ends — and it is idempotent per round, so both callers are safe.</summary>
-    private static void RedTapeRandom(Ti4DbContext db, GameSession session, HttpContext http)
-    {
-        if (RedTape.RemoveRandomTape(session) is not { } picked) return;
-        Log(db, session, http, SessionLogKind.RedTapeRandom,
-            detail: string.IsNullOrEmpty(picked.ObjectiveId) ? picked.CustomName : picked.ObjectiveId);
-        foreach (var p in RedTape.ApplyPurge(session))
-            Log(db, session, http, SessionLogKind.RedTapePurge,
-                detail: string.IsNullOrEmpty(p.ObjectiveId) ? p.CustomName : p.ObjectiveId);
-    }
+    // Red Tape Lite: raise the random-removal question if this is its moment. It used to take the tape off
+    // here and now; it is irreversible and it changes who can still win, so the app only asks — the host
+    // answers via POST /redtape/random and only then does anything move.
+    private static void RedTapeRandom(GameSession session) => RedTape.ProposeRandom(session);
 
     // -----------------------------------------------------------------------
     // Match log — append a structured event; persisted by the next SaveChangesAsync (SaveAndReturn).

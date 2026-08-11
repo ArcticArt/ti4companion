@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Ti4Companion.ApiService.Data;
+using Ti4Companion.Shared;
 
 namespace Ti4Companion.ApiService.Services;
 
@@ -28,8 +29,8 @@ public class SessionCleanupWorker(
         // One line in the journal so the active windows are visible without reading the config file.
         logger.LogInformation(
             "Session cleanup active: default {DefaultHours} h after last activity, paused {PausedHours} h, checked every {Minutes} min",
-            config.GetValue("Ti4:DefaultRetentionHours", 2160),
-            config.GetValue("Ti4:PausedRetentionHours", 8760),
+            config.GetValue("Ti4:DefaultRetentionHours", GameRules.DefaultRetentionHours),
+            config.GetValue("Ti4:PausedRetentionHours", GameRules.PausedRetentionHours),
             Interval.TotalMinutes);
 
         using var timer = new PeriodicTimer(Interval);
@@ -48,7 +49,7 @@ public class SessionCleanupWorker(
             var db = scope.ServiceProvider.GetRequiredService<Ti4DbContext>();
 
             var now = DateTimeOffset.UtcNow;
-            var pausedHours = config.GetValue("Ti4:PausedRetentionHours", 8760);
+            var pausedHours = config.GetValue("Ti4:PausedRetentionHours", GameRules.PausedRetentionHours);
             // Load the graph: a session about to be deleted is summarised first, which needs its players
             // and objectives. Stale sessions are a handful at a time, so the extra joins are cheap.
             var all = await db.Sessions

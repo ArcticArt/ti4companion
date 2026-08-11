@@ -238,6 +238,20 @@
                     return sub ? sub.endpoint : null;
                 } catch (e) { return null; }
             },
+            // The WHOLE existing subscription (endpoint + keys), without asking for permission or creating
+            // one. The app re-registers it with the server on every load: the server stores a subscription
+            // against ONE session and player, so a device that switched sessions — or whose subscription the
+            // server retired after a 410 — looked switched on here while nothing was being delivered.
+            existing: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (!reg || !reg.pushManager) return null;
+                    const sub = await reg.pushManager.getSubscription();
+                    if (!sub) return null;
+                    const j = sub.toJSON();
+                    return { endpoint: sub.endpoint, p256dh: j.keys && j.keys.p256dh, auth: j.keys && j.keys.auth };
+                } catch (e) { return null; }
+            },
             subscribe: async function (publicKey) {
                 try {
                     const perm = await Notification.requestPermission();

@@ -109,6 +109,9 @@
 @if (Store.Session is not null)
 {
     <SecondaryModal />
+    @* Red Tape Lite's purge / random-removal questions. Same reason they live in the shell: they are raised by
+       a phase change or by somebody else pulling a tape, so they must show whatever tab this device is on. *@
+    <RedTapeModal />
 }
 
 @* Pause overlay — blocks all input while the game is paused; only the host can resume. *@

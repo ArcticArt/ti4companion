@@ -1,0 +1,46 @@
+@inherits Ti4ComponentBase
+
+@*
+    How to put the app on an iPhone's home screen, because on iOS that is the ONLY way Web Push exists at all
+    (Safari 16.4+ requires an installed web app — in a normal tab `PushManager` is not even defined).
+
+    It used to be one line of text on a chip next to the bell, which is a lot of instruction for a chip and
+    easy to miss on the device it is written for. Three numbered steps with the actual Safari glyphs are much
+    harder to misread — the share icon especially, which has no name most people would recognise.
+*@
+<div class="modal-backdrop centered blurred" @onclick="Close">
+    <div class="modal install-modal" @onclick:stopPropagation>
+        <div class="modal-head">
+            <MaterialIcon Name="add_to_home_screen" SizeCss="1.6em" />
+            <h3 style="margin:0;">@Loc["install.title"]</h3>
+        </div>
+        <div class="modal-body">
+            <p class="rt-ask-lead">@Loc["install.why"]</p>
+            <ol class="install-steps">
+                <li>
+                    <span class="is-icon"><MaterialIcon Name="ios_share" SizeCss="1.5em" /></span>
+                    <span>@Loc["install.step1"]</span>
+                </li>
+                <li>
+                    <span class="is-icon"><MaterialIcon Name="add_to_home_screen" SizeCss="1.5em" /></span>
+                    <span>@Loc["install.step2"]</span>
+                </li>
+                <li>
+                    <span class="is-icon"><MaterialIcon Name="notifications" SizeCss="1.5em" /></span>
+                    <span>@Loc["install.step3"]</span>
+                </li>
+            </ol>
+            <p class="faint" style="margin:.6rem 0 0;font-size:.78rem;">@Loc["install.note"]</p>
+        </div>
+        <div class="modal-actions">
+            <div class="spacer" style="flex:1"></div>
+            <button class="btn btn-gold" @onclick="Close">@Loc["common.close"]</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

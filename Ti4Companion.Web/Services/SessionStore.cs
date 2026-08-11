@@ -117,10 +117,9 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     public void ShowObjectivesTab() => OnShowObjectivesTab?.Invoke();
 
-    /// <summary>Host is steering other players' turns from this device (the action phase "take over"
-    /// toggle). Lives here rather than in the view so switching tabs — Phase → Players → Phase — doesn't
-    /// silently drop it, which meant re-tapping it constantly when one person runs the whole table.</summary>
-    public bool HostTakeover { get; set; }
+    // The action phase's "take over" toggle used to live here (so switching tabs wouldn't drop it). It is gone:
+    // the host can always act for whoever is up — which is what the server allowed all along — and jumping to
+    // another player is exactly what "previous turn"/"next turn" already do.
 
     /// <summary>This device asked to see the secondary-round popup although it is not addressed to it (the
     /// host opening it from the action view). Per device and not per component, because the popup lives in
@@ -200,6 +199,20 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public int ClearStageI => Session is null ? 0
         : Session.Objectives.Count(o => Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageI
                                         && o.MarkerRemoved && !o.Purged);
+
+    // --- Red Tape Lite's two questions ------------------------------------------------------------------
+    // Neither the purge nor the random removal happens on its own any more: the server proposes and the HOST
+    // answers (RedTapeModal). Both are irreversible and both change who can still win, which is why they are
+    // questions and not events.
+
+    /// <summary>Objectives the app is proposing to purge, waiting for the host's answer (empty = none). Only
+    /// what was already on the table when the fifth Stage I came clear is ever in here.</summary>
+    public IReadOnlyList<SessionObjectiveDto> RedTapePurgeProposal => Session is null
+        ? Array.Empty<SessionObjectiveDto>()
+        : Session.Objectives.Where(o => o.PurgePending).ToList();
+
+    /// <summary>A random removal is being asked about (nobody took the carrier card this round).</summary>
+    public bool RedTapeRandomAsking => Session?.RedTapeRandomPendingRound > 0;
 
     /// <summary>Whether this device may edit the given player: self always, the host may edit anyone,
     /// or anyone when the session has open editing enabled.</summary>
@@ -399,7 +412,6 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         _joinedCode = null;
         Session = null;
         MyPlayerId = null;
-        HostTakeover = false;
         Log = Array.Empty<SessionLogEntryDto>();
         await storage.RemoveAsync(KeyCode);
         await storage.RemoveAsync(KeyPlayer);

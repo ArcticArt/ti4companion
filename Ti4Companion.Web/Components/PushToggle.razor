@@ -22,6 +22,11 @@
         <span class="chip push-note" @onclick="() => note = null" title='@Loc["common.close"]'>@note</span>
     }
 }
+@* The iOS home-screen requirement is a three-step walk-through, not a sentence on a chip. *@
+@if (showInstall)
+{
+    <InstallHelpModal OnClose="() => showInstall = false" />
+}
 
 @code {
     // The public key can't change while the app runs, so ask once per app load.
@@ -33,6 +38,7 @@
     private string? note;
     private bool busy;
     private bool iosNotInstalled;
+    private bool showInstall;
 
     private string Title => on ? Loc["push.disable"] : Loc["push.enable"];
 
@@ -52,7 +58,33 @@
         iosNotInstalled = await Call<bool>("ti4.push.isApple") && !await Call<bool>("ti4.push.standalone");
         if (!iosNotInstalled && !await Call<bool>("ti4.push.supported")) return;   // browser can't do it at all
         show = true;
-        if (!iosNotInstalled) on = await Call<string?>("ti4.push.current") is not null;
+        if (!iosNotInstalled) await AdoptExistingAsync();
+    }
+
+    /// <summary>
+    /// Re-register a subscription this browser already has against the CURRENT session, on every app load.
+    ///
+    /// Two ways the bell used to read "on" while nothing was delivered, and both are silent:
+    /// the server keeps one row per push endpoint and it names a single session and player, so a device that
+    /// enabled notifications in one game and then joined another was still on file for the FIRST one; and a
+    /// row retired after a 404/410 (the browser threw its subscription away, e.g. the home-screen app was
+    /// reinstalled) is never revived, because the switch asks the BROWSER whether it has a subscription and
+    /// the browser happily says yes. Re-sending it heals both — the endpoint is the key, so this moves the row
+    /// to this session and clears the failure flag. Costs one request per load, and only when there is
+    /// something to re-register.
+    /// </summary>
+    private async Task AdoptExistingAsync()
+    {
+        var sub = await Call<PushResult?>("ti4.push.existing");
+        if (sub is null || string.IsNullOrEmpty(sub.Endpoint)) { on = false; return; }
+        on = true;
+        if (string.IsNullOrEmpty(sub.P256dh) || string.IsNullOrEmpty(sub.Auth)) return;   // nothing to send
+        try
+        {
+            await Store.Api.SubscribePushAsync(Store.Session!.Id,
+                new PushSubscribeRequest(sub.Endpoint!, sub.P256dh!, sub.Auth!));
+        }
+        catch { /* the bell is not worth a visible error; the next load tries again */ }
     }
 
     private async Task Toggle()
@@ -70,10 +102,10 @@
                 return;
             }
 
-            // iOS refuses outside an installed PWA, and the failure is silent — say so before asking.
+            // iOS refuses outside an installed PWA, and the failure is silent — show the how-to before asking.
             if (iosNotInstalled)
             {
-                note = Loc["push.iosHint"];
+                showInstall = true;
                 return;
             }
 

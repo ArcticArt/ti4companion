@@ -14,12 +14,15 @@
             <button class="btn btn-sm btn-ghost" @onclick="Close" title='@Loc["common.close"]'>✕</button>
         </div>
 
-        <div class="tabs" style="margin:.4rem 0 .6rem;">
-            <div class="tab @(tab == 0 ? "active" : "")" @onclick="() => tab = 0">@Loc["stats.tabStats"]</div>
-            <div class="tab @(tab == 1 ? "active" : "")" @onclick="() => tab = 1">@Loc["stats.tabLog"]</div>
+        @* Buttons, not divs — see the note on the session tab strip. *@
+        <div class="tabs" role="tablist" style="margin:.4rem 0 .6rem;">
+            <button type="button" class="tab @(tab == 0 ? "active" : "")" role="tab" id="statstab-0"
+                    aria-selected="@(tab == 0 ? "true" : "false")" @onclick="() => tab = 0">@Loc["stats.tabStats"]</button>
+            <button type="button" class="tab @(tab == 1 ? "active" : "")" role="tab" id="statstab-1"
+                    aria-selected="@(tab == 1 ? "true" : "false")" @onclick="() => tab = 1">@Loc["stats.tabLog"]</button>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-body" role="tabpanel" aria-labelledby="@($"statstab-{tab}")">
             @if (loading)
             {
                 <p class="faint">@Loc["common.loading"]</p>

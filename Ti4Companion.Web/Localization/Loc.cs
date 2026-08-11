@@ -119,8 +119,6 @@ public class Loc
         ["turn.strategyAction"] = ("Strategy action", "Strategieaktion"),
         ["turn.notDone"] = ("Not done", "Nicht ausgeführt"),
         ["turn.endHighlight"] = ("End highlight", "Hervorhebung beenden"),
-        ["turn.takeOver"] = ("Take over", "Übernehmen"),
-        ["turn.takeOverEnd"] = ("End takeover", "Übernahme beenden"),
         ["turn.endGame"] = ("End game", "Spiel beenden"),
         // Host-only game options (setup).
         ["options.title"] = ("Game options", "Spieloptionen"),
@@ -153,6 +151,10 @@ public class Loc
         ["redtape.cardHint"] = (
             "Replace either — but not both — Diplomacy or Imperial with the matching Bureaucracy card. Everything else on it stays the printed card.",
             "Ersetze entweder Diplomatie oder Imperium — nicht beide — durch die passende Bürokratie-Karte. Alles andere darauf bleibt die gedruckte Karte."),
+        // Lite replaces no card, so there is nothing to choose: it is published for Diplomacy.
+        ["redtape.cardLiteHint"] = (
+            "Red Tape Lite replaces no card — the ability sits on Diplomacy as printed, so there is nothing to choose.",
+            "Red Tape Lite ersetzt keine Karte — die Fähigkeit liegt auf der gedruckten Diplomatie, also gibt es nichts zu wählen."),
         // The addition the variant prints on the carrier card, shown above its base text (see StrategyCardView).
         ["redtape.cardLabel"] = ("Red Tape", "Red Tape"),
         ["redtape.cardSpecial"] = (
@@ -177,22 +179,65 @@ public class Loc
         ["redtape.actionLite"] = (
             "Remove one tape of your choice — no Stage II until the five scorable Stage I are clear. No random removal this round.",
             "Entferne ein Band nach Wahl — kein Stufe II, solange die fünf wertbaren Stufe-I-Aufträge nicht frei sind. Diese Runde fällt die Zufallsentnahme weg."),
-        ["redtape.openObjectives"] = ("Open objectives", "Aufträge öffnen"),
         ["redtape.randomHint"] = (
-            "Nobody took the card this round, so one tape comes off at random — the app does it right after the strategy phase in round 1, and when the status phase ends after that.",
-            "Diese Runde hat niemand die Karte genommen, also geht ein zufälliges Band ab — die App macht das in Runde 1 direkt nach der Strategiephase, danach jeweils am Ende der Statusphase."),
-        // Why a tape cannot be pulled right now (the server refuses the same, see RedTape).
+            "Nobody took the card this round, so one tape comes off at random — the app asks the host about it right after the strategy phase in round 1, and when the status phase ends after that.",
+            "Diese Runde hat niemand die Karte genommen, also geht ein zufälliges Band ab — die App fragt den Host in Runde 1 direkt nach der Strategiephase danach, später jeweils am Ende der Statusphase."),
+        // Red Tape Lite's two questions. The app proposes, the host answers — see RedTapeModal for why
+        // neither of them happens on its own any more.
+        ["redtape.randomAsk"] = ("Remove a tape at random?", "Band zufällig entfernen?"),
+        ["redtape.randomAskBody"] = (
+            "Nobody took {0} this round, so the variant takes one tape off at random instead of letting anybody choose.",
+            "Diese Runde hat niemand {0} genommen, also nimmt die Variante ein zufälliges Band ab, statt jemanden wählen zu lassen."),
+        ["redtape.randomAskWarn"] = (
+            "The app picks one of the tapes it would be allowed to pull. Nothing happens until you say so.",
+            "Die App wählt eines der Bänder, die sie abnehmen darf. Bis du zustimmst, passiert nichts."),
+        ["redtape.randomYes"] = ("Remove one at random", "Zufällig entfernen"),
+        ["redtape.randomNo"] = ("Not this round", "Diese Runde nicht"),
+        ["redtape.purgeAsk"] = ("Take the rest out of the game?", "Die übrigen aus dem Spiel nehmen?"),
+        ["redtape.purgeAskBody"] = (
+            "{0} Stage I objectives are clear, so under Red Tape Lite only those can ever score. These are still taped:",
+            "{0} Stufe-I-Aufträge sind frei, also können bei Red Tape Lite nur diese je punkten. Diese sind noch versiegelt:"),
+        ["redtape.purgeAskWarn"] = (
+            "Taken out, they can never be scored and their tape never comes off. This cannot be undone — leaving them in is a perfectly good answer.",
+            "Herausgenommen können sie nie mehr gewertet werden und ihr Band geht nie mehr ab. Das lässt sich nicht zurücknehmen — sie drin zu lassen ist eine völlig gute Antwort."),
+        ["redtape.purgeYes"] = ("Take them out of the game", "Aus dem Spiel nehmen"),
+        ["redtape.purgeNo"] = ("Leave them in", "Drin lassen"),
+        // Why a tape cannot be pulled right now (the server refuses the same, see RedTape). The `*Long` forms
+        // are the same rule as a sentence, for the dialog that offers to overrule it.
         ["redtape.purged"] = ("PURGED — CAN NEVER BE SCORED", "ENTFERNT — NICHT MEHR WERTBAR"),
         ["redtape.lockedRounds"] = ("STAGE II — LOCKED FOR THE FIRST 3 ROUNDS", "STUFE II — DIE ERSTEN 3 RUNDEN GESPERRT"),
+        ["redtape.lockedRoundsLong"] = (
+            "Bureaucracy seals the Stage II objectives for the first three rounds — this one cannot be scored until round 4.",
+            "Bürokratie hält die Stufe-II-Aufträge die ersten drei Runden versiegelt — dieser ist erst ab Runde 4 wertbar."),
         ["redtape.lockedStageI"] = ("STAGE II — NOT UNTIL 5 STAGE I ARE CLEAR", "STUFE II — ERST WENN 5 STUFE-I-AUFTRÄGE FREI SIND"),
+        ["redtape.lockedStageILong"] = (
+            "Red Tape Lite keeps Stage II sealed until the five scorable Stage I objectives are clear.",
+            "Red Tape Lite hält Stufe II versiegelt, bis die fünf wertbaren Stufe-I-Aufträge frei sind."),
+        // What the wall shows on a taped objective: the STATE, nothing else. The rule and the action belong on
+        // a device somebody can act on.
+        ["redtape.sealed"] = ("SEALED", "VERSIEGELT"),
+        // Tapping a tape a timing rule holds shut: which rule, and the option to overrule it anyway.
+        ["redtape.lockedAskTitle"] = ("This objective is sealed", "Dieser Auftrag ist versiegelt"),
+        ["redtape.lockedAskWarn"] = (
+            "You can take the tape off anyway — it is your table's game. The match log records that the rule was overruled.",
+            "Du kannst das Band trotzdem abnehmen — es ist euer Spiel. Im Protokoll steht, dass die Regel übergangen wurde."),
+        ["redtape.removeAnyway"] = ("Remove it anyway", "Trotzdem entfernen"),
+        ["redtape.leaveSealed"] = ("Leave it sealed", "Versiegelt lassen"),
+        // The carrier card's own ability: "remove a marker of your choice".
+        ["redtape.pickTitle"] = ("Remove a marker", "Marker entfernen"),
+        ["redtape.pickHint"] = ("Pick the objective whose tape comes off.", "Wähle den Auftrag, dessen Band abgeht."),
+        ["redtape.pickNone"] = ("No tape can come off right now.", "Gerade kann kein Band abgenommen werden."),
         ["redtape.takeOff"] = ("Tap the tape to remove it", "Zum Entfernen auf das Band tippen"),
-        // The tape is the only label — a separate "SEALED" chip said the same thing twice.
-        ["redtape.blocked"] = ("SEALED — TAP THE TAPE", "VERSIEGELT — AUF DAS BAND TIPPEN"),
+        // The tape is the only label — a separate "SEALED" chip said the same thing twice, which is also
+        // why this string is the ACTION and not the state: it is only ever shown where the tape really can
+        // be tapped. The wall renders the band with no text at all (see ObjectiveDisplayCard).
+        ["redtape.tapToRemove"] = ("TAP THE TAPE", "AUF DAS BAND TIPPEN"),
         ["redtape.confirmRemove"] = ("TAP AGAIN TO REMOVE", "NOCHMAL TIPPEN ZUM ENTFERNEN"),
-        ["redtape.putBack"] = ("Put the tape back", "Band zurücklegen"),
+        ["redtape.seal"] = ("Seal", "Versiegeln"),
         // Optional technology prompt after the Technology strategy action.
-        ["tech.promptOption"] = ("Ask for the technology after the Technology action",
-                                 "Nach der Technologie-Aktion zur Techeingabe auffordern"),
+        ["tech.promptTitle"] = ("Technology action", "Technologie-Aktion"),
+        ["tech.promptOption"] = ("Ask for the technology afterwards",
+                                 "Danach zur Techeingabe auffordern"),
         ["tech.promptHint"] = (
             "Shows a shortcut to the technology tab after that action is played. A reminder, not a requirement.",
             "Zeigt nach dieser Aktion eine Verknüpfung zum Technologie-Reiter. Eine Erinnerung, keine Pflicht."),
@@ -244,26 +289,27 @@ public class Loc
         ["setup.startHint"] = ("The host starts the game once everyone is ready.", "Der Host startet das Spiel, sobald alle bereit sind."),
         ["setup.searchFaction"] = ("Search faction…", "Fraktion suchen…"),
         ["setup.needFactionColor"] = ("Choose a faction and a colour to ready up.", "Wähle Fraktion und Farbe, um bereit zu sein."),
-        // The speaker is picked in the seat dialog (and is not required to start) — see PhaseView.
+        // The speaker is settled on the SEATING step — it decides who picks first, so it belongs with the
+        // order around the table, and the step will not let the host past without one.
         ["setup.speakerLbl"] = ("Speaker set — tap a row to change it.", "Sprecher festgelegt — zum Ändern eine Zeile antippen."),
-        ["setup.noSpeakerYet"] = ("No speaker yet — tap a row, or roll for it.", "Noch kein Sprecher — Zeile antippen oder auslosen."),
-        ["setup.randomSpeaker"] = ("Pick at random", "Zufällig wählen"),
-        // Seat-order confirmation dialog shown before the game actually starts.
-        ["setup.confirmSeatTitle"] = ("Is the seating order right?", "Passt die Sitzreihenfolge?"),
-        ["setup.confirmSeatHint"] = (
-            "This is the order around the table (speaker marked). You can change it with the ▲▼ arrows in the player list.",
-            "So sitzt ihr am Tisch (Sprecher markiert). Ändern kannst du die Reihenfolge mit den ▲▼-Pfeilen in der Spielerliste."),
+        ["setup.noSpeakerYet"] = ("No speaker yet — use \"Make speaker\", or roll for it.",
+                                  "Noch kein Sprecher — „Sprecher machen\" nutzen oder auslosen."),
+        ["setup.randomSpeaker"] = ("Randomly assign speaker", "Sprecher auslosen"),
+        ["setup.needSpeaker"] = ("Pick a speaker to carry on — they decide who picks a strategy card first.",
+                                 "Wähle einen Sprecher, um weiterzukommen — er entscheidet, wer zuerst eine Strategiekarte nimmt."),
+        // The "is the seating order right?" dialog is gone — the seating step IS that question, and the host
+        // cannot reach "start" without passing it, so its title/confirm strings went with it.
         ["setup.confirmSeatDragHint"] = (
-            "Drag a row by its handle to change the order, or use the arrows. The speaker is marked.",
-            "Zeile am Griff ziehen, um die Reihenfolge zu ändern — oder die Pfeile nutzen. Der Sprecher ist markiert."),
+            "Drag a row by its handle to change the order, or use the arrows.",
+            "Zeile am Griff ziehen, um die Reihenfolge zu ändern — oder die Pfeile nutzen."),
         ["setup.dragSeat"] = ("Drag to reorder", "Ziehen zum Umsortieren"),
-        ["setup.confirmSeatOk"] = ("Looks good — start", "Passt — Spiel starten"),
-        ["setup.confirmSeatChange"] = ("Change it", "Noch ändern"),
         ["setup.maxPlayers"] = ("Maximum of 8 players reached.", "Maximal 8 Spieler erreicht."),
         ["setup.deselectColor"] = ("Click to deselect (frees the colour)", "Klicken zum Abwählen (gibt die Farbe frei)"),
         ["setup.seatOrder"] = ("Seat order", "Sitzreihenfolge"),
         ["setup.speaker"] = ("Speaker", "Sprecher"),
-        ["setup.makeSpeaker"] = ("Speaker", "Sprecher"),
+        // The verb, not the noun: it is a button that DOES something, and it reads the same in the seating
+        // step and the Players tab so the two are recognisably the same control.
+        ["setup.makeSpeaker"] = ("Make speaker", "Sprecher machen"),
         ["setup.moveUp"] = ("Move up", "Nach oben"),
         ["setup.moveDown"] = ("Move down", "Nach unten"),
         ["setup.objectives"] = ("Starting objectives", "Anfangsaufträge"),
@@ -272,8 +318,8 @@ public class Loc
             "Red Tape: record every public objective you laid out — the first two Stage I are open, the rest come up taped.",
             "Red Tape: Trage alle ausgelegten öffentlichen Aufträge ein — die ersten zwei Stufe-I-Aufträge liegen frei, der Rest kommt versiegelt."),
         // Setup runs as steps (host view). Non-hosts always see the player step — see SetupView.
-        ["setup.step.name"] = ("Session", "Session"),
-        ["setup.step.options"] = ("Variant & options", "Variante & Optionen"),
+        // Name + options share one step ("what game is this"), so there is one key for it now.
+        ["setup.step.session"] = ("Session & options", "Session & Optionen"),
         ["setup.step.players"] = ("Players", "Spieler"),
         ["setup.step.seating"] = ("Seating", "Sitzordnung"),
         ["setup.step.objectives"] = ("Objectives", "Aufträge"),
@@ -281,8 +327,8 @@ public class Loc
                               "Wie heißt diese Partie? Der Name steht auf der Wandanzeige."),
         ["setup.expansionsHint"] = ("Decides which factions, technologies and cards the app offers. The base game is always in.",
                                     "Bestimmt, welche Fraktionen, Technologien und Karten die App anbietet. Das Grundspiel ist immer dabei."),
-        ["setup.seatingHint"] = ("Drag by the handle or use the arrows, and tap a row to make that player speaker.",
-                                 "Am Griff ziehen oder die Pfeile nutzen; für den Sprecher eine Zeile antippen."),
+        ["setup.seatingHint"] = ("Drag by the handle or use the arrows. Then say who the speaker is — or roll for it.",
+                                 "Am Griff ziehen oder die Pfeile nutzen. Dann den Sprecher festlegen — oder auslosen."),
         ["host.only"] = ("Host", "Host"),
         ["host.onlyHint"] = ("Only the host controls the phases.", "Nur der Host steuert die Phasen."),
         ["host.takeOver"] = ("Play for this player", "Für diesen Spieler spielen"),
@@ -485,9 +531,15 @@ public class Loc
         ["players.faction"] = ("Faction", "Fraktion"),
         ["players.color"] = ("Color", "Farbe"),
         ["players.name"] = ("Name", "Name"),
-        ["players.remove"] = ("Remove", "Entfernen"),
+        ["players.remove"] = ("Remove player", "Spieler entfernen"),
+        // Removing takes the player's scores and technologies with them, so it asks twice.
+        ["players.removeConfirm"] = ("Tap again to remove", "Nochmal tippen zum Entfernen"),
+        ["players.removeWarn"] = ("Their scores and technologies go too.", "Ihre Wertungen und Technologien gehen mit."),
         ["players.speaker"] = ("Speaker", "Sprecher"),
-        ["players.makeSpeaker"] = ("Make speaker", "Zum Sprecher"),
+        // Same wording as the seating step, because it is the same control.
+        ["players.makeSpeaker"] = ("Make speaker", "Sprecher machen"),
+        // Everything editable about one player, in a popup (name, faction, colour, removal).
+        ["players.edit"] = ("Edit player", "Spieler bearbeiten"),
         ["players.you"] = ("You", "Du"),
         ["players.add"] = ("Add player", "Spieler hinzufügen"),
         ["players.chooseFaction"] = ("Choose faction…", "Fraktion wählen…"),
@@ -520,6 +572,13 @@ public class Loc
         ["tech.pickColor"] = ("Pick a colour to browse, or search — then click a card to add it", "Farbe wählen oder suchen — dann Karte anklicken zum Hinzufügen"),
         ["tech.allFactions"] = ("All faction techs", "Alle Fraktionstechs"),
         ["tech.owned"] = ("Owned", "Im Besitz"),
+        // Recording a technology as a popup (TechPickModal) — where the action was played, not a tab away.
+        ["tech.pickTitle"] = ("Record technology", "Technologie erfassen"),
+        ["tech.pickHint"] = ("Pick a colour, or search — then click a card to take it.",
+                            "Farbe wählen oder suchen — dann eine Karte anklicken."),
+        ["tech.pickOwned"] = ("{0} researched", "{0} erforscht"),
+        ["tech.pickClockStopped"] = ("your clock is stopped", "deine Uhr steht"),
+        ["tech.noneFound"] = ("Nothing matches.", "Keine Treffer."),
         ["color.Biotic"] = ("Biotic", "Biotisch"),
         ["color.Cybernetic"] = ("Cybernetic", "Kybernetisch"),
         ["color.Propulsion"] = ("Propulsion", "Antrieb"),
@@ -548,6 +607,7 @@ public class Loc
 
         ["common.save"] = ("Save", "Speichern"),
         ["common.cancel"] = ("Cancel", "Abbrechen"),
+        ["common.done"] = ("Done", "Fertig"),
         ["common.close"] = ("Close", "Schließen"),
         ["common.back"] = ("Back", "Zurück"),
         // Secondary abilities of a strategy action (only with the turn timer in use).
@@ -558,6 +618,16 @@ public class Loc
         ["politics.waitingFor"] = ("{0} is appointing the new speaker.", "{0} bestimmt den neuen Sprecher."),
         ["imperial.promptText"] = ("Imperial: you may score a public objective.", "Imperium: du darfst einen öffentlichen Auftrag werten."),
         ["imperial.promptOpen"] = ("Open objectives", "Aufträge öffnen"),
+        // The table option. Its own switch, but only usable with the turn timer on — the round exists to
+        // separate time spent on a secondary from time on turn, and there is no clock to separate without it.
+        ["secondary.optionTitle"] = ("Secondary abilities", "Sekundärfähigkeiten"),
+        ["secondary.optionLabel"] = ("Track who is taking a secondary", "Mitverfolgen, wer eine Sekundärfähigkeit nimmt"),
+        ["secondary.optionHint"] = (
+            "After a strategy action, everyone taking the secondary gets their own clock and ticks themselves off when done — so deciding on a secondary is not counted as the next player's turn.",
+            "Nach einer Strategieaktion bekommt jeder, der die Sekundärfähigkeit nimmt, eine eigene Uhr und hakt sich ab, wenn er fertig ist — so zählt das Überlegen nicht als Zug des nächsten Spielers."),
+        ["secondary.optionNeedsTimer"] = (
+            "Needs the turn timer: without a clock there is nothing to keep apart.",
+            "Braucht den Zug-Timer: ohne Uhr gibt es nichts auseinanderzuhalten."),
         ["secondary.title"] = ("Secondary ability", "Sekundärfähigkeit"),
         ["secondary.playedBy"] = ("played by {0}", "gespielt von {0}"),
         ["secondary.modalHint"] = (
@@ -571,6 +641,8 @@ public class Loc
         ["secondary.open"] = ("Open", "Öffnen"),
         // Combat: the app only tracks that one is running (the wall shows the two sides, the clock stops).
         ["combat.title"] = ("Combat", "Kampf"),
+        // Offered as a button on the player card; the opponent is chosen in a popup.
+        ["combat.declare"] = ("Combat", "Kampf"),
         ["combat.hint"] = ("Pick your opponent — the wall shows both sides, and the turn clock stops until it is over.",
                            "Gegner wählen — die Wand zeigt beide Seiten, und die Zuguhr steht, bis der Kampf vorbei ist."),
         ["combat.running"] = ("Combat", "Kampf"),
@@ -591,9 +663,21 @@ public class Loc
         // "You're up" notification (per device).
         ["push.enable"] = ("Notify me when it's my turn", "Benachrichtige mich, wenn ich dran bin"),
         ["push.disable"] = ("Turn the notification off", "Benachrichtigung ausschalten"),
-        ["push.iosHint"] = (
-            "On iPhone and iPad this only works once the page is on the home screen: Share → Add to Home Screen, then open it from there.",
-            "Auf iPhone und iPad geht das erst, wenn die Seite auf dem Home-Bildschirm liegt: Teilen → Zum Home-Bildschirm, dann von dort öffnen."),
+        // The iOS home-screen requirement, walked through with the actual Safari glyphs (InstallHelpModal) —
+        // it used to be this much instruction crammed onto a chip next to the bell.
+        ["install.title"] = ("Add to the home screen", "Zum Home-Bildschirm hinzufügen"),
+        ["install.why"] = (
+            "On iPhone and iPad, notifications only exist for an app that lives on the home screen — Apple allows them nowhere else. It takes three taps:",
+            "Auf iPhone und iPad gibt es Benachrichtigungen nur für eine App, die auf dem Home-Bildschirm liegt — Apple erlaubt sie sonst nicht. Das sind drei Tipps:"),
+        ["install.step1"] = ("In Safari, tap the share button in the toolbar.",
+                            "In Safari auf das Teilen-Symbol in der Leiste tippen."),
+        ["install.step2"] = ("Choose \"Add to Home Screen\" and confirm.",
+                            "„Zum Home-Bildschirm“ wählen und bestätigen."),
+        ["install.step3"] = ("Open the app from the home screen, then switch the bell on there.",
+                            "Die App vom Home-Bildschirm öffnen und dort die Glocke einschalten."),
+        ["install.note"] = (
+            "The home-screen app is the same session — your seat and the join code are still there.",
+            "Die App vom Home-Bildschirm ist dieselbe Session — dein Platz und der Beitritts-Code sind weiterhin da."),
         ["push.blocked"] = ("Notifications are blocked for this site in the browser settings.",
                            "Benachrichtigungen sind für diese Seite in den Browsereinstellungen gesperrt."),
         ["push.failed"] = ("The notification could not be set up.", "Die Benachrichtigung konnte nicht eingerichtet werden."),

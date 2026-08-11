@@ -50,10 +50,17 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1:focus { outline: none; }
 
-/* ---- App bar ---- */
+/* ---- App bar ----
+   ⚠️ The safe-area padding is NOT cosmetic. `index.html` asks for `viewport-fit=cover` and an
+   `apple-mobile-web-app-status-bar-style: black-translucent`, which together put the page UNDER the notch and
+   the carrier bar — that is the point of an installed app, but it means every inset has to be paid back by
+   hand, and nothing in this stylesheet did. On an iPhone the round/phase/code and the buttons next to them sat
+   behind the clock and the battery. `env()` is 0 everywhere else, so this costs nothing on a desktop.
+   The left/right insets matter in LANDSCAPE, where the notch takes a side instead of the top. */
 .appbar {
     display: flex; align-items: center; gap: .5rem .8rem; flex-wrap: wrap;
-    padding: .5rem 1rem;
+    padding: calc(.5rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+             .5rem calc(1rem + env(safe-area-inset-left));
     background: linear-gradient(180deg, rgba(20,30,60,.9), rgba(10,16,34,.85));
     border-bottom: 1px solid var(--panel-border);
     position: sticky; top: 0; z-index: 50;
@@ -87,7 +94,10 @@ h1:focus { outline: none; }
 .pause-box .pause-title { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.6rem; color: var(--gold); }
 .btn-lg { font-size: 1.1rem; padding: .7rem 1.4rem; }
 
-.container { max-width: 1180px; margin: 0 auto; padding: 1rem; }
+/* Same reason as the app bar: with `viewport-fit=cover` the page runs edge to edge, so the sides and the
+   bottom (home indicator) have to be paid back. Zero on every device without insets. */
+.container { max-width: 1180px; margin: 0 auto;
+    padding: 1rem calc(1rem + env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left)); }
 .content { padding-top: 1rem; }
 /* Start page: vertically centre the create/join panel in the leftover height (footer stays pinned). */
 .content:has(> .home-view) { display: flex; flex-direction: column; }
@@ -143,9 +153,13 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .tabs { display: flex; flex-wrap: nowrap; gap: .25rem; border-bottom: 1px solid var(--panel-border); margin-bottom: 1rem; }
 /* Fill the full available width (each tab shares it equally); the label scales down with the viewport
    and ellipsises so all tabs fit a phone on one row. */
+/* A tab is a real <button> (keyboard-reachable, and it says what it is in the a11y tree), so the browser's
+   own button look has to be undone: background, font and the focus ring's default offset. */
 .tab { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
     padding: .5rem .45rem; border: 1px solid transparent; border-bottom: none; border-radius: 9px 9px 0 0;
-    cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: clamp(.72rem, 2.9vw, .95rem); }
+    cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: clamp(.72rem, 2.9vw, .95rem);
+    appearance: none; background: none; font-family: inherit; line-height: inherit; }
+.tab:focus-visible { outline: 2px solid var(--gold-dim); outline-offset: -2px; }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--panel); border-color: var(--panel-border); color: var(--gold); }
 
@@ -226,13 +240,52 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .picker-banner .pb-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.3rem; }
 
 /* Host game options (setup): label, control, and a wrapping hint that never squeezes the select. */
-.game-option { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .7rem; }
+/* A setup option is a GRID, not a flex row: label column, control column, hint underneath. Flex let every
+   control start wherever its own label happened to end, so no two selects lined up — with a fixed label
+   column they share one edge however long the labels get. The label carries the weight (it is the question);
+   the hint is the small print below both. */
+.game-option { display: grid; grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr);
+    align-items: center; gap: .35rem .9rem; margin-bottom: 1rem; }
 .game-option:last-child { margin-bottom: 0; }
-.game-option label { font-size: .82rem; color: var(--text-faint); }
-.game-option select { max-width: 22rem; }
-.game-option .go-hint { flex: 1 1 16rem; font-size: .74rem; line-height: 1.35; }
-.game-option .go-check { display: flex; align-items: center; gap: .4rem; cursor: pointer; color: var(--text); font-size: .85rem; }
-.game-option .go-check input { accent-color: var(--gold); cursor: pointer; }
+.game-option > label { font-size: .95rem; font-weight: 600; color: var(--text); line-height: 1.25; }
+.game-option select, .game-option input[type=text] { width: 100%; max-width: 22rem; }
+/* The hint sits under the control, aligned with it rather than with the label. */
+.game-option .go-hint { grid-column: 2; font-size: .76rem; line-height: 1.4; }
+.game-option .go-fixed { color: var(--text); font-size: .9rem; }
+.game-option .go-checks { display: flex; flex-wrap: wrap; gap: .35rem .9rem; }
+@media (max-width: 560px) {
+    /* One column on a phone: a 9rem label column next to a select leaves the select unusably narrow. */
+    .game-option { grid-template-columns: 1fr; }
+    .game-option .go-hint { grid-column: 1; }
+}
+
+/* Checkbox / radio that matches the rest of the app instead of the browser's own. The native input stays in
+   the DOM (it is what carries the state, the keyboard and the a11y tree) and is only visually replaced by
+   `.oc-box`, so focus and Space keep working. Expansions, the tech prompt and the Red Tape card all use it —
+   they were three different-looking controls for the same kind of choice. */
+.opt-check { position: relative; display: inline-flex; align-items: center; gap: .45rem; cursor: pointer;
+    padding: .3rem .55rem .3rem .35rem; border: 1px solid var(--panel-border); border-radius: 8px;
+    background: var(--panel-2, rgba(255,255,255,.02)); color: var(--text); font-size: .86rem; user-select: none; }
+.opt-check:hover { border-color: var(--gold-dim); }
+.opt-check input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.opt-check .oc-box { flex: 0 0 auto; width: 1.05rem; height: 1.05rem; border: 1px solid var(--text-faint);
+    border-radius: 4px; background: rgba(0,0,0,.25); position: relative; transition: background .12s, border-color .12s; }
+.opt-check .oc-box.oc-radio { border-radius: 50%; }
+/* The tick is drawn, not a glyph: a font's checkmark sits differently in every font stack. */
+.opt-check .oc-box::after { content: ""; position: absolute; opacity: 0;
+    left: 50%; top: 46%; width: .3rem; height: .58rem; margin-left: -.16rem; margin-top: -.34rem;
+    border-right: 2px solid #0b1020; border-bottom: 2px solid #0b1020; transform: rotate(40deg); }
+.opt-check .oc-box.oc-radio::after { left: 50%; top: 50%; width: .45rem; height: .45rem; margin: -.225rem 0 0 -.225rem;
+    border: none; border-radius: 50%; background: #0b1020; transform: none; }
+.opt-check input:checked ~ .oc-box { background: var(--gold); border-color: var(--gold); }
+.opt-check input:checked ~ .oc-box::after { opacity: 1; }
+.opt-check input:focus-visible ~ .oc-box { outline: 2px solid var(--gold-dim); outline-offset: 2px; }
+.opt-check.is-disabled, .opt-check input:disabled { cursor: default; }
+.opt-check.is-disabled { opacity: .5; }
+.opt-check.is-disabled:hover { border-color: var(--panel-border); }
+/* Base game: on, and not up for discussion — shown so the set reads complete. */
+.opt-check.is-fixed { opacity: .75; cursor: default; }
+.opt-check.is-fixed:hover { border-color: var(--panel-border); }
 
 /* (Red Tape styling lives with the objective cards further down — see `.rt-tape`. It used to be duplicated
    here, which is exactly the same-specificity collision this file has been bitten by before.) */
@@ -313,7 +366,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .fp-item.sel .fp-name { color: var(--text); }
 
 /* join identity: pick which player to take over (or create new) */
-.join-players { display: flex; flex-direction: column; gap: .4rem; margin: .3rem 0; max-height: 46vh; overflow: auto; }
+/* The 2px padding is not decoration: the rows lift by 1px on hover, and `overflow: auto` clips at the PADDING
+   box — without it the hovered row's top border was cut off. */
+.join-players { display: flex; flex-direction: column; gap: .4rem; margin: .3rem 0; padding: 2px; max-height: 46vh; overflow: auto; }
 .join-player { display: flex; align-items: center; gap: .6rem; text-align: left; width: 100%; padding: .5rem .7rem; border-radius: 10px;
     border: 1px solid var(--panel-border); background: var(--panel-2); color: var(--text); cursor: pointer; font: inherit; transition: .12s ease; }
 .join-player:hover:not(:disabled) { border-color: var(--gold-dim); transform: translateY(-1px); }
@@ -360,11 +415,18 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
     border-top: 1px solid rgba(0,0,0,.5); border-bottom: 1px solid rgba(0,0,0,.5); }
 /* As a <span> (the wall) it is display only; as a <button> it can be pulled off. */
 span.rt-tape { pointer-events: none; }
+/* The wall's band carries no text (nobody can tap a projected screen), so it needs its own height —
+   without this the padding alone leaves a thread instead of a band. */
+.rt-tape.bare { min-height: 1.15rem; }
+.beamer .rt-tape.bare { min-height: clamp(1.15rem, 2vh, 2rem); }
 button.rt-tape { cursor: pointer; z-index: 2; }
 button.rt-tape:hover { filter: brightness(1.15); }
-/* Locked by a variant rule (purged, or Stage II too early): darker, and not a control. */
-.rt-tape.locked { pointer-events: none;
-    background: repeating-linear-gradient(135deg, #7a1c16 0 12px, #1a0605 12px 24px); color: #f3cfcb; }
+/* Locked by a variant rule: darker. As a <span> (purged, and the wall) it is display only; as a <button> it
+   is tappable on purpose — it explains WHICH rule and offers to overrule it. */
+.rt-tape.locked { background: repeating-linear-gradient(135deg, #7a1c16 0 12px, #1a0605 12px 24px); color: #f3cfcb; }
+span.rt-tape.locked { pointer-events: none; }
+button.rt-tape.locked { cursor: help; }
+button.rt-tape.locked:hover { filter: brightness(1.25); }
 /* A purged objective is out of the game: dimmed, and its points stay hidden. */
 .obj-card.purged { opacity: .55; filter: grayscale(.5); }
 .obj-card.purged .obj-name { text-decoration: line-through; }
@@ -374,6 +436,9 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 /* Taped = the points are covered, exactly as the marker sits on the physical card (the requirement text
    stays readable on purpose — planning ahead is the whole point of the variant). */
 .obj-vp.taped { color: #f1a3ae; border-color: #6b2a35; box-shadow: none; }
+/* The icon that stands in for the hidden value: an eye with a slash, because a "?" reads as "we don't know"
+   and the point is that the number exists and is not to be seen yet. */
+.obj-vp .obj-vp-icon { display: block; opacity: .85; }
 /* The addition the variant prints on the carrier strategy card, above its base text. */
 .ability-label.rt { color: #f1a3ae; }
 .ability-bullets.rt-bullets li { color: var(--text-dim); }
@@ -1028,14 +1093,27 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 /* ===================================================================
    Modal overlay (match statistics / log)
    =================================================================== */
-.modal-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(4, 8, 18, .66); display: flex; align-items: flex-start; justify-content: center; padding: 4vh 1rem; overflow: auto; }
+/* The insets keep a dialog's buttons off the home indicator and out from under the notch — a full-screen
+   overlay is exactly where "edge to edge" bites, because it has no parent padding to inherit. */
+.modal-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(4, 8, 18, .66); display: flex; align-items: flex-start; justify-content: center; overflow: auto;
+    padding: calc(4vh + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+             calc(4vh + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left)); }
 /* `height: auto` is NOT redundant — the same bootstrap.min.css `.modal` collision as the positioning below:
    bootstrap sets `height: 100%`, app.css overrode width/display but never height, so with `max-height: 90vh`
    every dialog was exactly 90vh tall no matter how little was in it (a three-row seat dialog measured 648px
    in an 800px window). Content height, capped at 90vh. */
 .modal { width: 100%; height: auto; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--shadow); padding: 1rem; }
-.modal-head { display: flex; align-items: center; gap: .5rem; }
+.modal-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .modal-body { overflow: auto; min-height: 0; }
+/* The row of answers at the bottom. It only ever worked by accident before (inline-block buttons happening to
+   sit next to each other); a dialog that asks something needs its buttons laid out on purpose. On a phone they
+   go full width and stack, so neither answer is a small target next to a big one. */
+.modal-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: .9rem; }
+@media (max-width: 480px) {
+    .modal-actions { flex-direction: column; align-items: stretch; }
+    .modal-actions .btn { width: 100%; justify-content: center; }
+    .modal-actions .spacer { display: none; }
+}
 /* Centred dialog with the rest of the page blurred behind it.
    `margin:auto` on the box rather than `align-items:center`: a flex item taller than the container gets
    its top cut off (and becomes unscrollable) with align-items, while auto margins centre it and still
@@ -1065,10 +1143,23 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 .seat-confirm-row.dragging .seat-grip { cursor: grabbing; color: var(--gold); }
 .seat-arrows { display: flex; flex-direction: column; gap: .1rem; flex: 0 0 auto; }
 .seat-arrows .btn { padding: 0 .35rem; line-height: 1.15; font-size: .7rem; }
-/* Speaker per row: the same slot whether or not this player holds the token, so the rows stay aligned. */
-.seat-speaker { flex: 0 0 auto; min-width: 2.2rem; display: inline-flex; align-items: center; justify-content: center;
-    padding: .1rem .3rem; line-height: 1; }
-.seat-speaker .ss-dash { color: var(--text-faint); }
+/* Speaker per row: the same slot whether or not this player holds the token, so the rows stay aligned. The
+   button names the ACTION until the token is there — a column of dashes said nothing about what a tap does. */
+.seat-speaker { flex: 0 0 auto; min-width: 7.5rem; display: inline-flex; align-items: center; justify-content: center;
+    padding: .18rem .5rem; line-height: 1.15; }
+.seat-speaker .ss-make { font-size: .76rem; white-space: nowrap; }
+@media (max-width: 560px) { .seat-speaker { min-width: 2.6rem; } .seat-speaker .ss-make { font-size: .68rem; } }
+/* Rolling for the speaker: the row the token lands on glows for a moment, so the result is seen and not just
+   suddenly true. The pulse is the whole point, hence the reduced-motion fallback keeps the ring but drops it. */
+.seat-confirm-row.speaker-landed { border-color: var(--gold); animation: speaker-land 1.4s ease-out 1; }
+@keyframes speaker-land {
+    0%   { box-shadow: 0 0 0 0 rgba(217, 176, 74, .9), 0 0 22px 6px rgba(217, 176, 74, .55); }
+    70%  { box-shadow: 0 0 0 3px rgba(217, 176, 74, .35), 0 0 18px 4px rgba(217, 176, 74, .3); }
+    100% { box-shadow: 0 0 0 1px rgba(217, 176, 74, .5); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .seat-confirm-row.speaker-landed { animation: none; box-shadow: 0 0 0 2px var(--gold); }
+}
 /* End of the match: three equal, unmissable choices under the statistics. */
 .endgame-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .8rem; }
 .endgame-actions .btn { flex: 1 1 8rem; justify-content: center; text-align: center; }
@@ -1104,7 +1195,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* "A new version is available" (UpdateNotice). Bottom centre, above the app bar's stacking but far below the
    pause overlay: it must be reachable without ever covering a dialog someone is working in. */
-.update-bar { position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); z-index: 300;
+.update-bar { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 300;
     display: flex; align-items: center; gap: .6rem; max-width: min(94vw, 32rem);
     padding: .5rem .7rem .5rem 1rem; border-radius: 999px;
     background: rgba(7, 11, 22, .94); border: 1px solid var(--gold-dim);
@@ -1283,7 +1374,58 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* Secondary round + Politics appointment, as popups (see SecondaryModal / ActionView). Both use the
    `.modal-backdrop.centered` box, so the bootstrap `.modal` positioning trap is already handled there. */
-.secondary-modal, .politics-modal { max-width: 480px; }
+.secondary-modal, .politics-modal, .redtape-modal, .combat-pick-modal { max-width: 480px; }
+/* "Add to the home screen": three numbered steps, each with the glyph you are looking for on the device. */
+.install-modal { max-width: 460px; }
+.install-steps { list-style: none; counter-reset: istep; margin: .8rem 0 0; padding: 0;
+    display: flex; flex-direction: column; gap: .6rem; }
+.install-steps li { counter-increment: istep; display: flex; align-items: center; gap: .7rem;
+    padding: .55rem .7rem; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-border); }
+.install-steps li::before { content: counter(istep); flex: 0 0 1.5rem; width: 1.5rem; height: 1.5rem;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+    background: var(--gold); color: #0b1020; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .8rem; }
+.install-steps .is-icon { flex: 0 0 auto; color: var(--gold); display: inline-flex; }
+.install-steps li > span:last-child { font-size: .88rem; line-height: 1.35; }
+
+/* Editing one player: name, faction, colour and removal. Wide enough for the faction grid to breathe. */
+.player-edit-modal { max-width: 620px; }
+.player-edit-modal .modal-body { max-height: 60vh; }
+.pe-danger { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+    margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--panel-border); }
+
+/* The in-game player list: one compact row each, scannable at a glance. The faction symbol and the speaker
+   button are the two things you actually reach for, so they are the two big things. */
+.player-rows { display: flex; flex-direction: column; gap: .5rem; }
+.player-row { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.player-row .pr-id { flex: 1 1 8rem; min-width: 0; }
+.player-row .pr-name { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+    font-weight: 700; font-size: 1.05rem; }
+.player-row .pr-fac { color: var(--text-dim); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-row .pr-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.player-row .pr-speaker { display: inline-flex; align-items: center; padding: .35rem .6rem; }
+.player-row .pr-speaker-btn { display: inline-flex; align-items: center; gap: .4rem; }
+@media (max-width: 480px) {
+    /* On a phone the actions go under the identity rather than squeezing the name into two characters. */
+    .player-row .pr-id { flex: 1 1 100%; order: 1; }
+    .player-row .pr-actions { flex: 1 1 100%; order: 2; }
+}
+/* The technology picker needs room for cards, not for a sentence — hence the wider box. */
+.techpick-modal { max-width: 900px; width: 100%; }
+.techpick-modal .modal-body { max-height: 62vh; }
+.techpick-modal .tech-cat { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+/* Red Tape Lite's two questions (see RedTapeModal). Both are irreversible, so the warning is not fine print:
+   it gets the tape's own red. */
+.rt-ask-lead { margin: 0 0 .7rem; }
+.rt-ask-list { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .7rem; }
+.rt-ask-item { display: flex; flex-direction: column; gap: .1rem; padding: .4rem .55rem; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid #c1261c; }
+.rt-ask-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .82rem; }
+/* In the "remove a marker of your choice" list every row IS the choice, so it is a button. */
+.rt-ask-pick { width: 100%; text-align: left; cursor: pointer; appearance: none; font-family: inherit; }
+.rt-ask-pick:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 8%, var(--panel)); }
+.rt-ask-pick:focus-visible { outline: 2px solid var(--gold-dim); outline-offset: 2px; }
+.rt-ask-req { color: var(--text-dim); font-size: .78rem; line-height: 1.25; }
+.rt-ask-warn { margin: 0; color: #f1a3ae; font-size: .8rem; line-height: 1.35; }
 .sec-rows { display: flex; flex-direction: column; gap: .4rem; }
 .sec-row { display: flex; align-items: center; gap: .55rem; padding: .35rem .5rem; border-radius: 10px;
     background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }

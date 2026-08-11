@@ -12,7 +12,18 @@
         @* The physical variant lays the marker over the VICTORY POINT VALUE, deliberately not over the text —
            the whole point is that everyone can read what is coming. Same here: the points are hidden while
            the tape is on, the requirement stays legible. *@
-        <span class="obj-vp @(Taped ? "taped" : "")">@(Taped ? "?" : Pts?.ToString())</span>
+        <span class="obj-vp @(Taped ? "taped" : "")">
+            @if (Taped)
+            {
+                @* An icon, not a "?": a question mark reads as "we don't know", and that is not what a sealed
+                   objective means — the value exists, you are simply not allowed to see it yet. *@
+                <MaterialIcon Name="visibility_off" SizeCss="1em" Class="obj-vp-icon" />
+            }
+            else
+            {
+                @Pts?.ToString()
+            }
+        </span>
     </div>
     @if (Def is not null)
     {
@@ -24,22 +35,36 @@
            takes two taps, because pulling the tape is exactly the kind of thing a stray touch shouldn't do. *@
         @if (Taped)
         {
-            @* Locked by a variant rule (purged, or Stage II too early) → the tape says which rule and cannot
-               be pulled. Otherwise it is the control. *@
             var lockKey = Store.RedTapeBlockKey(So);
-            @if (lockKey is not null)
+            @if (!TapeClickable)
             {
-                <span class="rt-tape locked">@Loc[lockKey]</span>
+                @* The wall says the STATE and nothing else — "SEALED", for a rule-locked Stage II just the
+                   same. It used to carry the control's own "tap the tape" string, which asked a projected
+                   screen full of people to tap a pointer-events:none span; and printing the whole rule there
+                   ("STAGE II — LOCKED FOR THE FIRST 3 ROUNDS") was reference text on a screen nobody reads
+                   from. The reason belongs where somebody can act on it. *@
+                <span class="rt-tape @(lockKey is not null ? "locked" : "")">@Loc["redtape.sealed"]</span>
             }
-            else if (TapeClickable)
+            else if (lockKey is null)
             {
+                @* Free to pull: two taps, because the whole card is a scoring target here and a stray touch
+                   must not take a tape off. *@
                 <button class="rt-tape @(armed ? "armed" : "")" @onclick="TapeTap" @onclick:stopPropagation="true">
-                    @(armed ? Loc["redtape.confirmRemove"] : Loc["redtape.blocked"])
+                    @(armed ? Loc["redtape.confirmRemove"] : Loc["redtape.tapToRemove"])
                 </button>
+            }
+            else if (So.Purged)
+            {
+                @* Purged is not a lock, it is gone — nothing to ask about. *@
+                <span class="rt-tape locked">@Loc[lockKey]</span>
             }
             else
             {
-                <span class="rt-tape">@Loc["redtape.blocked"]</span>
+                @* Locked by one of the variant's timing rules. Tappable on purpose: the table may have a
+                   reason the app cannot know, so it asks instead of refusing (see OnLockedTap). *@
+                <button class="rt-tape locked" @onclick="() => OnLockedTap.InvokeAsync(So)" @onclick:stopPropagation="true">
+                    @Loc[lockKey]
+                </button>
             }
         }
         @foreach (var pid in So.ScoredByPlayerIds)
@@ -75,6 +100,10 @@
     [Parameter] public bool TapeClickable { get; set; }
 
     [Parameter] public EventCallback OnRemoveTape { get; set; }
+
+    /// <summary>A tape held shut by one of the variant's timing rules was tapped — the host is asking about
+    /// it. Only reachable where <see cref="TapeClickable"/> is on, and never for a purged objective.</summary>
+    [Parameter] public EventCallback<SessionObjectiveDto> OnLockedTap { get; set; }
 
     private bool armed;
 

@@ -193,6 +193,9 @@ public record SessionObjectiveDto(
     bool MarkerRemoved = false,
     /// <summary>Red Tape Lite: purged — it can never be scored and its tape never comes off.</summary>
     bool Purged = false,
+    /// <summary>Red Tape Lite: proposed for purging, waiting for the table to confirm. Only what was already
+    /// on the table when the fifth Stage I came clear is ever flagged, so a later reveal is never swept up.</summary>
+    bool PurgePending = false,
     /// <summary>Who scored this in the CURRENT round — the wall glows those. Computed server-side so the
     /// client doesn't reimplement "this round".</summary>
     IReadOnlyList<Guid>? ScoredThisRoundPlayerIds = null);
@@ -222,6 +225,7 @@ public record SessionStateDto(
     string? CurrentAgendaId, bool AllowEditAllPlayers,
     bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, bool Paused, int RetentionHours,
     int TurnTimerSeconds, int StrategyCardsPerPlayer, RedTapeVariant RedTapeVariant, int RedTapeCardNumber, bool PromptTechOnAction,
+    bool TrackSecondaryAbilities,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
@@ -247,13 +251,18 @@ public record SessionStateDto(
     Guid? SecondaryOwnerId = null,
     /// <summary>Politics is on the table and the new speaker has not been appointed yet.</summary>
     bool SpeakerPending = false,
-    /// <summary>Red Tape Lite: the round its random removal already happened in (0 = never). The client uses
-    /// it to announce that one is still coming this round.</summary>
+    /// <summary>Red Tape Lite: the round its random removal was already answered in (0 = never). The client
+    /// uses it to announce that one is still coming this round.</summary>
     int RedTapeRandomRound = 0,
+    /// <summary>Red Tape Lite: the round a random removal is currently being asked about (0 = nothing
+    /// pending). Non-zero means the host has an open question — nothing has been removed yet.</summary>
+    int RedTapeRandomPendingRound = 0,
     /// <summary>A combat is running between these two players (null = none). The wall shows them facing each
     /// other and the turn clock stops.</summary>
     Guid? CombatAId = null,
     Guid? CombatBId = null,
+    /// <summary>Who has the technology picker open (null = nobody). Their time on turn is stopped while it is.</summary>
+    Guid? TechPickPlayerId = null,
     /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
     string? CustomVoteTitle = null,
     /// <summary>What the free vote elects (null unless one is running).</summary>
@@ -303,11 +312,26 @@ public record UpdateSessionRequest(
     int? RedTapeCardNumber = null,
     /// <summary>Offer a technology entry after the Technology strategy action.</summary>
     bool? PromptTechOnAction = null,
+    /// <summary>Follow who is taking a strategy card's secondary ability. Only has an effect while the turn
+    /// timer is on, which is also the only time the option is offered.</summary>
+    bool? TrackSecondaryAbilities = null,
     /// <summary>Show the join QR code on the wall display (shared state — the wall is shared).</summary>
     bool? ShowJoinQr = null);
 
-/// <summary>Red Tape variant: take the marker off an objective (or put it back).</summary>
-public record SetObjectiveMarkerRequest(bool Removed);
+/// <summary>Red Tape variant: take the marker off an objective (or put it back).
+/// <para>
+/// <paramref name="Override"/> removes it despite one of the variant's TIMING rules (host only, and the UI
+/// only sends it once a dialog was confirmed). A purged objective is never overridable — that is not a lock.
+/// </para></summary>
+public record SetObjectiveMarkerRequest(bool Removed, bool Override = false);
+
+/// <summary>Answer one of Red Tape Lite's two questions (purge / random removal): yes or no. Both actions are
+/// irreversible and change who can still win, so the app proposes and the table decides.</summary>
+public record RedTapeAnswerRequest(bool Confirm);
+
+/// <summary>Open or close a player's technology picker. While it is open their time on turn stops — looking a
+/// technology up in the app is the app's overhead, not their thinking time.</summary>
+public record SetTechPickRequest(bool Open);
 
 /// <summary>Seat order as one list, in table order. Assigning it in a single call keeps the order
 /// consistent — reordering player by player would leave duplicate seats visible in between.</summary>

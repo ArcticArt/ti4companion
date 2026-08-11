@@ -105,7 +105,7 @@ public static class Mapping
             .OrderBy(o => o.RevealedAtUtc)
             .Select(o => new SessionObjectiveDto(
                 o.Id, o.ObjectiveId, o.Scores.Select(x => x.PlayerId).ToList(),
-                o.CustomName, o.CustomPoints, o.MarkerRemoved, o.Purged,
+                o.CustomName, o.CustomPoints, o.MarkerRemoved, o.Purged, o.PurgePending,
                 o.Scores.Where(x => x.Round == s.CurrentRound).Select(x => x.PlayerId).ToList()))
             .ToList();
 
@@ -149,6 +149,7 @@ public static class Mapping
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
             s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.Paused, s.RetentionHours,
             s.TurnTimerSeconds, s.StrategyCardsPerPlayer, s.RedTapeVariant, s.RedTapeCardNumber, s.PromptTechOnAction,
+            s.TrackSecondaryAbilities,
             s.CreatedAtUtc, s.LastActivityUtc,
             players, objectives, cardStates, votes,
             s.AgendaTotalsRevealed, totals,
@@ -156,6 +157,7 @@ public static class Mapping
             // Only meaningful in the status phase; null elsewhere so the client can't mistake it for a turn.
             s.Phase == GamePhase.Status ? TurnService.CurrentScorer(s, factionOverrides) : null,
             s.ShowJoinQr, s.StatusStage, s.SecondaryCardId, s.SecondaryOwnerId, s.SpeakerPending,
-            s.RedTapeRandomRound, s.CombatAId, s.CombatBId, s.CustomVoteTitle, s.CustomVoteElect);
+            s.RedTapeRandomRound, s.RedTapeRandomPendingRound,
+            s.CombatAId, s.CombatBId, s.TechPickPlayerId, s.CustomVoteTitle, s.CustomVoteElect);
     }
 }

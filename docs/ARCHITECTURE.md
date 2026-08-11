@@ -114,11 +114,14 @@ exception.
 
 **Game flow.** Phases: Setup → Strategy → Action → Status → (Agenda) → Strategy (next round).
 
-- **Setup:** players pick faction and colour and mark themselves ready (pickers hide options other
-  players already hold); the host arranges the seat order (▲/▼) and sets the speaker; the two starting
-  public objectives are recorded by hand. Starting the game requires everyone ready + a speaker; the
-  start button first shows a **seat-order confirmation dialog**. Faction changes reconcile starting
-  technologies automatically. Maximum 8 players (server-enforced).
+- **Setup** runs as four steps for the host — session & options → players → seating & speaker → objectives —
+  while everyone else always sees the player step, because a joiner has to be able to pick a faction and ready
+  up whenever they arrive. Players pick faction and colour and mark themselves ready (pickers hide options
+  other players already hold); the host arranges the seat order (drag or ▲/▼), says who the speaker is, and
+  records the two starting public objectives by hand. **The start button is the last thing on the last step**,
+  so the walk through seating and objectives *is* the confirmation — there is no separate "is this right?"
+  dialog, and the seating step will not let the host past without a speaker. Faction changes reconcile
+  starting technologies automatically. Maximum 8 players (server-enforced).
 - **Joining:** players join with a 5-character code or an invite link, and can either create a new seat
   or **take over** an existing one — **including the host's**, which is what lets a host who cleared their
   browser or switched device pick the role back up instead of leaving the table unable to change phases.
@@ -135,9 +138,28 @@ exception.
   phase starts. Initiative = lowest held card number (the Naalu Collective is always 0).
 - **Action:** turns run in initiative order. Playing a strategy action highlights the card on the wall;
   the highlight clears on the next turn change. A player may pass only once all of their strategy cards
-  are exhausted; the round can end only when everyone has passed.
+  are exhausted; the round can end only when everyone has passed. Whoever is up — or the host, who may always
+  act for them — can declare a **combat** and record a **technology**, both as popups on the player card.
+  Two things stop that player's clock while they are open, and both are the same mechanism: a logged
+  start/end interval that `MatchStats` subtracts from **time on turn only** (not from the round or the match).
+  A battle with someone else is not their thinking time, and neither is hunting for a technology in a list —
+  but both are still time the table spent playing. Because a popup can be walked away from, the server closes
+  either one at every turn and phase boundary.
 - **Status:** objectives are revealed (searchable picker) and scored; custom/secret-made-public
   objectives can be added by hand.
+- **Optional table variants** (all off by default — the app never forces a rule). The **Red Tape**
+  community variants are the one deliberate exception to "the app tracks, it does not enforce": a table
+  that chose one gets its rules applied server-side in `Services/RedTape.cs`, so a taped objective simply
+  cannot be scored. Two of those rules would otherwise take something away from the table irreversibly —
+  purging the Stage I objectives left over once five are clear, and pulling a tape at random in a round
+  where nobody took the carrier card. **Both are questions, not events:** the server marks them as
+  *proposed* and the host confirms in a dialog, and only that answer changes anything. The purge proposal
+  is flagged per objective at the moment it is raised, which is what keeps an objective revealed *later*
+  out of a pending purge; the random question stores the round it belongs to, because the moment it is
+  raised in can end before anyone answers it. The variant's *timing* rules can also be **overruled** by the
+  host through an explicit dialog (and the override is logged) — the app enforces them so nobody has to
+  remember them, but the table remains the authority on its own game. A purged objective is the exception:
+  that is not a lock, it is out of the game.
 - **Agenda:** a small state machine driven by `CurrentAgendaId` + `VotingStarted` + `AgendaVotesHidden`:
   1. *Influence entry* — every player enters their available influence (non-hosts see only their own).
   2. *Agenda revealed* — the host picks an agenda and starts the vote, open or **face-down**.
@@ -152,7 +174,11 @@ exception.
   paused, the clients show a lock overlay, and the paused interval is excluded from all statistics.
 - **Match log & statistics:** every meaningful mutation writes a structured `SessionLogEntry`. The
   client derives match/round/phase/per-player durations from the log timeline (`MatchStats`); the host's
-  "End game" action switches the wall to a statistics view with charts.
+  "End game" action switches the wall to a statistics view with charts. Because those figures come from the
+  `RoundChange`/`PhaseChange` entries and nothing else, **anything that moves the round or the phase has to
+  log it** — including a host correcting either by hand in the settings, which is easy to forget and leaves
+  a round missing from the statistics with its time absorbed by the round before it. Such a correction can
+  also point backwards, so the per-round figures are aggregated by round *number* rather than per entry.
 - **Retention:** inactive sessions are wiped automatically after `Ti4:DefaultRetentionHours`
   (server-side background worker).
 
@@ -188,6 +214,11 @@ Enums travel over the wire **as numbers** (no string conversion) — keep numeri
 - `Localization/Loc.cs` holds all UI strings as EN/DE pairs (`Loc["key"]`, `Loc.Pick(en, de)`); the
   language toggle persists per device.
 - Components inherit `Ti4ComponentBase` (re-renders on store/language changes).
+- **Anything clickable is a real control**, never a `<div>` with a click handler: a styled div is
+  unreachable by keyboard and shows up as nothing in the accessibility tree. Tab strips are `<button>`s in a
+  `role="tablist"` with `aria-selected` and a `role="tabpanel"`; cards that act as buttons carry
+  `role="button"`, `tabindex` and Enter/Space handling. Styling a `<button>` back to a flat look needs
+  `appearance: none; background: none; font-family: inherit`.
 - Pages: `Home` (create/join, `/join/{code}` invite links), `Session` (`/s/{code}` control view with
   Phase/Players/Objectives/Tech tabs), `Display` (`/display/{code}` — the full-screen wall).
 - The wall display has three player-switchable modes (Objectives / Secondary abilities / Tech overview)

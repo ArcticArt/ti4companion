@@ -8,10 +8,11 @@
     var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
     var host = Store.IsHost;
     var mine = active is not null && active.Id == Store.MyPlayerId;
-    // Players control only their own turn; the host controls only after pressing "Take over".
-    // The flag lives in the store, so it survives switching tabs (it used to reset on every switch).
-    var takeover = Store.HostTakeover;
-    var canControl = active is not null && (mine || (host && takeover));
+    // A player controls their own turn; the host controls whoever is up — which is what the server allows
+    // anyway ("active player or host"). There used to be a "take over" toggle in front of that, whose real
+    // job was jumping to another player; "previous turn"/"next turn" already do exactly that, so the toggle
+    // was a mode you had to remember to be in.
+    var canControl = active is not null && (mine || host);
 }
 
 @if (allPassed)
@@ -34,8 +35,6 @@
             <TurnTimer PlayerId="@active.Id" Signal="@mine" Report="@(mine || host)" />
         }
         <div class="spacer" style="flex:1"></div>
-        @if (host && !takeover) { <button class="btn btn-gold" @onclick="() => Store.HostTakeover = true">@Loc["turn.takeOver"]</button> }
-        else if (host && takeover) { <button class="btn btn-ghost" @onclick="() => Store.HostTakeover = false">@Loc["turn.takeOverEnd"]</button> }
     </div>
 }
 
@@ -82,7 +81,9 @@ else if (s.SpeakerPending)
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">@Loc["tech.promptText"]</span>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowTechTab()">@Loc["tech.promptOpen"] ▸</button>
+        <button class="btn btn-gold btn-sm" @onclick="() => OpenTechPick(Store.MyPlayerId ?? active?.Id)">
+            @Loc["tech.promptOpen"] <MaterialIcon Name="chevron_right" />
+        </button>
     </div>
 }
 @* Combat. The battle itself happens on the table — the app only needs to know one is running: the wall puts
@@ -106,19 +107,38 @@ else if (s.SpeakerPending)
         }
     </div>
 }
-else if (canControl && active is not null)
+
+@* Declaring a combat is offered ON the player card now (a button next to pass/advance), not as a panel of
+   opponent buttons that sat there all turn whether or not anybody was fighting. The opponent is chosen in a
+   popup — the same shape as every other "pick a player" question in the app. *@
+@if (showCombatPick && canControl && active is not null)
 {
-    <div class="panel" style="margin-top:.6rem;">
-        <div class="row-wrap" style="gap:.5rem;align-items:baseline;">
-            <h3 style="margin:0;">@Loc["combat.title"]</h3>
-            <span class="faint" style="font-size:.78rem;">@Loc["combat.hint"]</span>
-        </div>
-        <div style="margin-top:.45rem;">
-            <PlayerPicker Players="s.Players.Where(p => p.Id != active.Id).OrderBy(p => p.SeatOrder)"
-                          OnPick="StartCombat" />
+    <div class="modal-backdrop centered blurred" @onclick="() => showCombatPick = false">
+        <div class="modal combat-pick-modal" @onclick:stopPropagation>
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["combat.title"]</h3>
+            </div>
+            <div class="modal-body">
+                <p class="faint" style="margin:0 0 .6rem;">@Loc["combat.hint"]</p>
+                <PlayerPicker Players="s.Players.Where(p => p.Id != active.Id).OrderBy(p => p.SeatOrder)"
+                              OnPick="StartCombat" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn" @onclick="() => showCombatPick = false">@Loc["common.cancel"]</button>
+            </div>
         </div>
     </div>
 }
+
+@* Technology: the picker as a popup, so it is right where the action was played instead of a trip to another
+   tab — and while it is open the player's own clock stops (server-side, see SetTechPick). *@
+@if (techPickFor is Guid tpFor)
+{
+    <TechPickModal PlayerId="@tpFor" OnClose="CloseTechPick" />
+}
+
+@* Red Tape's carrier card: "remove a marker of your choice" — the choice, as a list of the ones it may be. *@
+<RedTapeSealModal Mode="@sealMode" OnClose="() => sealMode = null" />
 
 @* Red Tape variant: the carrier card's own step, which the variant puts BEFORE everything else on the card.
    An offer like the others — the app tapes the objectives and refuses to score a taped one, but which tape
@@ -131,7 +151,11 @@ else if (canControl && active is not null)
             @Loc[s.RedTapeVariant == RedTapeVariant.Lite ? "redtape.actionLite" : "redtape.actionBureaucracy"]
         </span>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowObjectivesTab()">@Loc["redtape.openObjectives"] ▸</button>
+        @* The card's ability is "remove a marker of your choice", so ask for the choice right here instead of
+           sending the player to the objectives tab to hunt for one whose tape may legally come off. *@
+        <button class="btn btn-gold btn-sm" @onclick="() => sealMode = RedTapeSealModal.SealMode.Pick">
+            @Loc["redtape.pickTitle"] <MaterialIcon Name="chevron_right" />
+        </button>
     </div>
 }
 @* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). *@
@@ -171,23 +195,6 @@ else if (canControl && active is not null)
         </span>
         <div class="spacer" style="flex:1"></div>
         <button class="btn btn-sm" @onclick="() => Store.ShowSecondary = true">@Loc["secondary.open"] ▸</button>
-    </div>
-}
-
-@* Host takeover: tap any player to steer their turn. *@
-@if (host && takeover)
-{
-    <div class="panel turn-strip" style="margin-top:.6rem;">
-        <span class="faint" style="margin-right:.2rem;">@Loc["turn.takeOver"]:</span>
-        @foreach (var p in ordered)
-        {
-            <button class="turn-chip @(p.Id == s.ActivePlayerId ? "active" : "") @(p.HasPassed ? "passed" : "")" @onclick="() => SetActive(p.Id)">
-                <span class="ti">@(p.Initiative?.ToString() ?? "—")</span>
-                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.5" Ring="@p.ColorHex" />
-                <span>@p.Name</span>
-                @if (p.HasPassed) { <span class="chip chip-passed">@Loc["turn.passed"]</span> }
-            </button>
-        }
     </div>
 }
 
@@ -246,9 +253,16 @@ else
                 {
                     <button class="btn btn-danger" disabled="@(!canPass)" @onclick="() => Pass(active.Id, true)">@Loc["turn.pass"]</button>
                 }
+                @* Combat sits with the other things this player can do on their turn. Only offered when none
+                   is running — while one is, the band above carries the "combat over" button instead. *@
+                @if (s.CombatAId is null)
+                {
+                    <button class="btn btn-sm" @onclick="() => showCombatPick = true">@Loc["combat.declare"]</button>
+                }
+                <button class="btn btn-sm" @onclick="() => OpenTechPick(active.Id)">@Loc["tech.pickTitle"]</button>
                 <div class="spacer" style="flex:1"></div>
-                <button class="btn btn-sm" @onclick="Prev">◂ @Loc["turn.previous"]</button>
-                <button class="btn btn-sm btn-primary" @onclick="Next">@Loc["turn.advance"] ▸</button>
+                <button class="btn btn-sm" @onclick="Prev"><MaterialIcon Name="chevron_left" /> @Loc["turn.previous"]</button>
+                <button class="btn btn-sm btn-primary" @onclick="Next">@Loc["turn.advance"] <MaterialIcon Name="chevron_right" /></button>
             </div>
             @if (!active.HasPassed && !canPass) { <div class="faint" style="font-size:.72rem;margin-top:.3rem;">@Loc["turn.passHint"]</div> }
         }
@@ -258,8 +272,33 @@ else
 @code {
     private Guid Sid => Store.Session!.Id;
 
+    /// <summary>Choosing a combat opponent, as a popup rather than a permanent row of buttons.</summary>
+    private bool showCombatPick;
+
+    /// <summary>Red Tape's "which tape comes off" popup (the carrier card's own ability).</summary>
+    private RedTapeSealModal.SealMode? sealMode;
+
+    /// <summary>Whose technology picker is open on THIS device (null = none). The server also knows, because
+    /// it stops that player's clock; this is only which popup to render here.</summary>
+    private Guid? techPickFor;
+
+    private async Task OpenTechPick(Guid? playerId)
+    {
+        if (playerId is not Guid pid) return;
+        techPickFor = pid;
+        // Tell the server before the list even renders: the clock has to stop from the moment they asked, not
+        // from whenever the popup finished painting.
+        await Store.Mutate(Store.Api.SetTechPickAsync(Sid, pid, true));
+    }
+
+    private async Task CloseTechPick()
+    {
+        if (techPickFor is not Guid pid) return;
+        techPickFor = null;
+        await Store.Mutate(Store.Api.SetTechPickAsync(Sid, pid, false));
+    }
+
     private Task EndHighlight() => Store.Mutate(Store.Api.SetActiveStrategyAsync(Sid, null));
-    private Task SetActive(Guid playerId) => Store.Mutate(Store.Api.SetActivePlayerAsync(Sid, playerId));
     private Task Next() => Store.Mutate(Store.Api.AdvanceTurnAsync(Sid));
     private Task Prev() => Store.Mutate(Store.Api.PreviousTurnAsync(Sid));
 
@@ -286,6 +325,11 @@ else
 
     private Task AppointSpeaker(Guid playerId) => Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
 
-    private Task StartCombat(Guid opponentId) => Store.Mutate(Store.Api.StartCombatAsync(Sid, opponentId));
+    private async Task StartCombat(Guid opponentId)
+    {
+        showCombatPick = false;
+        await Store.Mutate(Store.Api.StartCombatAsync(Sid, opponentId));
+    }
+
     private Task EndCombat() => Store.Mutate(Store.Api.EndCombatAsync(Sid));
 }

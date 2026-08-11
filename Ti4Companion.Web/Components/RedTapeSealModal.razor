@@ -1,0 +1,105 @@
+@inherits Ti4ComponentBase
+@inject SessionStore Store
+
+@*
+    Two Red Tape questions that both end in "which tape comes off", so they share one dialog:
+
+    * `Locked` — a tape one of the variant's TIMING rules holds shut was tapped. It says which rule, and offers
+      to take it off anyway. The app enforces the variant so nobody has to remember it, but the table is still
+      the authority on its own game and may have a reason the app cannot know; the override is logged.
+    * `Pick` — the carrier card was played and its ability is "remove a marker of your choice", so the popup
+      lists the objectives whose tape may actually come off and one tap does it. Sending the player to the
+      objectives tab to hunt for a removable one was the long way round.
+
+    A purged objective never appears in either: that is not a lock, it is out of the game.
+*@
+@if (Mode is not null && Store.Session is { } s)
+{
+    <div class="modal-backdrop centered blurred" @onclick="Close">
+        <div class="modal redtape-modal" @onclick:stopPropagation>
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc[Mode == SealMode.Locked ? "redtape.lockedAskTitle" : "redtape.pickTitle"]</h3>
+            </div>
+            <div class="modal-body">
+                @if (Mode == SealMode.Locked && Locked is { } lo)
+                {
+                    var lockKey = Store.RedTapeBlockKey(lo);
+                    <div class="rt-ask-list">
+                        <div class="rt-ask-item">
+                            <span class="rt-ask-name">@NameOf(lo)</span>
+                            @if (Store.Objective(lo.ObjectiveId) is { } d)
+                            {
+                                <span class="rt-ask-req">@Loc.Pick(d.Requirement, d.RequirementDe)</span>
+                            }
+                        </div>
+                    </div>
+                    <p class="rt-ask-lead" style="margin-top:.7rem;">@(lockKey is null ? "" : Loc[lockKey + "Long"])</p>
+                    <p class="rt-ask-warn">@Loc["redtape.lockedAskWarn"]</p>
+                }
+                else
+                {
+                    var removable = Removable(s);
+                    @if (removable.Count == 0)
+                    {
+                        <p class="faint" style="margin:0;">@Loc["redtape.pickNone"]</p>
+                    }
+                    else
+                    {
+                        <p class="rt-ask-lead">@Loc["redtape.pickHint"]</p>
+                        <div class="rt-ask-list">
+                            @foreach (var o in removable)
+                            {
+                                var target = o;
+                                <button class="rt-ask-item rt-ask-pick" @onclick="() => Unseal(target, false)">
+                                    <span class="rt-ask-name">@NameOf(o)</span>
+                                    @if (Store.Objective(o.ObjectiveId) is { } d2)
+                                    {
+                                        <span class="rt-ask-req">@Loc.Pick(d2.Requirement, d2.RequirementDe)</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-actions">
+                @if (Mode == SealMode.Locked && Locked is { } lo2)
+                {
+                    <button class="btn btn-danger" @onclick="() => Unseal(lo2, true)">@Loc["redtape.removeAnyway"]</button>
+                }
+                <div class="spacer" style="flex:1"></div>
+                <button class="btn" @onclick="Close">@Loc[Mode == SealMode.Locked ? "redtape.leaveSealed" : "common.close"]</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public enum SealMode { Locked, Pick }
+
+    /// <summary>Which question is open (null = none).</summary>
+    [Parameter] public SealMode? Mode { get; set; }
+
+    /// <summary>The objective being asked about, for <see cref="SealMode.Locked"/>.</summary>
+    [Parameter] public SessionObjectiveDto? Locked { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Guid Sid => Store.Session!.Id;
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private string NameOf(SessionObjectiveDto o)
+        => o.CustomName ?? (Store.Objective(o.ObjectiveId) is { } d ? Loc.Pick(d.Name, d.NameDe) : o.ObjectiveId);
+
+    /// <summary>Tapes that may legally come off right now — nothing the variant forbids, so a "choose one"
+    /// list never offers a choice the server would refuse.</summary>
+    private List<SessionObjectiveDto> Removable(SessionStateDto s)
+        => s.Objectives.Where(o => Store.RedTapeBlocks(o) && Store.RedTapeBlockKey(o) is null).ToList();
+
+    private async Task Unseal(SessionObjectiveDto o, bool over)
+    {
+        await Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, o.Id, true, over));
+        await Close();
+    }
+}

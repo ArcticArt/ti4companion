@@ -13,11 +13,17 @@ namespace Ti4Companion.ApiService.Services;
 /// <item>the first two Stage I objectives revealed start UNTAPED (they count as revealed);</item>
 /// <item>Bureaucracy: no Stage II tape may come off in the first three rounds;</item>
 /// <item>Lite: no Stage II tape until <see cref="ScorableStageI"/> Stage I objectives are clear;</item>
-/// <item>Lite: when the fifth Stage I tape comes off, every remaining taped Stage I is PURGED — it can never
-///       be scored and its tape can never be removed;</item>
-/// <item>Lite: in a round where nobody took the carrier card, one tape comes off at random (round 1 right
+/// <item>Lite: when the fifth Stage I tape comes off, every remaining taped Stage I is PROPOSED for purging —
+///       the table confirms, and only then can it never be scored again;</item>
+/// <item>Lite: in a round where nobody took the carrier card, a random removal is PROPOSED (round 1 right
 ///       after the strategy phase, afterwards when the status phase ends).</item>
 /// </list>
+/// <para>
+/// Both of those used to happen on their own. They are irreversible and they change who can still win, so the
+/// app now only ever asks: <see cref="ProposePurge"/>/<see cref="ProposeRandom"/> raise the question,
+/// <see cref="ConfirmPurge"/>/<see cref="ConfirmRandom"/> and <see cref="DeclinePurge"/>/
+/// <see cref="DeclineRandom"/> answer it. Nothing here mutates the game without having been asked first.
+/// </para>
 /// Sources: "Bureaucracy: Red Tape for TI4" (WildFalkon) and "Red Tape Lite" (van nguyen) — the rulebook
 /// insert and the card text as supplied by the user.
 /// </summary>
@@ -68,27 +74,51 @@ public static class RedTape
     public static int ClearStageI(GameSession s)
         => s.Objectives.Count(o => IsStageI(o) && o.MarkerRemoved && !o.Purged);
 
+    /// <summary>Objectives currently proposed for purging (awaiting the table's answer).</summary>
+    public static List<SessionObjective> PurgeProposal(GameSession s)
+        => s.Objectives.Where(o => o.PurgePending).ToList();
+
     /// <summary>
-    /// Red Tape Lite: once the fifth Stage I tape is off, the Stage I objectives still taped are purged —
-    /// they can never be scored. Returns the ones purged by this call (for the log), empty when nothing
-    /// changed. A no-op in Bureaucracy, where all five revealed Stage I are scorable.
+    /// Red Tape Lite: the fifth Stage I tape has just come off, so the Stage I objectives still taped are
+    /// PROPOSED for purging. Returns the ones newly flagged (empty when the moment is not now). Call it right
+    /// after a tape came off; a no-op in Bureaucracy, where all five revealed Stage I are scorable.
     /// <para>
-    /// The rules call them "Stage I #6 and #7", which needs no numbering here: they are whatever is still
-    /// taped at that moment, so this scales with however many the table laid out (seven → two purged, six →
-    /// one) instead of assuming a count.
+    /// It fires on the TRANSITION — exactly <see cref="ScorableStageI"/> clear, i.e. this removal was the
+    /// fifth — and not on "five or more are clear". That difference is the point: as a standing condition it
+    /// also swallowed every Stage I revealed afterwards, striking out a card the table had only just turned
+    /// face-up. The rules call the victims "Stage I #6 and #7", which needs no numbering here: they are
+    /// whatever is still taped at this moment, so it scales with however many the table laid out (seven → two,
+    /// six → one).
     /// </para>
     /// </summary>
-    public static List<SessionObjective> ApplyPurge(GameSession s)
+    public static List<SessionObjective> ProposePurge(GameSession s)
     {
-        var purged = new List<SessionObjective>();
-        if (s.RedTapeVariant != RedTapeVariant.Lite) return purged;
-        if (ClearStageI(s) < ScorableStageI) return purged;
+        var proposed = new List<SessionObjective>();
+        if (s.RedTapeVariant != RedTapeVariant.Lite) return proposed;
+        if (ClearStageI(s) != ScorableStageI) return proposed;      // not the fifth → not the moment
+        if (s.Objectives.Any(o => o.PurgePending)) return proposed;  // already asking
         foreach (var o in s.Objectives.Where(o => IsStageI(o) && !o.MarkerRemoved && !o.Purged))
         {
-            o.Purged = true;
-            purged.Add(o);
+            o.PurgePending = true;
+            proposed.Add(o);
         }
+        return proposed;
+    }
+
+    /// <summary>The table said yes: the proposed objectives are out of the game. Returns them for the log.</summary>
+    public static List<SessionObjective> ConfirmPurge(GameSession s)
+    {
+        var purged = PurgeProposal(s);
+        foreach (var o in purged) { o.Purged = true; o.PurgePending = false; }
         return purged;
+    }
+
+    /// <summary>The table said no: drop the proposal and leave the objectives taped but alive. The moment does
+    /// not come back on its own — a further Stage I tape takes the count past the fifth, so
+    /// <see cref="ProposePurge"/> stays quiet unless a tape is put back and pulled again.</summary>
+    public static void DeclinePurge(GameSession s)
+    {
+        foreach (var o in PurgeProposal(s)) o.PurgePending = false;
     }
 
     /// <summary>Nobody holds the strategy card carrying the Red Tape ability this round — the condition for
@@ -96,22 +126,50 @@ public static class RedTape
     public static bool NobodyTookCarrier(GameSession s)
         => s.Players.All(p => p.StrategyCards.All(c => c.StrategyCardId != s.RedTapeCardNumber));
 
-    /// <summary>
-    /// Red Tape Lite's random removal, if it is due: nobody took the carrier card and it has not happened in
-    /// this round yet. Returns the objective whose tape came off, or null. Deliberately skips anything the
-    /// gates above forbid, so a random roll can never break a rule a player could not break either.
-    /// </summary>
-    public static SessionObjective? RemoveRandomTape(GameSession s)
-    {
-        if (s.RedTapeVariant != RedTapeVariant.Lite) return null;
-        if (s.RedTapeRandomRound >= s.CurrentRound) return null;   // already done this round
-        if (!NobodyTookCarrier(s)) return null;                     // someone took it → they choose instead
+    /// <summary>Tapes a random removal could legally take off — never one the gates above forbid, so a roll
+    /// can never break a rule a player could not break either.</summary>
+    private static List<SessionObjective> RandomEligible(GameSession s)
+        => s.Objectives.Where(o => !o.MarkerRemoved && WhyCannotRemove(s, o) is null).ToList();
 
-        var eligible = s.Objectives.Where(o => !o.MarkerRemoved && WhyCannotRemove(s, o) is null).ToList();
-        s.RedTapeRandomRound = s.CurrentRound;                      // mark the round either way: it was its moment
+    /// <summary>
+    /// Raise the question "nobody took the carrier card — take one tape off at random?" if it is due: Lite,
+    /// not already settled this round, nobody holds the carrier, and there is actually a tape it could take.
+    /// Returns true when the question is now open. Nothing is removed here.
+    /// </summary>
+    public static bool ProposeRandom(GameSession s)
+    {
+        if (s.RedTapeVariant != RedTapeVariant.Lite) return false;
+        if (s.RedTapeRandomPendingRound != 0) return false;         // already asking
+        if (s.RedTapeRandomRound >= s.CurrentRound) return false;    // already settled this round
+        if (!NobodyTookCarrier(s)) return false;                     // someone took it → they choose instead
+        // Don't ask a question whose only answer is "there is nothing to remove" — but do settle the round,
+        // or every later phase boundary in it would ask again.
+        if (RandomEligible(s).Count == 0) { s.RedTapeRandomRound = s.CurrentRound; return false; }
+        s.RedTapeRandomPendingRound = s.CurrentRound;
+        return true;
+    }
+
+    /// <summary>The table said yes: take one eligible tape off at random. Returns the objective, or null if
+    /// nothing was pending or nothing is eligible any more.</summary>
+    public static SessionObjective? ConfirmRandom(GameSession s)
+    {
+        if (s.RedTapeRandomPendingRound == 0) return null;
+        // Settle the round the question was ASKED for, not the current one: NextRound raises it while still in
+        // the old round and only then increments, so answering afterwards must not mark the new round as done.
+        s.RedTapeRandomRound = s.RedTapeRandomPendingRound;
+        s.RedTapeRandomPendingRound = 0;
+        var eligible = RandomEligible(s);
         if (eligible.Count == 0) return null;
         var pick = eligible[Random.Shared.Next(eligible.Count)];
         pick.MarkerRemoved = true;
         return pick;
+    }
+
+    /// <summary>The table said no: nothing comes off, and the round is settled so it stops asking.</summary>
+    public static void DeclineRandom(GameSession s)
+    {
+        if (s.RedTapeRandomPendingRound == 0) return;
+        s.RedTapeRandomRound = s.RedTapeRandomPendingRound;
+        s.RedTapeRandomPendingRound = 0;
     }
 }

@@ -360,5 +360,17 @@ public enum SessionLogKind
     /// <summary>A device took over an existing seat, the HOST's seat included (Target = that seat). Worth a
     /// line in the log precisely because it can hand the host role to another device: the table should be
     /// able to see when that happened, since there is no account behind it, only the join code.</summary>
-    SeatClaim = 31
+    SeatClaim = 31,
+
+    /// <summary>A player has the technology picker open (Target = that player) and closed it again. The
+    /// interval is excluded from time-on-turn exactly like a combat is: looking up a technology in the app is
+    /// the app's overhead, not the player's thinking time. Keep the numeric values stable — the statistics
+    /// read them.</summary>
+    TechPickStart = 32,
+    TechPickEnd = 33,
+
+    /// <summary>A tape the variant's timing rules held shut was removed anyway, on the host's explicit
+    /// confirmation (Detail = the objective). Logged because the app was overruled: the table is the authority
+    /// on its own game, but the rest of it should be able to see that it happened.</summary>
+    RedTapeOverride = 34
 }

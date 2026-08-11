@@ -78,15 +78,8 @@
                 <label>@Loc["home.yourName"]</label>
                 <input type="text" @bind="hostName" placeholder="@NamePlaceholder" />
             </div>
-            <div class="field">
-                <label>@Loc["home.expansions"]</label>
-                <div class="row-wrap">
-                    <label class="badge"><input type="checkbox" checked disabled /> &nbsp;@Loc["exp.Base"]</label>
-                    <label class="badge"><input type="checkbox" @bind="pok" /> &nbsp;@Loc["exp.ProphecyOfKings"]</label>
-                    <label class="badge"><input type="checkbox" @bind="codex" /> &nbsp;@Loc["exp.Codex"]</label>
-                    <label class="badge"><input type="checkbox" @bind="te" /> &nbsp;@Loc["exp.ThundersEdge"]</label>
-                </div>
-            </div>
+            @* No expansion picker here: it is the first thing the setup asks, and asking twice meant the
+               start page could disagree with the session it just created. *@
             <button class="btn btn-primary btn-block" @onclick="Create" disabled="@busy">@Loc["home.create.button"]</button>
         </div>
     }
@@ -194,7 +187,6 @@
     private string hostName = "";
     private string joinCode = "";
     private string joinName = "";
-    private bool pok = true, codex = true, te = true;
     private bool busy;
     private string? error;
     private SessionStateDto? peek;   // the loaded session whose players you choose an identity from
@@ -216,18 +208,14 @@
         }
     }
 
-    private Expansion SelectedExpansions =>
-        Expansion.Base
-        | (pok ? Expansion.ProphecyOfKings : 0)
-        | (codex ? Expansion.Codex : 0)
-        | (te ? Expansion.ThundersEdge : 0);
-
     private async Task Create()
     {
         busy = true; error = null;
         try
         {
-            var req = new CreateSessionRequest(sessionName, Loc.Lang, SelectedExpansions,
+            // Null = "all of them", which the server turns into every expansion | Base. The table narrows it
+            // down in the first setup step; a fresh session showing everything is the friendlier default.
+            var req = new CreateSessionRequest(sessionName, Loc.Lang, null,
                 string.IsNullOrWhiteSpace(hostName) ? "Host" : hostName, null, null, null);
             var s = await Store.CreateAsync(req);
             if (s is not null) Nav.NavigateTo($"/s/{s.JoinCode}");
