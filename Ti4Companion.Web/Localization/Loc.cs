@@ -32,10 +32,6 @@ public class Loc
         ["home.welcome"] = ("Choose how to start", "Wähle, wie du startest"),
         ["home.createSession"] = ("Create session", "Session erstellen"),
         ["home.joinSession"] = ("Join session", "Session beitreten"),
-        // Third choice on the start page. PLACEHOLDER — it opens an empty long form that is still to be
-        // filled; rename this key (and `home.moreHint`) once it is decided what goes in there.
-        ["home.more"] = ("More", "Mehr"),
-        ["home.moreHint"] = ("Nothing here yet.", "Hier ist noch nichts."),
         ["home.back"] = ("Back", "Zurück"),
         ["home.sessionName"] = ("Session name", "Session-Name"),
         ["home.yourName"] = ("Your name", "Dein Name"),
@@ -60,6 +56,8 @@ public class Loc
         ["home.recentTitle"] = ("Sessions on this device", "Sessions auf diesem Gerät"),
         ["home.recentAs"] = ("as", "als"),
         ["home.recentUnnamed"] = ("Session", "Session"),
+        ["home.recentNone"] = ("No sessions on this device yet — create one or join with a code.",
+                               "Auf diesem Gerät noch keine Sessions — erstelle eine oder tritt mit einem Code bei."),
         ["home.notfound"] = ("No session found for that code.", "Keine Session für diesen Code gefunden."),
         ["home.continue"] = ("Continue", "Weiter"),
         // Activity counters on the landing page. The label says WHAT, never the rule behind it.

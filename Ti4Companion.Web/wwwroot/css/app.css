@@ -1241,8 +1241,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .home-senate-toggle:hover { color: var(--text-dim); }
 /* Create / join, on the other hand, are forms — inputs need the room. */
 .home-form { width: 100%; max-width: 480px; margin-left: auto; margin-right: auto; }
-/* …and the third choice is a long one, still empty. */
-.home-form-long { max-width: 720px; min-height: 60vh; }
 /* Join: player or wall display. The one choice on the page that decides what this DEVICE becomes, so both
    options are large targets with an icon over the label rather than two small pills. */
 .join-mode { display: flex; gap: .6rem; margin: .3rem 0 1rem; }

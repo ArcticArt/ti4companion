@@ -27,13 +27,9 @@
                 <h2>@Loc["home.welcome"]</h2>
                 <button class="btn btn-primary" @onclick="() => view = View.Create">@Loc["home.createSession"]</button>
                 <button class="btn btn-gold" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
-                @* Only offered when there is something to pick up — an empty list is not a choice. *@
-                @if (recent.Count > 0)
-                {
-                    <button class="btn" @onclick="() => view = View.Recent">@Loc["home.recent"]</button>
-                }
-                @* Placeholder for whatever comes next: opens a long, deliberately empty form. *@
-                <button class="btn" @onclick="() => view = View.More">@Loc["home.more"]</button>
+                @* A fixed third entry, shown even with nothing to resume: the menu should not change shape
+                   between devices, and the list says for itself when it is empty. *@
+                <button class="btn" @onclick="() => view = View.Recent">@Loc["home.recent"]</button>
             </div>
             @* The backdrop switch. Deliberately BELOW the stack and small: it is a setting about the page, not
                one of the ways into a game, and the four rows above should stay the choice. *@
@@ -50,6 +46,10 @@
         <div class="panel home-form">
             <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.recentTitle"]</h2>
+            @if (recent.Count == 0)
+            {
+                <p class="faint">@Loc["home.recentNone"]</p>
+            }
             <div class="join-players">
                 @foreach (var r in recent)
                 {
@@ -63,16 +63,6 @@
                     </button>
                 }
             </div>
-        </div>
-    }
-    else if (view == View.More)
-    {
-        @* Deliberately empty: a long form reserved for what comes next. Rename `home.more` when it is known
-           what this is for. *@
-        <div class="panel home-form home-form-long">
-            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
-            <h2 style="margin-top:.5rem;">@Loc["home.more"]</h2>
-            <p class="faint">@Loc["home.moreHint"]</p>
         </div>
     }
     else if (view == View.Create)
@@ -195,7 +185,7 @@
 @code {
     [Parameter] public string? Code { get; set; }
 
-    private enum View { Landing, Create, Join, Recent, More }
+    private enum View { Landing, Create, Join, Recent }
     private View view = View.Landing;
     private enum JoinMode { Player, Display }
     private JoinMode joinAs = JoinMode.Player;
