@@ -1,91 +1,203 @@
 @inherits Ti4ComponentBase
+@inject IJSRuntime JS
 
 @*
-    The start page's backdrop: the senate chamber as a BOWL, seen from above, turning very slowly.
+    The start page's backdrop: the senate chamber, one ring of pods per row, turning very slowly.
 
-    Three things make it work, and each was got wrong first:
+    Read the four things that were got wrong first, before changing any number here:
 
-    1. It is a funnel, not a sphere: every ring sits higher AND further out than the one below, leans in
-       towards the middle and is drawn a little smaller. That is the shape in the reference cutaway — the rings
-       fan open towards the viewer instead of wrapping back over their head.
+    1. The FRAMING is the spec. The lowest ring sits so low that only the tips of its portraits clear the
+       bottom edge; the highest one hangs into the top edge so only the lower part of its portraits shows.
+       Everything in between is a full ring. That is why the rings are placed by (radius, lift) pairs solved
+       for a screen position, not by a pretty formula: `Rings` below carries the solution, `PLACEMENT`
+       explains how to re-solve one.
 
-    2. The whole ring stays BEHIND the perspective plane (see `.senate-scene` in app.css). CSS magnifies by
-       `perspective / distance`, without bound as a seat approaches the camera plane — and a ring drawn *around*
-       the camera necessarily crosses it. One seat came out 15557px wide that way.
+    2. The wall has to get STEEPER as it rises. On a straight cone — every ring the same step up and the same
+       step out — all rings sit at the same elevation angle from the camera, i.e. at the same height ON SCREEN,
+       stacked into one band. The lift therefore grows much faster than the radius.
 
-    3. No portrait is ever seen from behind: the near half of every ring faces the bowl's axis, i.e. away from
-       us, and `backface-visibility: hidden` simply doesn't paint it. What is left is the far half stepping up.
+    3. The whole ring stays BEHIND the perspective plane (`.senate-scene` pushes the scene back 40vmin). CSS
+       magnifies by `perspective / distance`, without bound as a seat approaches the camera plane — and a ring
+       drawn AROUND the camera necessarily crosses it. One seat came out 15557px wide that way.
 
-    Rings are offset by half a seat against each other, so the pods interlock:
+    4. No portrait is ever seen from behind: the near half of every ring faces the chamber's axis, i.e. away
+       from us, and `backface-visibility: hidden` simply doesn't paint it. What is left is the far half, and
+       because its ends are closer to the camera than its middle, that half arches across the screen — the
+       curvature of the rows is the perspective doing its job, not a hand-drawn arc.
 
-        X X X X X X X
-         X X X X X X X
+    The seats are mounted one frame AFTER the page (see `ready`): laying out ~120 pods before the FIRST paint
+    is what left a cold visit sitting on the boot screen until it was reloaded.
 
     `pointer-events: none` throughout: it is a backdrop, and nothing on it may ever eat a tap meant for the
     buttons in front.
 *@
-<div class="senate" aria-hidden="true">
+<div class="senate @(ready ? "in" : null)" aria-hidden="true">
     <div class="senate-scene">
-        @for (var row = 0; row < Rows; row++)
+        @if (ready)
         {
-            // Up and out: the funnel widens with every row, and the seats shrink as they climb.
-            // The Y value is emitted SIGNED (screen coordinates, so negative = up). Writing `-{lift}` instead
-            // produced `translateY(--14vmin)` for the bottom row, which is not a valid transform — the whole
-            // declaration was dropped and that row landed on the camera, filling the screen.
-            var radius = FormattableString.Invariant($"{BaseRadius + row * RadiusStep:0.##}");
-            var lift = FormattableString.Invariant($"{FirstRowDrop - row * HeightStep:0.##}");
-            var tilt = FormattableString.Invariant($"{row * TiltStep:0.##}");
-            var scale = FormattableString.Invariant($"{1.0 - row * ScaleStep:0.###}");
-            var offset = row % 2 == 1 ? 0.5 : 0.0;   // every other row shifted by half a seat
-            for (var col = 0; col < Cols; col++)
+            @for (var r = 0; r < Rings.Length; r++)
             {
-                // A FULL ring per row. The seats on the near side face the bowl's axis, i.e. away from us, and
-                // `backface-visibility: hidden` drops them — which is what keeps their backs off the screen
-                // while the far side steps up into view.
-                var yaw = FormattableString.Invariant($"{(col + offset) * (360.0 / Cols):0.##}");
-                var slug = Slugs[(row * Cols + col) % Slugs.Count];
-                // Order matters: yaw puts the seat on the ring, translateY lifts it, translateZ pushes it out
-                // along the yawed axis (so it already faces the centre), and rotateX then tilts it in place
-                // towards the viewer below. Scale last, so it doesn't scale the offsets with it.
-                <div class="senate-seat"
-                     style="@FormattableString.Invariant($"transform: rotateY({yaw}deg) translateY({lift}vmin) translateZ(-{radius}vmin) rotateX({tilt}deg) scale({scale});")">
-                    @* The pod itself: a dark shell with a lit rim along its lower edge and the delegate inside
-                       it. All CSS — see `.pod*` in app.css. No loading="lazy" on the portrait: the seats are
-                       transformed far outside the viewport's own coordinates, so the browser never considers
-                       them near enough to fetch and the chamber stayed empty. *@
-                    <div class="pod">
-                        <img class="pod-face" src="@($"portraits/{slug}.jpg")" alt="" />
-                        <span class="pod-rim"></span>
+                var ring = Rings[r];
+                // Each ring leans to face the camera: the ones below it tip their top towards us, the ones
+                // above tip it away. Only a fraction of the full elevation, or the outer rings turn edge-on.
+                var tilt = -0.6 * Math.Atan2(ring.Lift, ring.Radius) * 180.0 / Math.PI;
+                // Every ring stands a little further round than the one below it, and by a bigger step each
+                // time (see Ring.Shift). The offsets ACCUMULATE, so what you see between any two rings is
+                // that ring's own Shift.
+                var pitch = 360.0 / ring.Cols;
+                var turned = Rings.Take(r + 1).Sum(x => x.Shift * 360.0 / x.Cols);
+                for (var col = 0; col < ring.Cols; col++)
+                {
+                    var yaw = turned + col * pitch;
+                    var slug = Faces[r][col];
+                    <div class="senate-seat" style="@Seat(yaw, ring.Lift, ring.Radius, tilt)">
+                        @* Most pods are EMPTY — see Faces for why that is arithmetic, not taste.
+                           No loading="lazy" on the ones that aren't: the seats are transformed far outside the
+                           viewport's own coordinates, so the browser never considers them near enough to fetch
+                           and the chamber stayed empty. `decoding`/`fetchpriority` keep them off the critical
+                           path instead — this is decoration, the panel in front is what matters. *@
+                        @if (slug is not null)
+                        {
+                            <img class="pod-face" src="@($"portraits/{slug}.jpg")" alt=""
+                                 decoding="async" fetchpriority="low" />
+                        }
+                        <div class="pod"><span class="pod-strip"></span></div>
                     </div>
-                </div>
+                }
             }
         }
     </div>
 </div>
 
 @code {
-    // Funnel geometry, in vmin so it scales with the window.
-    private const int Rows = 8;
-    private const int Cols = 20;            // a full ring; roughly half of it faces us at any time
-    private const double BaseRadius = 26;   // innermost ring (around the podium)
-    private const double RadiusStep = 13;   // each ring further out …
-    private const double HeightStep = 10;    // … and a step higher: a shallow bowl, as in the reference
-    private const double FirstRowDrop = 0;
-    private const double TiltStep = 6;      // degrees each ring leans in towards the middle
-    private const double ScaleStep = 0.05;  // slightly smaller per ring, on top of what perspective does
+    /// <summary>
+    /// A ring of pods: how far out, how far up (SIGNED, screen sense — positive is down), and how many seats.
+    /// <para>
+    /// PLACEMENT: the pairs are solved for where the ring lands on screen, against `perspective: 140vmin`,
+    /// the scene's `translateZ(-40vmin) rotateX(12deg)` and a 34vmin-tall seat. For a far-side seat
+    /// (the middle of the visible arch):
+    /// <code>
+    ///   y_scene = cos(12°)·lift + sin(12°)·radius
+    ///   z_scene = sin(12°)·lift - cos(12°)·radius - 40
+    ///   y_screen = 140/(140 - z_scene) · y_scene        // vmin from the centre, positive = down
+    /// </code>
+    /// The half-height of the window is 50vmin, so the five rings target y_screen ≈ +57, +26, -3, -28, -49:
+    /// the first and the last are deliberately past the edge, and the seat's own height (about 19vmin on
+    /// screen at the front, 8 at the back) leaves exactly the sliver the design asks for — measured, the
+    /// bottom ring shows 21% of its portraits (the tips) and the top one 40% (the lower part). To move a
+    /// ring, pick its target y_screen and solve the last line for `lift`; do NOT nudge radius and lift at
+    /// once, or the ring changes size as well as position.
+    /// </para>
+    /// <para>
+    /// Seat counts follow the circumference (a wider ring holds more pods, as in a real chamber) and stay
+    /// deliberately modest: every seat is a DOM element on the start page, so ~150 total is the budget.
+    /// </para>
+    /// <para>
+    /// <c>Shift</c> is how far this ring stands round from the one below it, as a fraction of its OWN seat
+    /// pitch — a fraction rather than degrees because the rings hold different numbers of seats, and what the
+    /// eye compares is seat against seat. It grows with height, and 0.5 is the ceiling that means anything:
+    /// half a seat is as staggered as two rows can be, and past a full seat they line up again.
+    /// </para>
+    /// </summary>
+    private sealed record Ring(double Radius, double Lift, int Cols, double Shift);
+
+    private static readonly Ring[] Rings =
+    {
+        new(150, 95.2, 16, 0),      // tips only, at the bottom edge
+        new(168, 47.4, 18, 0.18),
+        new(188, -6.6, 20, 0.26),
+        new(208, -64.1, 22, 0.34),
+        new(226, -121.4, 24, 0.42),
+        new(240, -174.6, 24, 0.48),
+        new(252, -223.9, 26, 0.33),  // cut by the top edge. 0.33 of ITS pitch is what lands half a seat off
+                                     // the ring below, because it holds 26 seats against that ring's 24 —
+                                     // the two grids don't line up, so measure the stagger, never assume it.
+    };
+
+    /// <summary>False until the page has painted once; see the note at the top.</summary>
+    private bool ready;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || ready) return;
+        // Wait for the PAGE to be finished — window.load, then one painted frame — not merely for our own
+        // first render. The chamber is ~150 elements and 24 photographs; on a cold visit it must not be laid
+        // out while the browser is still fetching the app. Falls back to a plain delay if the helper is
+        // missing (an old cached index.html), because a backdrop must never be able to break the page.
+        try { await JS.InvokeAsync<bool>("ti4.afterLoad"); }
+        catch { await Task.Delay(200); }
+        ready = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Order matters: yaw puts the seat on the ring, translateY lifts it, translateZ pushes it out along the
+    /// yawed axis (so it already faces the middle), and rotateX then leans it in place. The lift is emitted
+    /// SIGNED — writing `translateY(-{lift}vmin)` around a negative value produced `translateY(--216.7vmin)`,
+    /// which is not a valid transform, so the whole declaration was dropped and that ring landed on the
+    /// camera and filled the screen.
+    /// </summary>
+    private static string Seat(double yaw, double lift, double radius, double tilt) =>
+        FormattableString.Invariant(
+            $"transform: rotateY({yaw:0.##}deg) translateY({lift:0.##}vmin) translateZ(-{radius:0.##}vmin) rotateX({tilt:0.##}deg);");
 
     /// <summary>
     /// The portrait files used for the seats — file NAMES, not all of them faction slugs (barony/cabal/ghosts).
     /// Hard-coded because the client cannot stat files, and a missing image would leave a hole in the chamber.
     /// <para>
-    /// Deliberately a SUBSET of the 24 portraits that exist: each is ~50 KB, and this is decoration on a
-    /// landing page — twelve is ~600 KB instead of ~1.2 MB, and nobody can tell that a slowly turning chamber
-    /// repeats a face. They are the same files the agenda wall uses, so a returning visitor has them cached.
+    /// ALL of them, ~1.2 MB together. A subset of twelve was cheaper, but with about fifty seats on screen at
+    /// once twelve faces means each one shows up four times and the repetition is the first thing you notice.
+    /// They are the same files the agenda wall uses (so a returning visitor has them cached) and they are
+    /// fetched at low priority AFTER the first paint, so nothing waits on them.
     /// </para>
     /// </summary>
     private static readonly List<string> Slugs = new()
     {
-        "sol", "hacan", "jolnar", "xxcha", "mentak", "naalu",
-        "muaat", "sardakk", "arborec", "yssaril", "nekro", "titans",
+        "arborec", "argent", "barony", "cabal", "empyrean", "ghosts", "hacan", "jolnar",
+        "lizix", "mahact", "mentak", "muaat", "naalu", "nekro", "nomad", "nra",
+        "saar", "sardakk", "sol", "titans", "winnu", "xxcha", "yin", "yssaril",
     };
+
+    /// <summary>
+    /// Which delegate sits in which pod — <c>null</c> means an EMPTY pod, and most of them are.
+    /// <para>
+    /// The requirement is that no portrait is ever visible twice, and that is a counting problem, not a
+    /// shuffling one: about 37 pods are in frame and only 24 portrait files exist, so at most 24 pods can be
+    /// occupied and the rest have to stay empty. Guaranteed rather than made likely, by construction:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>every portrait belongs to exactly ONE ring (the per-ring counts sum to <c>Slugs.Count</c>), so
+    /// two rings can never show the same face;</item>
+    /// <item>within its ring a portrait sits in exactly TWO pods, at opposite ends of the circle. Half a ring
+    /// is the most that can ever be in view — `backface-visibility` drops the near half, and measured only
+    /// about 40% of a ring is actually in frame — so a pair can never both be on screen.</item>
+    /// </list>
+    /// <para>
+    /// Any randomised placement was ruled out first: with 24 faces over 37 visible pods, at least 13 repeats
+    /// are unavoidable, and scattering only pushes them apart (measured: 366px) rather than away.
+    /// </para>
+    /// </summary>
+    private static readonly string?[][] Faces = BuildFaces();
+
+    private static string?[][] BuildFaces()
+    {
+        // Portraits per ring, roughly proportional to its size. MUST sum to Slugs.Count — see above.
+        var perRing = new[] { 2, 3, 3, 4, 4, 4, 4 };
+        var faces = new string?[Rings.Length][];
+        var next = 0;
+        for (var r = 0; r < Rings.Length; r++)
+        {
+            var n = Rings[r].Cols;      // even, so that "opposite" is a real seat and not a rounding
+            faces[r] = new string?[n];
+            var f = perRing[r];
+            for (var i = 0; i < 2 * f; i++)
+            {
+                // 2f occupied pods, evenly spaced around the whole circle; face j takes i = j and i = j + f,
+                // which sit exactly half a ring apart.
+                faces[r][(int)Math.Round(i * n / (2.0 * f)) % n] = Slugs[next + i % f];
+            }
+            next += f;
+        }
+        return faces;
+    }
 }

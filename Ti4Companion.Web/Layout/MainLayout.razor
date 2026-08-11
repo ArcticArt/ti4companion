@@ -44,7 +44,7 @@
     }
     else
     {
-        <a class="brand" href="/">@Loc["app.title"]</a>
+        @* No brand here: outside a session the title stands large over the start page itself (see Home). *@
         <div class="spacer"></div>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
     }

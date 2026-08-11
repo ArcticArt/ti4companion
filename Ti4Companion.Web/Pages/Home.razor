@@ -10,13 +10,21 @@
 <SenateBackdrop />
 
 <div class="container home-view">
+    @* The application's own name, above the form — it used to be a small link in the app bar, which is not
+       where a landing page introduces itself. *@
+    <h1 class="app-title">@Loc["app.title"]</h1>
+
     @if (view == View.Landing)
     {
-        <div class="panel" style="text-align:center;">
-            <h2>@Loc["home.welcome"]</h2>
-            <div class="row-wrap" style="justify-content:center;margin-top:1rem;">
-                <button class="btn btn-primary" style="min-width:200px;" @onclick="() => view = View.Create">@Loc["home.createSession"]</button>
-                <button class="btn btn-gold" style="min-width:200px;" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
+        <div class="panel home-panel" style="text-align:center;">
+            @* Heading and choices are one stack of equally sized rows — the heading is the label of the menu,
+               not a title above it. See `.home-choice`. *@
+            <div class="home-choice">
+                <h2>@Loc["home.welcome"]</h2>
+                <button class="btn btn-primary" @onclick="() => view = View.Create">@Loc["home.createSession"]</button>
+                <button class="btn btn-gold" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
+                @* Placeholder for whatever comes next: opens a long, deliberately empty form. *@
+                <button class="btn" @onclick="() => view = View.More">@Loc["home.more"]</button>
             </div>
             @if (lastCode is not null)
             {
@@ -27,25 +35,20 @@
                 </div>
             }
         </div>
-        @* How busy it is tonight. OUTSIDE the panel and below it — a notice about the instance, not a control
-           in the form. Counts only, see ActivityDto; absent when the server didn't answer. *@
-        @if (activity is { } act)
-        {
-            <div class="activity">
-                <div class="activity-item">
-                    <span class="activity-num">@act.Active</span>
-                    <span class="activity-lbl">@Loc["home.activeNow"]</span>
-                </div>
-                <div class="activity-item">
-                    <span class="activity-num">@act.Last24h</span>
-                    <span class="activity-lbl">@Loc["home.active24h"]</span>
-                </div>
-            </div>
-        }
+    }
+    else if (view == View.More)
+    {
+        @* Deliberately empty: a long form reserved for what comes next. Rename `home.more` when it is known
+           what this is for. *@
+        <div class="panel home-form home-form-long">
+            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
+            <h2 style="margin-top:.5rem;">@Loc["home.more"]</h2>
+            <p class="faint">@Loc["home.moreHint"]</p>
+        </div>
     }
     else if (view == View.Create)
     {
-        <div class="panel" style="max-width:480px;margin:0 auto;">
+        <div class="panel home-form">
             <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.createSession"]</h2>
             <div class="field">
@@ -70,17 +73,24 @@
     }
     else
     {
-        <div class="panel" style="max-width:480px;margin:0 auto;">
+        <div class="panel home-form">
             <button class="btn btn-ghost btn-sm" @onclick="BackToLanding">◂ @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.joinSession"]</h2>
             <div class="field">
                 <label>@Loc["home.joinCode"]</label>
                 <input type="text" @bind="joinCode" @bind:event="oninput" placeholder="ABCDE" style="text-transform:uppercase;letter-spacing:.2em;" />
             </div>
-            @* Join as a player, or open this code on a wall/beamer as the shared display. *@
-            <div class="row-wrap" style="gap:.4rem;margin:.2rem 0 .8rem;">
-                <button class="btn btn-sm @(joinAs == JoinMode.Player ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Player)">@Loc["home.asPlayer"]</button>
-                <button class="btn btn-sm @(joinAs == JoinMode.Display ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Display)">@Loc["home.asDisplay"]</button>
+            @* Join as a player, or open this code on a wall/beamer as the shared display. Two big targets with
+               an icon each: this is the one choice on the page that decides what the device becomes. *@
+            <div class="join-mode">
+                <button class="btn @(joinAs == JoinMode.Player ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Player)">
+                    <MaterialIcon Name="person" SizeCss="1.9em" />
+                    <span>@Loc["home.asPlayer"]</span>
+                </button>
+                <button class="btn @(joinAs == JoinMode.Display ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Display)">
+                    <MaterialIcon Name="tv" SizeCss="1.9em" />
+                    <span>@Loc["home.asDisplay"]</span>
+                </button>
             </div>
             @if (joinAs == JoinMode.Player)
             {
@@ -139,12 +149,28 @@
             }
         </div>
     }
+
+    @* How busy it is tonight: a notice about the instance between the form and the footer, never a field
+       inside the form. Counts only, see ActivityDto; absent when the server didn't answer. *@
+    @if (activity is { } act)
+    {
+        <div class="activity">
+            <div class="activity-item">
+                <span class="activity-num">@act.Active</span>
+                <span class="activity-lbl">@Loc["home.activeNow"]</span>
+            </div>
+            <div class="activity-item">
+                <span class="activity-num">@act.Last24h</span>
+                <span class="activity-lbl">@Loc["home.active24h"]</span>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     [Parameter] public string? Code { get; set; }
 
-    private enum View { Landing, Create, Join }
+    private enum View { Landing, Create, Join, More }
     private View view = View.Landing;
     private enum JoinMode { Player, Display }
     private JoinMode joinAs = JoinMode.Player;

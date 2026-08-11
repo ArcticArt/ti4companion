@@ -32,6 +32,10 @@ public class Loc
         ["home.welcome"] = ("Choose how to start", "Wähle, wie du startest"),
         ["home.createSession"] = ("Create session", "Session erstellen"),
         ["home.joinSession"] = ("Join session", "Session beitreten"),
+        // Third choice on the start page. PLACEHOLDER — it opens an empty long form that is still to be
+        // filled; rename this key (and `home.moreHint`) once it is decided what goes in there.
+        ["home.more"] = ("More", "Mehr"),
+        ["home.moreHint"] = ("Nothing here yet.", "Hier ist noch nichts."),
         ["home.back"] = ("Back", "Zurück"),
         ["home.sessionName"] = ("Session name", "Session-Name"),
         ["home.yourName"] = ("Your name", "Dein Name"),

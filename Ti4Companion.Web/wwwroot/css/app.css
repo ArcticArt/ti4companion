@@ -1091,11 +1091,20 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Legal / IP notice footer (Asmodee/FFG community-use guidelines) */
 /* The footer sits over the start page's backdrop, so it needs its own ground and enough contrast to read
    against it — over the dark chamber the old faint grey was barely there. */
-.legal-footer { position: relative; z-index: 1; max-width: 1180px; margin: 1.5rem auto 0; padding: .9rem 1rem 1.4rem; border-top: 1px solid var(--panel-border); color: var(--text-dim); font-size: .68rem; line-height: 1.4; background: rgba(7, 11, 22, .72); border-radius: 10px 10px 0 0; }
+/* Its dark pane is shared with the title and the activity notice — see `.app-title, .activity,
+   .legal-footer` further down (that rule wins on order, so the background lives there). */
+.legal-footer { position: relative; z-index: 1; max-width: 1180px; margin: 1.5rem auto 0; padding: .9rem 1rem 1.4rem; border-top: 1px solid var(--panel-border); color: var(--text-dim); font-size: .68rem; line-height: 1.4; border-radius: 10px 10px 0 0; }
 .legal-footer p { margin: .15rem 0; }
 .legal-footer .legal-meta { margin-top: .4rem; }
 .legal-footer a { color: var(--accent); text-decoration: underline; }
 .legal-footer a:hover { color: var(--gold); }
+
+/* The boot watchdog's report (see index.html): only ever rendered when the loading screen is still up after
+   eight seconds, so it may look as plain as it likes — it exists to name a cause, not to be pretty. */
+.boot-stuck { position: fixed; left: 50%; bottom: 8vh; transform: translateX(-50%); max-width: 90vw;
+    padding: .8rem 1.1rem; border-radius: 10px; background: rgba(7, 11, 22, .92); border: 1px solid #6b4f14;
+    color: #d9b04a; font-family: system-ui, sans-serif; font-size: .8rem; line-height: 1.5; text-align: center; }
+.boot-stuck a { color: #4fc3f7; }
 
 /* ===================================================================
    Blazor essentials (loading + error)
@@ -1127,47 +1136,104 @@ html, body { max-width: 100%; overflow-x: hidden; }
     background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
 
 /* ---- Start page: the senate chamber behind everything ----------------------------------------------- */
-/* Fixed and BEHIND the shell (z-index 0 vs. the content's own stacking), never interactive. */
+/* Fixed and BEHIND the shell (z-index 0 vs. the content's own stacking), never interactive. It fades in
+   because the seats are mounted one frame AFTER the page (see SenateBackdrop): laying out and painting the
+   whole chamber before the FIRST frame is what left the boot screen sitting there on a cold visit. */
 .senate { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-    perspective: 92vmin; perspective-origin: 50% 38%; }
-/* The bowl: pushed back far enough that the WHOLE ring stays behind the perspective plane (a ring that
-   crosses it has a seat magnified without limit — the first attempt produced seats 15557px wide), and tipped
-   forward so we look down INTO the funnel. The near half of every ring faces away from us and is dropped by
-   `backface-visibility`, so no portrait is ever seen from behind; what is left is the far side stepping up,
-   ring by ring. The shift and the tilt must be repeated in every keyframe, or the animation would drop them. */
-.senate-scene { position: absolute; inset: 0; transform-style: preserve-3d;
-    animation: senate-spin 320s linear infinite; }
+    perspective: 140vmin; perspective-origin: 50% 50%; opacity: 0; transition: opacity 1.4s ease; }
+.senate.in { opacity: 1; }
+/* The chamber: one ring per row, each higher and a little further out. Two rules must hold.
+   (1) The WHOLE ring stays behind the perspective plane — CSS magnifies by `perspective / distance`,
+   without bound as a seat approaches the camera plane (a ring drawn AROUND the camera once produced a seat
+   15557px wide). Pushed back 40vmin, that is the closest any seat can come.
+   (2) The near half of every ring faces away from us and `backface-visibility` simply does not paint it, so
+   no portrait is ever seen from behind; what is left is the far side, arching across the screen.
+   The push-back and the tilt must be repeated in BOTH keyframes, or the animation drops them. */
+.senate-scene { position: absolute; inset: 0; transform-style: preserve-3d; will-change: transform;
+    animation: senate-spin 900s linear infinite; }
 @keyframes senate-spin {
-    from { transform: translateZ(-30vmin) rotateX(31deg) rotateY(0deg); }
-    to   { transform: translateZ(-30vmin) rotateX(31deg) rotateY(360deg); }
+    from { transform: translateZ(-40vmin) rotateX(12deg) rotateY(0deg); }
+    to   { transform: translateZ(-40vmin) rotateX(12deg) rotateY(360deg); }
 }
-/* Each seat is placed by its own transform (see SenateBackdrop); this only sizes it. */
-.senate-seat { position: absolute; left: 50%; top: 50%; width: 17vmin; height: 12vmin;
-    margin: -6vmin 0 0 -8.5vmin; transform-style: preserve-3d; backface-visibility: hidden; }
-/* The pod: a dark shell, flattened and wider than tall, with a lit rim along its lower edge and the delegate
-   sitting inside it. Faint on purpose — this is a backdrop, and the buttons in front have to win. */
-.pod { position: absolute; inset: 0; overflow: hidden; opacity: .82;
-    border-radius: 46% 46% 26% 26% / 62% 62% 38% 38%;
-    background: linear-gradient(180deg, #2b3a5c 0%, #16203a 55%, #0b1220 100%);
-    border: 1px solid rgba(155, 190, 240, .4);
-    box-shadow: inset 0 .3vmin .8vmin rgba(0, 0, 0, .75), 0 0 1.6vmin rgba(90, 140, 220, .28); }
-.pod-face { position: absolute; left: 50%; top: 14%; width: 46%; height: 56%; transform: translateX(-50%);
-    object-fit: cover; border-radius: 50% 50% 35% 35%; opacity: .72;
-    filter: grayscale(.3) contrast(1.05); }
-/* The lit strip along the rim — the one bright thing on a senate pod. */
-.pod-rim { position: absolute; left: 8%; right: 8%; bottom: 9%; height: 7%; border-radius: 999px;
-    background: linear-gradient(90deg, transparent 0%, rgba(200, 222, 255, .5) 25%, rgba(200, 222, 255, .6) 75%, transparent 100%);
-    box-shadow: 0 0 1.1vmin rgba(150, 190, 255, .5); }
-/* A vignette so the dome sinks into the page instead of competing with the buttons in front of it. */
+/* Each seat is placed by its own transform (see SenateBackdrop); this only sizes it. Note `transform-style`
+   stays FLAT: the seat's two children are coplanar, and under `preserve-3d` a 3D context sorts by depth
+   instead of DOM order — which is what decides whether the shell can cover the portrait's foot below. */
+.senate-seat { position: absolute; left: 50%; top: 50%; width: 38vmin; height: 48vmin;
+    margin: -24vmin 0 0 -19vmin; backface-visibility: hidden; }
+/* The delegate: the portrait, standing IN the pod — it IS the seat's full box, and the shell over its lowest
+   quarter (the shell is 25% of the box, anchored at the bottom) is the only thing that covers it. Its width
+   stays inside the shell's straight top edge (54% against 20%…80%), so no part of its WIDTH is ever cut. No
+   frame around it and nothing behind it; an earlier version wrapped it in the shell, read as a backrest. */
+.pod-face { position: absolute; left: 50%; top: 0; width: 54%; height: 100%; transform: translateX(-50%);
+    object-fit: cover; object-position: 50% 16%; border-radius: 6% 6% 0 0; }
+/* The pod: a very flat, wide shell — a dome cut off far below its apex, flanks curving out to a full-width
+   base with pointed lower corners. `clip-path` rather than border-radius, because only a polygon holds the
+   straight cut, the curved flank and the sharp corners at once; it also clips the lit strip to the outline,
+   which is what makes the strip read as the rim itself.
+   Every colour stop is OPAQUE: a translucent one let the delegate and the seats behind show through the
+   shell, and a senate pod is a solid object.
+   Deliberately NO filter and no inset shadow on a seat: the chamber is ~130 elements, and a per-seat filter
+   forces a separate raster for each one — that cost is what stalled the first paint. */
+.pod { position: absolute; left: 0; right: 0; bottom: 0; height: 25%;
+    background: linear-gradient(180deg, #3b4c6d 0%, #1e2844 46%, #2b3a5a 90%, #0c1322 100%);
+    clip-path: polygon(20% 0, 80% 0, 85% 8%, 89% 18%, 93% 30%, 96% 44%, 98% 60%, 99.3% 76%, 100% 88%,
+        98% 100%, 2% 100%, 0 88%, 0.7% 76%, 2% 60%, 4% 44%, 7% 30%, 11% 18%, 15% 8%); }
+/* The lit strip: over the whole width, just above the lower edge — the one bright thing on a senate pod.
+   Its glow is clipped by the pod outline (see above), so it spreads along and into the shell, not past it. */
+.pod-strip { position: absolute; left: 0; right: 0; bottom: 6%; height: 13%;
+    background: linear-gradient(90deg, rgba(255,255,255,.6) 0%, #fff 12%, #fff 88%, rgba(255,255,255,.6) 100%);
+    box-shadow: 0 0 1.4vmin rgba(205, 230, 255, .65); }
+/* A vignette so the chamber sinks into the page instead of competing with the buttons in front of it. */
 .senate::after { content: ""; position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 50% 40%, rgba(7, 11, 22, 0) 34%, rgba(7, 11, 22, .5) 72%, rgba(7, 11, 22, .88) 100%); }
+    background: radial-gradient(ellipse at 50% 46%, rgba(7, 11, 22, 0) 30%, rgba(7, 11, 22, .42) 70%, rgba(7, 11, 22, .8) 100%); }
 /* Anything that moves this slowly is still motion — honour the preference and just hold still. */
 @media (prefers-reduced-motion: reduce) { .senate-scene { animation: none; } }
 /* The content has to sit above the backdrop; the shell is transparent, so give it its own layer. */
 .home-view { position: relative; z-index: 1; }
+/* The three things that stand ON the chamber — the title, the activity notice and the legal footer — share
+   one treatment: a dark pane, so text stays readable over a backdrop that is all portraits and lit rims.
+   Plain opacity, deliberately: `backdrop-filter: blur()` was tried and taken out again. It is GPU work that
+   repeats whenever the backdrop changes, and the chamber turns continuously — so three panes covering ~22%
+   of the screen were being re-blurred every frame, for decoration. A slightly darker pane does the same job
+   for free. If you ever add it back, never over a large area of the moving chamber. */
+.app-title, .activity, .legal-footer { background: rgba(7, 11, 22, .82); }
+/* The application's name over the start page, hard against the top of the view. */
+.app-title { align-self: center; width: fit-content; max-width: 100%;
+    margin: 0 0 1rem; padding: .5rem 2.2rem .6rem; border-radius: 16px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(1.5rem, 4.4vw, 3rem);
+    line-height: 1.15; letter-spacing: .05em; text-align: center; color: var(--gold);
+    text-shadow: 0 0 18px rgba(217, 176, 74, .35); }
+/* THE FORM ABSORBS THE SLACK, not the things around it: the panel takes ALL the free vertical space into its
+   own two auto margins, which pins the title to the top of the view and the activity notice to the bottom.
+   Centring the whole column instead (`justify-content: center`) made both of them jump the moment the form
+   grew — switching to "create session" shoved the title up and the notice down. `margin-block` so the
+   horizontal margins stay with each panel's own rule. */
+.home-view > .panel { margin-block: auto; }
+/* The start page's own panel is a choice, not a form: only as wide as its rows need. */
+.home-panel { width: fit-content; min-width: min(100%, 26rem); max-width: min(100%, 34rem);
+    padding: 1.3rem 1.5rem; margin-left: auto; margin-right: auto; }
+/* Heading and choices are ONE stack of equal rows: same width (stretch), same type size, same padding, so
+   "Choose how to start" reads as the menu's label rather than as a title sitting above it.
+   Both selectors are spelled out rather than `.home-choice > *`: that ties with `.btn` on specificity, and a
+   tie is decided by source order, which left the buttons at their own size while the heading took the new one. */
+.home-choice { display: flex; flex-direction: column; align-items: stretch; gap: .7rem; }
+.home-choice > h2, .home-choice > .btn { margin: 0; padding: .75rem 1.4rem; font-size: 1.15rem;
+    line-height: 1.3; text-align: center; justify-content: center; }
+/* …including the border, or the heading comes out 2px shorter than the buttons. */
+.home-choice > h2 { border: 1px solid transparent; }
+/* Create / join, on the other hand, are forms — inputs need the room. */
+.home-form { width: 100%; max-width: 480px; margin-left: auto; margin-right: auto; }
+/* …and the third choice is a long one, still empty. */
+.home-form-long { max-width: 720px; min-height: 60vh; }
+/* Join: player or wall display. The one choice on the page that decides what this DEVICE becomes, so both
+   options are large targets with an icon over the label rather than two small pills. */
+.join-mode { display: flex; gap: .6rem; margin: .3rem 0 1rem; }
+.join-mode .btn { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: .4rem;
+    padding: .9rem .6rem; font-size: 1rem; }
 /* Activity counters: a notice BELOW the panel, not a field inside it. Blue and glowing, so the numbers read
    as a live signal from the instance rather than as part of the form. */
-.activity { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin: 1.6rem 0 .5rem; }
+.activity { align-self: center; display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;
+    margin: 1rem 0 0; padding: .6rem 1.8rem .7rem; border-radius: 16px; }
 .activity-item { text-align: center; }
 .activity-num { display: block; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.7rem;
     color: var(--accent); text-shadow: 0 0 10px rgba(79, 195, 247, .75), 0 0 24px rgba(79, 195, 247, .4); }

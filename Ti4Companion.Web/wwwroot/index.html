@@ -41,10 +41,57 @@
         <span class="dismiss">🗙</span>
     </div>
     <script>
+        // ---- Boot watchdog ---------------------------------------------------------------------------
+        // A Blazor boot that stalls leaves the loading screen above on screen and says NOTHING, which is
+        // exactly how a "the first visit just hangs, F5 fixes it" report is born — and such a report is
+        // unfixable, because it names no cause. So: collect what went wrong, and if the boot screen is
+        // still up after 8 seconds, put the state on the screen. Loaded before the framework, so the
+        // handlers catch errors from the boot itself.
+        window.ti4boot = { errors: [] };
+        addEventListener('error', function (e) {
+            window.ti4boot.errors.push((e.message || 'error') + ' @ ' + ((e.filename || '?').split('/').pop()));
+        }, true);
+        addEventListener('unhandledrejection', function (e) {
+            var r = e.reason;
+            window.ti4boot.errors.push('promise: ' + ((r && (r.message || r)) || '?'));
+        });
+        setTimeout(function () {
+            var app = document.getElementById('app');
+            if (!app || !app.querySelector('.loading-progress')) return;   // it booted; nothing to report
+            var pct = getComputedStyle(document.documentElement).getPropertyValue('--blazor-load-percentage');
+            var res = performance.getEntriesByType('resource');
+            var pending = res.filter(function (r) { return r.responseEnd === 0; });
+            var box = document.createElement('div');
+            box.className = 'boot-stuck';
+            box.innerHTML = '<b>Still starting…</b><br>' +
+                'loaded ' + (pct || '?').trim() + ' · ' + res.length + ' files, ' + pending.length + ' still pending' +
+                (pending.length ? '<br>waiting on: ' + pending.slice(0, 3).map(function (r) { return r.name.split('/').pop(); }).join(', ') : '') +
+                (window.ti4boot.errors.length ? '<br>' + window.ti4boot.errors.slice(0, 3).join('<br>') : '') +
+                '<br><br><a href="javascript:location.reload()">Reload</a>';
+            app.appendChild(box);
+        }, 8000);
+    </script>
+    <script>
         // Wall-display helper: flow the tech cards into balanced columns; while a column flow overflows its
         // height, collapse the lowest-prerequisite tech to just its name (top-down, one at a time) until it
         // fits. Reset (uncollapse) first so removing techs re-expands the cards. Purely visual (CSS classes).
         window.ti4 = window.ti4 || {};
+        // Resolves once the page is fully loaded and one frame has been painted. Used by the start page's
+        // senate backdrop: ~150 pods with 24 photographs must never be laid out while the browser is still
+        // pulling the app down, or the very first visit pays for decoration before it gets a page.
+        // ⚠️ The frame is RACED against a timer, never awaited on its own: in a tab that is not visible —
+        // opened in the background, or restored on startup — requestAnimationFrame never fires at all
+        // (verified: no callback within 1.2s while document.visibilityState was 'hidden'), so anything that
+        // waits for it simply never happens.
+        window.ti4.afterLoad = function () {
+            return new Promise(function (resolve) {
+                var done = false;
+                var finish = function () { if (!done) { done = true; resolve(true); } };
+                var go = function () { requestAnimationFrame(finish); setTimeout(finish, 300); };
+                if (document.readyState === 'complete') { go(); }
+                else { addEventListener('load', go, { once: true }); }
+            });
+        };
         // Copy text to the clipboard SYNCHRONOUSLY within the user gesture. Called via Blazor's
         // in-process (synchronous) JS interop — Safari/iPad discards async clipboard calls once the
         // click gesture has "expired", which the normal awaited interop roundtrip triggers. Falls back
@@ -236,7 +283,19 @@
         };
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
+    <script>
+        // Register AFTER the page has loaded, and only where service workers exist at all.
+        // Two reasons, both burned: at parse time the registration — and in a published build the worker's
+        // own precache of EVERY asset, ~250 files — competes with the boot download for the browser's six
+        // connections, which is a first-visit-only stall that a reload always appears to "fix". And on a
+        // plain-HTTP LAN address `navigator.serviceWorker` is undefined, so the bare call threw a TypeError
+        // on exactly the setup the wall display uses.
+        if ('serviceWorker' in navigator) {
+            addEventListener('load', function () {
+                navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });
+            });
+        }
+    </script>
 </body>
 
 </html>
