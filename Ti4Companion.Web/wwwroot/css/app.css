@@ -295,14 +295,18 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Base game: on, and not up for discussion — shown so the set reads complete. */
 .opt-check.is-fixed { opacity: .75; cursor: default; }
 .opt-check.is-fixed:hover { border-color: var(--panel-border); }
-/* Offered but not yet possible. NOT dimmed like `is-disabled`: it exists to be read, so only the box is off. */
+/* Offered but not yet possible: the OPTION goes quiet and its "coming soon" chip stays lit — the chip is the
+   answer to the question the row asks, so it is the one part that has to be read. Done with `color`, not
+   `opacity`: opacity on the row would multiply into the chip, and a child can never undo it. */
 .opt-check.is-soon { cursor: default; }
 .opt-check.is-soon:hover { border-color: var(--panel-border); }
-.opt-check.is-soon .oc-box { opacity: .45; }
+.opt-check.is-soon .oc-box { opacity: .35; }
+.opt-check.is-soon > span { color: var(--text-faint); }
 /* "coming soon" next to an option that is deliberately offered and off (Discordant Stars, Twilight's Fall):
    the question is visibly asked, the answer is "not yet". */
 .opt-check .soon { margin-left: .35rem; font-size: .62rem; text-transform: uppercase; letter-spacing: .05em;
     color: var(--gold-dim); border: 1px solid var(--gold-dim); border-radius: 999px; padding: 0 .3rem; }
+.opt-check.is-soon .soon { color: var(--gold); border-color: var(--gold); }
 
 /* (Red Tape styling lives with the objective cards further down — see `.rt-tape`. It used to be duplicated
    here, which is exactly the same-specificity collision this file has been bitten by before.) */
@@ -808,20 +812,19 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 .chip-passed { background: rgba(224,85,106,.18); color: #f1a3ae; border-color: #6b2a35; }
 .chip-done { background: rgba(70,192,138,.16); color: #8fe0bd; border-color: #2c5e49; }
 .chip-active { background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
-/* The technology prompt's "still to enter" row and the seat being filled in. Names are at reading size, not
-   chip-size: on the table device the host reads these across the table. `color` is set explicitly because the
-   same element is a <button> for the host and a <span> for everyone else, and a button does not inherit it
-   (same trap as `.rt-ask-item`). */
-.tp-waiting { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; margin-bottom: .7rem; }
-.tp-waiting-lbl { font-size: .78rem; }
-.tp-who { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .5rem .2rem .3rem;
-    border: 1px solid var(--panel-border); border-radius: 999px; background: var(--panel-2, rgba(255,255,255,.03));
-    color: var(--text); font: inherit; font-size: .95rem; font-weight: 600; appearance: none; }
-button.tp-who { cursor: pointer; }
-button.tp-who:hover { border-color: var(--gold-dim); }
-.tp-who.on { border-color: var(--player-color, var(--gold-dim)); background: rgba(217,176,74,.12); }
-.tp-target { display: flex; align-items: center; gap: .6rem; padding: .4rem .1rem; }
-.tp-target-name { font-family: 'Orbitron', sans-serif; font-size: 1.15rem; color: var(--text); }
+/* The technology prompt's host list: one row per seat, the same shape as entering influence in the agenda
+   phase (`.inf-row`) — the host is looking at the whole table and filling in for whoever is not holding a
+   phone. Names are at reading size, not chip-size: this is read across the table. */
+.tp-rows { display: flex; flex-direction: column; gap: .4rem; }
+.tp-row { flex-wrap: wrap; gap: .5rem; }
+.tp-row-name { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: var(--text); }
+.tp-count { font-size: .74rem; }
+/* (`.tp-picker-layer` lives with the modal rules further down — put here it lost to `.modal-backdrop`'s own
+   z-index, which is later in the file at the same specificity. Measured: 1200, not 1300.) */
+/* What this player holds, at the foot of the picker — the Technologies tab's own list, so a card that was
+   just tapped lands somewhere visible. A staged one is marked: it has not been sent yet. */
+.tp-owned { margin-top: .8rem; border-top: 1px solid var(--panel-border); padding-top: .6rem; }
+.tp-owned .my-tech.is-new { border-style: dashed; box-shadow: 0 0 0 1px rgba(217,176,74,.35); }
 
 /* ---- code chip ---- */
 .codechip { font-family: 'Orbitron', monospace; letter-spacing: .25em; font-size: 1.1rem; color: var(--gold); background: #0a1020; border: 1px dashed var(--gold-dim); padding: .2rem .6rem; border-radius: 8px; }
@@ -836,16 +839,19 @@ button.tp-who:hover { border-color: var(--gold-dim); }
     height: 100vh; width: 100vw; overflow: hidden;
     padding: 1vh 1.4vw; display: flex; flex-direction: column; gap: 1vh;
 }
-.beamer .b-head { display: flex; align-items: baseline; gap: 1.2rem; flex: 0 0 auto; }
-.beamer .b-title { font-size: clamp(1.4rem, 2.4vw, 3rem); color: var(--gold); }
-.beamer .b-meta { font-size: clamp(.9rem, 1.4vw, 1.8rem); color: var(--text-dim); }
+/* The header is a caption, not content: every millimetre it takes comes off the player table and the
+   objectives below it, which are what the room is actually reading. Kept deliberately small. */
+.beamer .b-head { display: flex; align-items: baseline; gap: .9rem; flex: 0 0 auto; }
+.beamer .b-title { font-size: clamp(1rem, 1.6vw, 1.9rem); color: var(--gold); }
+.beamer .b-meta { font-size: clamp(.75rem, 1vw, 1.2rem); color: var(--text-dim); }
 .beamer .b-phase { font-family: 'Orbitron', sans-serif; color: var(--text); font-weight: 700; }
-/* Prominent join code on the wall so players can read it across the room and join. */
+/* The join code still has to carry across the room, but it is read once per guest — the QR area (and the
+   setup screen) are where a latecomer is actually pointed. */
 .beamer .b-join { display: flex; align-items: center; gap: .6vw; }
-.beamer .b-join-lbl { font-size: clamp(.7rem, 1vw, 1.3rem); color: var(--text-faint); text-transform: uppercase; letter-spacing: .18em; }
-.beamer .b-join-code { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); letter-spacing: .22em;
-    font-size: clamp(1.4rem, 2.6vw, 3.2rem); line-height: 1; background: #0a1020; border: 1px dashed var(--gold-dim);
-    padding: .12em .42em; border-radius: 10px; }
+.beamer .b-join-lbl { font-size: clamp(.6rem, .8vw, 1rem); color: var(--text-faint); text-transform: uppercase; letter-spacing: .18em; }
+.beamer .b-join-code { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); letter-spacing: .18em;
+    font-size: clamp(1rem, 1.5vw, 1.8rem); line-height: 1; background: #0a1020; border: 1px dashed var(--gold-dim);
+    padding: .1em .38em; border-radius: 8px; }
 
 /* The two-column body fills the remaining height and clips (never scrolls). */
 .beamer-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1.15fr .85fr; gap: 1.2vw; }
@@ -1490,7 +1496,22 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .player-row .pr-id { flex: 1 1 100%; order: 1; }
     .player-row .pr-actions { flex: 1 1 100%; order: 2; }
 }
-/* The technology picker needs room for cards, not for a sentence — hence the wider box. */
+/* The host is acting for somebody else — said in words under the turn banner, because the buttons below it
+   are then about a player who is not this device. */
+.takeover-note { font-size: .75rem; margin: .3rem 0 0; }
+
+/* Closing the session: two answers, each with the consequence written under it. Narrow — it is a question,
+   not a screen. */
+.exit-modal { max-width: min(92vw, 26rem); }
+.exit-modal .exit-hint { font-size: .78rem; margin: .35rem 0 .9rem; }
+.exit-modal .exit-hint:last-child { margin-bottom: 0; }
+
+/* The prompt itself is a list of names and buttons, so it stays narrow; the PICKER underneath it needs room
+   for cards, not for a sentence. */
+.techprompt-modal { max-width: 560px; width: 100%; }
+/* The picker sits ON the prompt, so it needs the higher layer — and it has to be stated AFTER
+   `.modal-backdrop`, which sets z-index at the same specificity (same collision as `.rt-confirm-layer`). */
+.tp-picker-layer { z-index: 1300; }
 .techpick-modal { max-width: 900px; width: 100%; }
 .techpick-modal .modal-body { max-height: 62vh; }
 .techpick-modal .tech-cat { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }

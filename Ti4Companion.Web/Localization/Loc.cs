@@ -58,11 +58,12 @@ public class Loc
         ["home.recent"] = ("Resume a session", "Session fortsetzen"),
         ["home.recentTitle"] = ("Sessions on this device", "Sessions auf diesem Gerät"),
         ["home.recentAs"] = ("as", "als"),
+        ["home.recentPick"] = ("choose a player", "Spieler wählen"),
         ["home.recentUnnamed"] = ("Session", "Session"),
-        // The timestamp on each row. It is what THIS DEVICE last saw, which is all a local list can know —
-        // somebody else may have played on afterwards.
-        ["home.recentWhenHint"] = ("Last activity of this device in that session",
-                                   "Letzte Aktivität dieses Geräts in der Session"),
+        // The timestamp on each row: when the session was CREATED. The list is still ordered by this device's
+        // last visit, but the date shown is the game's own — that is what identifies an evening.
+        ["home.recentWhenHint"] = ("When this session was created",
+                                   "Wann diese Session erstellt wurde"),
         ["home.recentNone"] = ("No sessions on this device yet — create one or join with a code.",
                                "Auf diesem Gerät noch keine Sessions — erstelle eine oder tritt mit einem Code bei."),
         ["home.notfound"] = ("No session found for that code.", "Keine Session für diesen Code gefunden."),
@@ -96,7 +97,15 @@ public class Loc
         ["nav.players"] = ("Players", "Spieler"),
         ["nav.settings"] = ("Settings", "Einstellungen"),
         ["nav.leave"] = ("Leave", "Verlassen"),
-        ["nav.leaveConfirm"] = ("Leave this session on this device?", "Diese Session auf diesem Gerät verlassen?"),
+        // Closing the session on this device is two different things, and a yes/no box could never ask which:
+        // do you want your seat back next time, or do you want to be asked who you are?
+        ["nav.exitTitle"] = ("Close this session on this device?", "Diese Session auf diesem Gerät schließen?"),
+        ["nav.exitClose"] = ("Close and keep my seat", "Schließen und Platz behalten"),
+        ["nav.exitCloseHint"] = ("The session stays in your list, and opening it again puts you straight back into {0}.",
+                                 "Die Session bleibt in deiner Liste, und beim nächsten Öffnen bist du wieder {0}."),
+        ["nav.exitLeave"] = ("Give up my seat", "Platz freigeben"),
+        ["nav.exitLeaveHint"] = ("Stays in your list too, but next time you choose which player you join as.",
+                                 "Bleibt ebenfalls in der Liste, aber beim nächsten Mal wählst du, als welcher Spieler du beitrittst."),
 
         ["phase.Setup"] = ("Setup", "Aufstellung"),
         ["phase.Strategy"] = ("Strategy", "Strategie"),
@@ -328,17 +337,19 @@ public class Loc
             "Asks the whole table for its technologies once the Technology action is resolved. A reminder, not a requirement.",
             "Fragt den ganzen Tisch nach seinen Technologien, sobald die Technologie-Aktion abgehandelt ist. Eine Erinnerung, keine Pflicht."),
         ["tech.promptHint"] = (
-            "Pick a colour or search, then click a card. Tap \"Done\" when you have entered everything — the clock is standing still until everyone has.",
-            "Farbe wählen oder suchen, dann eine Karte anklicken. „Fertig“ antippen, wenn alles erfasst ist — bis alle fertig sind, steht die Uhr."),
+            "Did you research anything? Record it — or skip. The clock is standing still until the table is through.",
+            "Etwas erforscht? Dann erfassen — oder überspringen. Bis der Tisch durch ist, steht die Uhr."),
         ["tech.promptHintHost"] = (
-            "Everyone enters their own; you can also switch to another player and enter theirs. \"Move on\" ends it for the whole table.",
-            "Jeder erfasst seine eigenen; du kannst auch auf einen anderen Spieler wechseln und für ihn erfassen. „Weiter“ beendet es für den ganzen Tisch."),
+            "Everyone can enter their own on their own device; you can enter it for anyone here. \"Next turn\" ends it for the whole table.",
+            "Jeder kann auf seinem Gerät selbst erfassen; du kannst es hier für jeden eintragen. „Nächster Zug“ beendet es für den ganzen Tisch."),
         ["tech.promptClockStopped"] = ("the clock is stopped", "die Uhr steht"),
-        ["tech.promptWaiting"] = ("Still to enter", "Fehlt noch"),
-        ["tech.promptAllDone"] = ("everyone is done", "alle fertig"),
-        ["tech.promptDone"] = ("Done", "Fertig"),
-        ["tech.promptDoneFor"] = ("Done for {0}", "Fertig für {0}"),
-        ["tech.promptMoveOn"] = ("Move on", "Weiter"),
+        ["tech.promptRecord"] = ("Record tech", "Techs erfassen"),
+        ["tech.promptRecordFor"] = ("Record technologies for {0}", "Technologien für {0} erfassen"),
+        ["tech.promptChange"] = ("Change", "Ändern"),
+        ["tech.promptSkip"] = ("Skip", "Überspringen"),
+        ["tech.promptSkipped"] = ("skipped", "übersprungen"),
+        ["tech.promptRecorded"] = ("{0} recorded", "{0} erfasst"),
+        ["tech.promptNextTurn"] = ("Next turn", "Nächster Zug"),
         // Per-player turn timer (informational only — never enforced).
         ["timer.remaining"] = ("Time left this round", "Restzeit diese Runde"),
         ["timer.over"] = ("Time budget used up", "Zeitbudget aufgebraucht"),
@@ -441,8 +452,11 @@ public class Loc
                                  "Am Griff ziehen oder die Pfeile nutzen. Dann den Sprecher festlegen — oder auslosen."),
         ["host.only"] = ("Host", "Host"),
         ["host.onlyHint"] = ("Only the host controls the phases.", "Nur der Host steuert die Phasen."),
-        // "host.takeOver" lived here for the take-over toggle. That is gone (the host can always act for
-        // whoever is up, and previous/next turn is how you jump), and so is its label.
+        // Acting for the player who is up. It is a MODE again (2026-08-12): always-on meant the host's device
+        // permanently showed somebody else's turn buttons, which at a table of phones is not clear.
+        ["host.takeOver"] = ("Take over", "Übernehmen"),
+        ["host.takeOverEnd"] = ("End take-over", "Übernahme beenden"),
+        ["host.takeOverHint"] = ("You are acting for {0}.", "Du handelst für {0}."),
         ["host.pickFor"] = ("Pick for this player", "Für diesen Spieler wählen"),
         ["host.manage"] = ("Manage (host)", "Verwalten (Host)"),
 

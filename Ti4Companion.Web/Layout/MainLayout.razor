@@ -44,7 +44,7 @@
         <PushToggle />
         <span class="dot @(Store.Connected ? "on" : "off")" title="@(Store.Connected ? "live" : Loc["common.connecting"])"></span>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
-        <button class="btn btn-sm btn-ghost" @onclick="Leave" title='@Loc["nav.leave"]'><MaterialIcon Name="close" /></button>
+        <button class="btn btn-sm btn-ghost" @onclick="() => showExit = true" title='@Loc["nav.leave"]'><MaterialIcon Name="close" /></button>
     }
     else
     {
@@ -99,6 +99,27 @@
             <JoinQr Text="@InviteLink(qs.JoinCode)" SizeCss="min(72vw, 20rem)" Alt="@Loc["nav.joinQr"]" />
             <div class="qr-code-big">@qs.JoinCode</div>
             <button class="btn" @onclick="() => showQr = false">@Loc["common.close"]</button>
+        </div>
+    </div>
+}
+
+@* Leaving is TWO different intentions and a confirm() could only ask one of them: keep the seat for next
+   time, or hand it back and be asked who you are. Both keep the session in the start page's list — that list
+   is how you come back at all. *@
+@if (showExit && Store.Session is { } xs)
+{
+    <div class="modal-backdrop centered blurred" @onclick="() => showExit = false">
+        <div class="modal exit-modal" @onclick:stopPropagation="true">
+            <div class="modal-head"><h3 style="margin:0;">@Loc["nav.exitTitle"]</h3></div>
+            <div class="modal-body">
+                <button class="btn btn-gold btn-block" @onclick="() => Exit(false)">@Loc["nav.exitClose"]</button>
+                <p class="faint exit-hint">@string.Format(Loc["nav.exitCloseHint"], Store.Me?.Name ?? xs.Name)</p>
+                <button class="btn btn-block" @onclick="() => Exit(true)">@Loc["nav.exitLeave"]</button>
+                <p class="faint exit-hint">@Loc["nav.exitLeaveHint"]</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" @onclick="() => showExit = false">@Loc["common.cancel"]</button>
+            </div>
         </div>
     </div>
 }
@@ -198,10 +219,16 @@
         if (CopySync($"{Nav.BaseUri}join/{Store.Session!.JoinCode}")) { inviteCopied = true; codeCopied = false; }
     }
 
-    private async Task Leave()
+    private bool showExit;
+
+    /// <summary>Close the session on this device. <paramref name="giveUpSeat"/> forgets WHICH player we were
+    /// here, so the next visit asks — the session itself stays in the start page's list either way, since
+    /// that list is the only way back to it.</summary>
+    private async Task Exit(bool giveUpSeat)
     {
-        var ok = await JS.InvokeAsync<bool>("confirm", Loc["nav.leaveConfirm"]);
-        if (!ok) return;
+        showExit = false;
+        var code = Store.Session?.JoinCode;
+        if (giveUpSeat && code is not null) await Store.ForgetSeatAsync(code);
         await Store.LeaveAsync();
         Nav.NavigateTo("/");
     }

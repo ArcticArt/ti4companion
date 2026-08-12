@@ -6,8 +6,9 @@
     var allReady = s.Players.Count > 0 && s.Players.All(p => p.IsReady);
     var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
     var speakerSet = s.SpeakerPlayerId is not null;
-    // Action phase can't begin until everyone has their full strategy-card allotment.
-    var allPicked = s.Players.Count > 0 && s.Players.All(p => p.StrategyCards.Count >= Store.MaxStrategyCards);
+    // Action phase can't begin until everyone has their full strategy-card allotment — or the eight cards
+    // have run out, which is the only way a five-player table playing "two each" ever gets there.
+    var allPicked = Store.StrategyPickDone;
     var host = Store.IsHost;
 }
 

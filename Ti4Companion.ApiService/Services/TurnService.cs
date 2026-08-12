@@ -1,4 +1,5 @@
 using Ti4Companion.ApiService.Data;
+using Ti4Companion.Shared;
 
 namespace Ti4Companion.ApiService.Services;
 
@@ -91,6 +92,9 @@ public static class TurnService
     {
         var order = SeatOrderFromSpeaker(s);
         if (order.Count == 0) return null;
+        // Nothing left to take — a five-player table playing "two each" runs out at eight, and pointing at a
+        // player who cannot pick is how the strategy phase looked stuck.
+        if (order.Sum(p => p.StrategyCards.Count) >= GameRules.StrategyCardCount) return null;
         for (var pass = 0; pass < maxCards; pass++)
         {
             var next = order.FirstOrDefault(p => p.StrategyCards.Count <= pass);

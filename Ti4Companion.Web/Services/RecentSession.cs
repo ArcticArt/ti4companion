@@ -19,4 +19,9 @@ public sealed record RecentSession(
     string Name,
     string PlayerName,
     Guid PlayerId,
-    DateTimeOffset LastSeen);
+    /// <summary>When this device was last in the session — what the list is ORDERED by.</summary>
+    DateTimeOffset LastSeen,
+    /// <summary>When the session itself was created (from the server). What the list SHOWS: "which evening
+    /// was this?" is answered by the game's own date, not by when this phone last looked at it. Entries
+    /// written before this field existed carry <c>default</c>, which the list falls back on.</summary>
+    DateTimeOffset Created = default);

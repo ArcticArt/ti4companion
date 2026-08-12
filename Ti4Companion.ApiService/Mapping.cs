@@ -86,7 +86,11 @@ public static class Mapping
     public static SessionLogEntryDto ToDto(this SessionLogEntry l)
         => new(l.Id, l.TimestampUtc, l.Kind, l.ActorPlayerId, l.TargetPlayerId, l.Phase, l.Round, l.Detail);
 
-    public static SessionStateDto ToDto(this GameSession s, IReadOnlyDictionary<string, int?> factionOverrides)
+    /// <param name="callerPlayerId">Which seat the requesting device holds — see
+    /// <see cref="SessionStateDto.CallerPlayerId"/>. Only the by-code read passes it; everything else is
+    /// produced by the shared save-and-return path, which has no request in scope.</param>
+    public static SessionStateDto ToDto(this GameSession s, IReadOnlyDictionary<string, int?> factionOverrides,
+        Guid? callerPlayerId = null)
     {
         var players = s.Players
             .OrderBy(p => p.SeatOrder)
@@ -159,6 +163,6 @@ public static class Mapping
             s.ShowJoinQr, s.StatusStage, s.SecondaryCardId, s.SecondaryOwnerId, s.SpeakerPending,
             s.RedTapeRandomRound, s.RedTapeRandomPendingRound,
             s.CombatAId, s.CombatBId, s.TechPickPlayerId, s.TechPromptOpen, s.TechPromptOwnerId,
-            s.RedTapeCarrierGoods, s.CustomVoteTitle, s.CustomVoteElect);
+            s.RedTapeCarrierGoods, s.CustomVoteTitle, s.CustomVoteElect, callerPlayerId);
     }
 }

@@ -94,6 +94,7 @@ else
     {
         base.OnInitialized();
         Store.OnShowTechTab += ShowTechs;
+        Store.OnSeatLost += SeatLost;
     }
 
     // The action view's optional "record your technology" prompt asks the shell to switch tabs.
@@ -103,9 +104,15 @@ else
         StateHasChanged();
     });
 
+    // Somebody joined and took this device's seat. Staying here means a screen where every control is
+    // present and none of them does anything — the server stopped recognising this device as that player.
+    // So go back to the join menu for the same code, where a seat can be chosen again.
+    private void SeatLost() => InvokeAsync(() => Nav.NavigateTo($"/join/{Code.ToUpperInvariant()}"));
+
     public override void Dispose()
     {
         Store.OnShowTechTab -= ShowTechs;
+        Store.OnSeatLost -= SeatLost;
         base.Dispose();
     }
 

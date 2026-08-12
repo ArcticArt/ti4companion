@@ -60,7 +60,7 @@ else
                     <span>@owner.Name</span>
                     @if (host || Store.CanEdit(owner.Id))
                     {
-                        <button class="btn btn-sm btn-ghost" @onclick="() => Return(owner.Id, card.Id)">↩ @Loc["strategy.unpick"]</button>
+                        <button class="btn btn-sm btn-ghost" @onclick="() => Return(owner.Id, card.Id)"><MaterialIcon Name="undo" /> @Loc["strategy.unpick"]</button>
                     }
                 </div>
             }

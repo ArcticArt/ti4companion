@@ -15,6 +15,25 @@ public static class GameRules
     public static int StrategyCardsPerPlayer(int playerCount, int option)
         => option is 1 or 2 ? option : playerCount <= 4 ? 2 : 1;
 
+    /// <summary>The eight printed strategy cards. There is no ninth — which is the whole reason for
+    /// <see cref="StrategyPickDone"/>.</summary>
+    public const int StrategyCardCount = 8;
+
+    /// <summary>
+    /// Whether the strategy phase is finished: everybody holds their allotment — <b>or</b> the cards have
+    /// simply run out.
+    /// <para>
+    /// The second half is not a nicety. Pin the count to two, sit five players down, and the table needs ten
+    /// cards where eight exist: "everyone has two" can never become true, so the action phase was unreachable
+    /// and the pinned option was a trap. How the eight are shared is the table's business; the app's only job
+    /// is to stop standing in the way once there is nothing left to take.
+    /// </para></summary>
+    /// <param name="cardsHeld">How many cards each player holds — one entry per seat.</param>
+    public static bool StrategyPickDone(IReadOnlyCollection<int> cardsHeld, int option)
+        => cardsHeld.Count > 0
+           && (cardsHeld.All(c => c >= StrategyCardsPerPlayer(cardsHeld.Count, option))
+               || cardsHeld.Sum() >= StrategyCardCount);
+
     /// <summary>The Technology strategy card's number (cards are keyed by their printed initiative 1–8).
     /// Used for the optional "record your technology" prompt after that action is played.</summary>
     public const int TechnologyStrategyCard = 7;

@@ -180,12 +180,14 @@ public static class SessionEndpoints
         return Results.Ok(new JoinResultDto(state, host.Id, deviceToken));
     }
 
-    private static async Task<IResult> GetByCode(string code, Ti4DbContext db, CancellationToken ct)
+    private static async Task<IResult> GetByCode(string code, Ti4DbContext db, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphByCodeAsync(db, SessionHub.Normalize(code), ct);
         if (session is null) return Results.NotFound();
         var overrides = FactionInitiative.Overrides;
-        return Results.Ok(session.ToDto(overrides));
+        // The one response that says which seat the asking device holds. It is how a device learns that its
+        // seat has been taken over — see SessionStateDto.CallerPlayerId.
+        return Results.Ok(session.ToDto(overrides, GetCaller(session, http)?.Id));
     }
 
     // The match log (chronological). Read-only like GetByCode; the client only surfaces it to the host.
@@ -340,9 +342,10 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
 
         // Every player must have taken their full strategy-card allotment first (printed rule unless the
-        // table pinned a count — see GameRules).
-        var perPlayer = GameRules.StrategyCardsPerPlayer(session.Players.Count, session.StrategyCardsPerPlayer);
-        if (session.Players.Count == 0 || session.Players.Any(p => p.StrategyCards.Count < perPlayer))
+        // table pinned a count) — or the eight cards must be gone, which is the only way a five-player table
+        // playing "two each" can ever get here. See GameRules.StrategyPickDone.
+        if (!GameRules.StrategyPickDone(session.Players.Select(p => p.StrategyCards.Count).ToList(),
+                                        session.StrategyCardsPerPlayer))
             return Results.BadRequest(new { error = "All players must pick their strategy card(s) first." });
 
         // Trade goods are settled only now (start of the action phase): each player collects the

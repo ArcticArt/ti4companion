@@ -127,31 +127,42 @@ exception.
   browser or switched device pick the role back up instead of leaving the table unable to change phases.
   The join code is the only thing guarding that, and a device holding it can already score and vote; the
   take-over is written to the match log so the table can see it. The claiming device gives up any other
-  seat it held (one device, one seat).
+  seat it held (one device, one seat) — **and the displaced device notices**: `GET /api/sessions/{code}`
+  answers with the seat the *asking* device holds, so the one that lost it drops the seat and goes back to
+  the join screen. Without that it kept a session where every control was present and none of them worked,
+  because the server no longer recognised it as that player.
 - **Coming back:** each device remembers the sessions it has played in `localStorage` — the last ten with
-  the session name, the code and **which player it was there**. That last part is the reason the record
-  exists: the device token identifies the device and is shared by every session it plays, so a single
-  stored player id could only ever describe one game. Leaving a session keeps its entry; an entry whose
-  code the server no longer knows removes itself on the next attempt.
+  the session name, the code, when the game was created and **which player it was there**. That last part is
+  the reason the record exists: the device token identifies the device and is shared by every session it
+  plays, so a single stored player id could only ever describe one game. Leaving a session keeps its entry,
+  and asks which kind of leaving was meant: keep the seat (coming back walks straight into it) or give it up
+  (coming back asks who you are). An entry whose code the server no longer knows removes itself on the next
+  attempt.
 - **Strategy:** cards are picked in order — speaker first, then clockwise by seat; with ≤4 players
-  everyone picks 2 cards. Unpicked cards gain 1 trade good per round; goods are settled when the action
-  phase starts. Initiative = lowest held card number (the Naalu Collective is always 0).
+  everyone picks 2 cards, and a table may pin the count instead. Whose pick it is comes from **who holds
+  what**, not from how many cards have gone: a returned card goes back to the player who returned it. The
+  phase is over when everyone has their allotment **or the eight cards have run out** — pinning two cards
+  with five players asks for ten, so "everyone has two" can never happen. Unpicked cards gain 1 trade good
+  per round; goods are settled when the action phase starts. Initiative = lowest held card number (the Naalu
+  Collective is always 0).
 - **Action:** turns run in initiative order. Playing a strategy action highlights the card on the wall;
   the highlight clears on the next turn change. A player may pass only once all of their strategy cards
-  are exhausted; the round can end only when everyone has passed. Whoever is up — or the host, who may always
-  act for them — can declare a **combat** and record a **technology**, both as popups on the player card.
-  Two things stop that player's clock while they are open, and both are the same mechanism: a logged
-  start/end interval that `MatchStats` subtracts from **time on turn only** (not from the round or the match).
-  A battle with someone else is not their thinking time, and neither is hunting for a technology in a list —
-  but both are still time the table spent playing. Because a popup can be walked away from, the server closes
-  either one at every turn and phase boundary. Imperial's primary opens a third popup, listing the objectives
-  that player may actually score.
+  are exhausted; the round can end only when everyone has passed. Whoever is up — or the host, after
+  switching **take over** on, which starts off so the table device does not permanently carry somebody else's
+  buttons — can declare a **combat**, as a popup on the player card.
+  A combat stops that player's clock while it runs, and so does the technology prompt below; both use the
+  same mechanism, a logged start/end interval that `MatchStats` subtracts from **time on turn only** (not
+  from the round or the match). A battle with someone else is not their thinking time, and neither is hunting
+  for a technology in a list — but both are still time the table spent playing. Because a popup can be walked
+  away from, the server closes either one at every turn and phase boundary. Imperial's primary opens a third
+  popup, listing the objectives that player may actually score.
 - **Recording technologies** (optional, a table setting) is asked once the Technology action is resolved, not
-  while it is being played: the players taking the secondary research as well. Every device then shows the
-  catalogue for its own seat — the host can also switch to another player and enter theirs — and **the clock
-  stands still** until everybody has said they are done, or the player who played the card (or the host) moves
-  the table on. Like the other clock stops it is a logged interval, and every turn or phase boundary ends it,
-  so a phone somebody put down cannot stop the clock for the rest of the evening.
+  while it is being played: the players taking the secondary research as well. The host then sees **the whole
+  table as a list**, one "record" button per seat, and can fill anything in for anyone; every other device
+  sees two buttons for its own seat — record, or skip. The picker itself stages its changes and only sends
+  them when confirmed, so cancelling really cancels. **The clock stands still** until everybody has answered
+  or the host moves the table on. Like the other clock stops it is a logged interval, and every turn or phase
+  boundary ends it, so a phone somebody put down cannot stop the clock for the rest of the evening.
 - **Secondary abilities** (an optional extra, and only meaningful with the turn timer on) are followed as a
   *round*: it opens when the player who played the primary ends their turn, each participant is put on their
   own clock, and it closes when the last one is done. A secondary happens **between two turns**, so while the
@@ -206,7 +217,8 @@ exception.
 Everything lives under `/api/sessions` (mutations broadcast a SignalR `SessionChanged` event and return
 the full updated session state) plus one content endpoint:
 
-- Lifecycle: `POST /` · `GET /{code}` · `GET /{code}/log` · `PATCH /{id}` · `DELETE /{id}` ·
+- Lifecycle: `POST /` · `GET /{code}` (the only response that also says which seat the *asking* device
+  holds) · `GET /{code}/log` · `PATCH /{id}` · `DELETE /{id}` ·
   `POST /{id}/display` · `POST /{id}/pause` · `POST /{id}/resume`
 - Phases/rounds: `POST /{id}/phase/{start|action|status|agenda}` · `POST /{id}/round/next`
 - Turn: `POST /{id}/active-strategy` · `POST /{id}/turn/{active|advance|previous}`

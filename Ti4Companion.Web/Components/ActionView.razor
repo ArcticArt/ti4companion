@@ -8,11 +8,12 @@
     var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
     var host = Store.IsHost;
     var mine = active is not null && active.Id == Store.MyPlayerId;
-    // A player controls their own turn; the host controls whoever is up — which is what the server allows
-    // anyway ("active player or host"). There used to be a "take over" toggle in front of that, whose real
-    // job was jumping to another player; "previous turn"/"next turn" already do exactly that, so the toggle
-    // was a mode you had to remember to be in.
-    var canControl = active is not null && (mine || host);
+    // A player controls their own turn. The host MAY control whoever is up — the server allows it ("active
+    // player or host") — but only after saying so: with it always on, the host's device carried somebody
+    // else's pass and play buttons the whole game, and at a table where everyone holds a phone it stops being
+    // clear whose taps count. So it is a mode, off by default, with a button to enter and leave it.
+    var takeover = host && Store.HostTakeover;
+    var canControl = active is not null && (mine || takeover);
 }
 
 @if (allPassed)
@@ -35,7 +36,27 @@
             <TurnTimer PlayerId="@active.Id" Signal="@mine" Report="@(mine || host)" />
         }
         <div class="spacer" style="flex:1"></div>
+        @* The switch into (and out of) acting for the player who is up. Only for the host, and only when the
+           turn is somebody else's — on their own turn there is nothing to take over. *@
+        @if (host && !mine)
+        {
+            <button class="btn btn-sm @(takeover ? "btn-gold" : "")" @onclick="() => Store.HostTakeover = !takeover">
+                @if (takeover)
+                {
+                    <MaterialIcon Name="close" />
+                    @Loc["host.takeOverEnd"]
+                }
+                else
+                {
+                    @Loc["host.takeOver"]
+                }
+            </button>
+        }
     </div>
+    @if (takeover && !mine)
+    {
+        <div class="faint takeover-note">@string.Format(Loc["host.takeOverHint"], active.Name)</div>
+    }
 }
 
 @* Card-specific actions. Only three of the eight have one worth offering; the other five are resolved on

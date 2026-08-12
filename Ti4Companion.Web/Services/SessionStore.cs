@@ -116,9 +116,22 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     // objective". That is a popup now (ImperialScoreModal), listing exactly what that player may score, so
     // nothing has to switch tabs for it any more.
 
-    // The action phase's "take over" toggle used to live here (so switching tabs wouldn't drop it). It is gone:
-    // the host can always act for whoever is up — which is what the server allowed all along — and jumping to
-    // another player is exactly what "previous turn"/"next turn" already do.
+    /// <summary>
+    /// The host is acting FOR the player who is up. Off by default and switched on deliberately, per device.
+    /// <para>
+    /// The server has always allowed "the active player or the host", and for a while the client simply used
+    /// that: the host's screen carried the whole turn at all times. At a table where everybody has their own
+    /// phone that is the wrong default — the host's device shows the pass and play buttons for somebody
+    /// else's turn, and it is not obvious whose taps count. So it is a mode again, with a button to enter and
+    /// leave it. Not persisted: it belongs to the moment somebody hands the host their turn, not to the
+    /// device forever.
+    /// </para></summary>
+    public bool HostTakeover
+    {
+        get => _hostTakeover;
+        set { _hostTakeover = value; OnChange?.Invoke(); }
+    }
+    private bool _hostTakeover;
 
     /// <summary>This device asked to see the secondary-round popup although it is not addressed to it (the
     /// host opening it from the action view). Per device and not per component, because the popup lives in
@@ -136,7 +149,11 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         || (Session is not null && MyPlayerId is not null && !Session.Players.Any(p => p.IsHost)
             && Session.Players.OrderBy(p => p.SeatOrder).FirstOrDefault()?.Id == MyPlayerId);
 
-    /// <summary>Whose turn it is to pick a strategy card (speaker first, then clockwise by seat), or null when done.</summary>
+    /// <summary>Whose turn it is to pick a strategy card (speaker first, then clockwise by seat), or null when
+    /// done. Mirrors <c>TurnService.CurrentPicker</c> exactly — including the two things that version had to
+    /// learn: it is derived from WHO HOLDS WHAT (so a returned card goes back to its owner rather than to
+    /// whoever sits at that index), and it stops when the eight cards are gone (a five-player table playing
+    /// "two each" runs out before everyone has two).</summary>
     public Guid? CurrentPickerId
     {
         get
@@ -147,10 +164,20 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
             var start = s.SpeakerPlayerId is Guid sp ? seated.FindIndex(p => p.Id == sp) : 0;
             if (start < 0) start = 0;
             var order = Enumerable.Range(0, seated.Count).Select(i => seated[(start + i) % seated.Count]).ToList();
-            var taken = order.Sum(p => p.StrategyCards.Count);
-            return taken >= order.Count * MaxStrategyCards ? null : order[taken % order.Count].Id;
+            if (order.Sum(p => p.StrategyCards.Count) >= GameRules.StrategyCardCount) return null;
+            for (var pass = 0; pass < MaxStrategyCards; pass++)
+            {
+                var next = order.FirstOrDefault(p => p.StrategyCards.Count <= pass);
+                if (next is not null) return next.Id;
+            }
+            return null;
         }
     }
+
+    /// <summary>Every player has their allotment, or the cards have run out — the action phase may begin.
+    /// Same helper the server gates with, so the button is never offered where the server would refuse.</summary>
+    public bool StrategyPickDone => Session is { } s
+        && GameRules.StrategyPickDone(s.Players.Select(p => p.StrategyCards.Count).ToList(), s.StrategyCardsPerPlayer);
 
     /// <summary>Status phase: whose turn it is to score (initiative order), from the server.</summary>
     public Guid? StatusScorerId => Session?.StatusScorerId;
@@ -309,7 +336,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         var list = await RecentAsync();
         list.RemoveAll(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
         var name = s.Players.FirstOrDefault(p => p.Id == playerId)?.Name ?? "";
-        list.Insert(0, new RecentSession(s.JoinCode, s.Name, name, playerId, DateTimeOffset.UtcNow));
+        list.Insert(0, new RecentSession(s.JoinCode, s.Name, name, playerId, DateTimeOffset.UtcNow, s.CreatedAtUtc));
         if (list.Count > MaxRecent) list.RemoveRange(MaxRecent, list.Count - MaxRecent);
         await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
     }
@@ -319,6 +346,20 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     {
         var list = await RecentAsync();
         if (list.RemoveAll(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase)) == 0) return;
+        await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
+    }
+
+    /// <summary>
+    /// Keep the session in the list but forget WHICH seat this device held in it, so coming back asks who to
+    /// be instead of walking into a player that is no longer ours. Two things do this: leaving a session on
+    /// purpose ("leave" rather than "close"), and having the seat taken over by somebody else.
+    /// </summary>
+    public async Task ForgetSeatAsync(string code)
+    {
+        var list = await RecentAsync();
+        var idx = list.FindIndex(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0 || list[idx].PlayerId == Guid.Empty) return;
+        list[idx] = list[idx] with { PlayerId = Guid.Empty, PlayerName = "" };
         await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
     }
 
@@ -357,17 +398,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         if (s is null) { await ForgetRecentAsync(code); Session = null; OnChange?.Invoke(); return false; }
 
         Session = s;
-
-        // Which seat this device holds HERE — looked up per session, so opening an older game gives you back
-        // the player you were in it rather than making you a stranger.
-        var remembered = (await RecentAsync())
-            .FirstOrDefault(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
-        if (remembered is not null && s.Players.Any(p => p.Id == remembered.PlayerId))
-        {
-            MyPlayerId = remembered.PlayerId;
-            await RememberAsync(s, remembered.PlayerId);   // refresh the names and move it to the front
-        }
-
+        await AdoptSeatAsync(s);
         ApplySessionLanguageIfUnset(s);
         await EnsureHubAsync(s.JoinCode);
         await RefreshLogAsync(); // the turn timer needs the log right away, not only after the first change
@@ -391,9 +422,55 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     {
         if (Session is null) return;
         Session = await api.GetSessionAsync(Session.JoinCode);
+        if (Session is not null) await AdoptSeatAsync(Session);
         await RefreshLogAsync();
         OnChange?.Invoke();
     }
+
+    /// <summary>
+    /// Somebody took this device's seat over: the session is still there, but this device is no longer that
+    /// player. Raised from the read path so the shell can send it back to the join menu.
+    /// </summary>
+    public event Action? OnSeatLost;
+
+    /// <summary>
+    /// Reconcile which seat this device holds with what the SERVER says it holds
+    /// (<see cref="SessionStateDto.CallerPlayerId"/>, filled only by the by-code read).
+    /// <para>
+    /// The remembered seat used to be taken at face value, and that is exactly what broke when a joiner
+    /// claimed it: the displaced device kept a session that looked completely alive — every button there,
+    /// nothing greyed out — while the server no longer recognised it as that player, so every tap came back
+    /// 403 and did nothing at all. The device token is the truth about who this device is, so it decides.
+    /// </para></summary>
+    private async Task AdoptSeatAsync(SessionStateDto s)
+    {
+        if (s.CallerPlayerId is Guid seat)
+        {
+            var isNew = MyPlayerId != seat;
+            MyPlayerId = seat;
+            // Refresh the remembered entry: names change, and the list is ordered by last use.
+            if (isNew || _lastRemembered != s.JoinCode)
+            {
+                _lastRemembered = s.JoinCode;
+                await RememberAsync(s, seat);
+            }
+            return;
+        }
+
+        // No seat here. Only interesting if we thought we had one — a wall display never did.
+        var remembered = (await RecentAsync())
+            .FirstOrDefault(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
+        var hadSeat = MyPlayerId is not null || (remembered is not null && remembered.PlayerId != Guid.Empty);
+        if (!hadSeat) return;
+
+        MyPlayerId = null;
+        await ForgetSeatAsync(s.JoinCode);
+        OnSeatLost?.Invoke();
+    }
+
+    /// <summary>Which session the recent list was last written for, so a refresh every few seconds doesn't
+    /// rewrite localStorage on every single change.</summary>
+    private string? _lastRemembered;
 
     /// <summary>
     /// Leave the current session on this device: disconnect and drop the live state. The entry in the recent
@@ -411,6 +488,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         _joinedCode = null;
         Session = null;
         MyPlayerId = null;
+        _lastRemembered = null;
         Log = Array.Empty<SessionLogEntryDto>();
         await storage.RemoveAsync(KeyCode);
         await storage.RemoveAsync(KeyPlayer);
@@ -424,6 +502,7 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         DeviceToken = result.DeviceToken;
         api.SetDeviceToken(result.DeviceToken);
         await storage.SetAsync(KeyDevice, result.DeviceToken);
+        _lastRemembered = result.Session.JoinCode;
         await RememberAsync(result.Session, result.PlayerId);
         ApplySessionLanguageIfUnset(result.Session);
         await EnsureHubAsync(result.Session.JoinCode);

@@ -278,7 +278,19 @@ public record SessionStateDto(
     /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
     string? CustomVoteTitle = null,
     /// <summary>What the free vote elects (null unless one is running).</summary>
-    ElectType? CustomVoteElect = null);
+    ElectType? CustomVoteElect = null,
+    /// <summary>
+    /// Which seat the CALLING device holds in this session, resolved from its <c>X-Device-Token</c> — the
+    /// answer to "am I still this player?". Null means the device holds no seat here.
+    /// <para>
+    /// <b>Only <c>GET /api/sessions/{code}</c> fills this in</b>; every other response leaves it null, because
+    /// they are produced by a shared save-and-return path that has no request in scope. So it is read in
+    /// exactly one place — the client's read path (<c>SessionStore.ConnectAsync</c>/<c>RefreshAsync</c>) —
+    /// where it answers the one question nothing else can: somebody has taken this device's seat over. Before
+    /// this existed, the displaced device kept a session that looked completely alive and silently did
+    /// nothing, because the server no longer recognised it as that player.
+    /// </para></summary>
+    Guid? CallerPlayerId = null);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>

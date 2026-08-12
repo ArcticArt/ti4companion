@@ -54,14 +54,21 @@
             <div class="join-players">
                 @foreach (var r in recent)
                 {
-                    <button class="join-player" disabled="@busy" @onclick="() => Resume(r.Code)">
+                    var seated = r.PlayerId != Guid.Empty;
+                    <button class="join-player" disabled="@busy" @onclick="() => Resume(r)">
                         <span class="rs-name">@(string.IsNullOrWhiteSpace(r.Name) ? Loc["home.recentUnnamed"] : r.Name)</span>
                         <span class="codechip">@r.Code</span>
-                        @if (!string.IsNullOrWhiteSpace(r.PlayerName))
+                        @if (seated && !string.IsNullOrWhiteSpace(r.PlayerName))
                         {
                             <span class="chip">@Loc["home.recentAs"] @r.PlayerName</span>
                         }
-                        <span class="rs-when" title='@Loc["home.recentWhenHint"]'>@When(r.LastSeen)</span>
+                        else if (!seated)
+                        {
+                            @* No seat here any more — gave it up, or somebody took it over. Say so, because
+                               the row then leads to the "who are you" step instead of straight into the game. *@
+                            <span class="chip">@Loc["home.recentPick"]</span>
+                        }
+                        <span class="rs-when" title='@Loc["home.recentWhenHint"]'>@When(r.Created == default ? r.LastSeen : r.Created)</span>
                     </button>
                 }
             </div>
@@ -197,10 +204,11 @@
 
     private string NamePlaceholder => Loc["players.you"];
 
-    /// <summary>When this device was last in that session, in ITS OWN local time. Formatted with an explicit
-    /// pattern per language and <see cref="CultureInfo.InvariantCulture"/> — the browser's culture decides
-    /// what `d` means, and a WASM app can be running under any of them (the same reason numbers going into
-    /// CSS are formatted invariant).</summary>
+    /// <summary>When the session was STARTED, in this device's local time — the date a group recognises a
+    /// game night by. (It used to show this device's last visit, which says more about the phone than about
+    /// the game.) Formatted with an explicit pattern per language and
+    /// <see cref="CultureInfo.InvariantCulture"/> — the browser's culture decides what `d` means, and a WASM
+    /// app can be running under any of them (the same reason numbers going into CSS are formatted invariant).</summary>
     private string When(DateTimeOffset ts)
     {
         var local = ts.ToLocalTime();
@@ -213,11 +221,14 @@
         await Store.InitAsync();
         recent = await Store.RecentAsync();
         activity = await Store.Api.GetActivityAsync();
-        // Arrived via an invite link (/join/{code}) → jump straight to the pre-filled join form.
+        // Arrived via an invite link (/join/{code}), or sent here because this device's seat was taken over.
+        // The code is known either way, so go straight to the list of players rather than making them press
+        // "continue" first — for the displaced device that step would ask a question it has already answered.
         if (!string.IsNullOrWhiteSpace(Code))
         {
             joinCode = Code.Trim().ToUpperInvariant();
             view = View.Join;
+            await LoadIdentities();
         }
     }
 
@@ -292,8 +303,11 @@
         Nav.NavigateTo($"/display/{code}");
     }
 
-    // Pick a remembered session back up. Nothing to send: the session page connects by code and the store
-    // looks up which seat this device held there (see SessionStore.ConnectAsync). A code that no longer
-    // exists drops itself from the list on the way in.
-    private void Resume(string code) => Nav.NavigateTo($"/s/{code}");
+    // Pick a remembered session back up. Nothing to send: the session page connects by code and the SERVER
+    // says which seat this device holds (see SessionStore.AdoptSeatAsync). A code that no longer exists drops
+    // itself from the list on the way in.
+    // An entry whose seat is gone — given up, or taken over by somebody else — goes to the join step instead,
+    // where a player can be chosen. Opening the session itself would land on a table we are not sitting at.
+    private void Resume(RecentSession r)
+        => Nav.NavigateTo(r.PlayerId == Guid.Empty ? $"/join/{r.Code}" : $"/s/{r.Code}");
 }
