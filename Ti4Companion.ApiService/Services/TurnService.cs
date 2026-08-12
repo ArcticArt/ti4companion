@@ -78,15 +78,25 @@ public static class TurnService
     }
 
     /// <summary>
-    /// Whose turn it is to pick a strategy card: speaker first, then clockwise, one card per round
+    /// Whose turn it is to pick a strategy card: speaker first, then clockwise, one card per pass
     /// (so with 2 cards everyone takes their first before the speaker takes a second). Null once full.
-    /// </summary>
+    /// <para>
+    /// Derived from WHO HOLDS WHAT, not from how many cards have been taken in total. The count-based version
+    /// (<c>order[taken % count]</c>) was right until a card came back: with everybody served, a player
+    /// returning their card handed the pick to whoever happened to sit at that index — usually the player who
+    /// picked last — instead of back to them. Looking for the first player short of a card in this pass has no
+    /// such hole, and behaves identically while the picking runs forward.
+    /// </para></summary>
     public static Guid? CurrentPicker(GameSession s, int maxCards)
     {
         var order = SeatOrderFromSpeaker(s);
         if (order.Count == 0) return null;
-        var taken = order.Sum(p => p.StrategyCards.Count);
-        return taken >= order.Count * maxCards ? null : order[taken % order.Count].Id;
+        for (var pass = 0; pass < maxCards; pass++)
+        {
+            var next = order.FirstOrDefault(p => p.StrategyCards.Count <= pass);
+            if (next is not null) return next.Id;
+        }
+        return null;
     }
 
     private static Guid? Step(GameSession s, IReadOnlyDictionary<string, int?> overrides, int dir)

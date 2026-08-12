@@ -87,11 +87,10 @@
         </div>
 
         @* Score by tapping the card itself (not via the little markers, as in the action phase). The list is
-           what the player who is up can actually DO: a taped or purged objective is not scorable, so it is not
-           here (the Objectives tab still shows the whole table, one tap away, tape and all). The ones they have
-           already scored stay, marked, and tapping one takes it back — a mis-tap has to be undoable in the
-           same place it happened, which is the reason the list is not simply filtered down to "not yet
-           scored". *@
+           what the player who is up can actually DO: a taped or purged objective is not scorable and one they
+           had already scored when their turn came round is not a decision, so neither is here (the Objectives
+           tab still shows the whole table, one tap away, tape and all). What they score NOW stays, marked, and
+           tapping it takes it back — a mis-tap has to be undoable in the same place it happened. *@
         <div class="panel" style="margin-top:.6rem;">
             @if (scorer is not null)
             {
@@ -221,19 +220,43 @@
     private Task ToggleStep(StatusStep step, bool done)
         => Store.Mutate(Store.Api.SetStatusStepAsync(Sid, step, done));
 
+    // What this scorer had ALREADY scored when their turn came round — snapshotted per scorer, so those cards
+    // stay out of their list while anything they score now stays in it, undoable. Per device and not in the
+    // session on purpose: it only decides what this screen offers, and it is re-taken when the scorer changes
+    // (the same reasoning as the wall's reveal baseline). An objective scored earlier in the round — Imperial's
+    // primary, say — is therefore gone from the list, which is exactly what "already scored" means here.
+    private Guid? baselineFor;
+    private HashSet<Guid> baseline = new();
+
+    private HashSet<Guid> Baseline(SessionStateDto s, PlayerDto? scorer)
+    {
+        if (scorer is null) return new HashSet<Guid>();
+        if (baselineFor != scorer.Id)
+        {
+            baselineFor = scorer.Id;
+            baseline = s.Objectives.Where(o => o.ScoredByPlayerIds.Contains(scorer.Id)).Select(o => o.Id).ToHashSet();
+        }
+        return baseline;
+    }
+
     /// <summary>What the player who is up can act on: everything they may still score, plus what they have
-    /// already scored this phase so a mis-tap can be taken back. A taped or purged objective can't be scored
-    /// (the server refuses it too), so it would only be a card that does nothing when tapped.
+    /// scored SINCE their turn began so a mis-tap can be taken back. A taped or purged objective can't be
+    /// scored (the server refuses it too), so it would only be a card that does nothing when tapped; and one
+    /// they had already scored before this phase is not a decision either.
     /// <para>With nobody up — everyone has said "done" — the same filter leaves the objectives that are
     /// simply on the table, which is what the heading then says.</para></summary>
     private List<SessionObjectiveDto> Scorable(SessionStateDto s, PlayerDto? scorer)
-        => s.Objectives
-            .Where(o => !o.Purged
-                        && (!Store.RedTapeBlocks(o)
-                            || (scorer is not null && o.ScoredByPlayerIds.Contains(scorer.Id))))
-            // Still to score first, already scored after it: the top of the list is what there is to decide.
-            .OrderBy(o => scorer is not null && o.ScoredByPlayerIds.Contains(scorer.Id) ? 1 : 0)
+    {
+        var was = Baseline(s, scorer);
+        bool ScoredNow(SessionObjectiveDto o) =>
+            scorer is not null && o.ScoredByPlayerIds.Contains(scorer.Id) && !was.Contains(o.Id);
+        return s.Objectives
+            .Where(o => !o.Purged && !was.Contains(o.Id)
+                        && (!Store.RedTapeBlocks(o) || ScoredNow(o)))
+            // Still to score first, scored just now after it: the top of the list is what there is to decide.
+            .OrderBy(o => ScoredNow(o) ? 1 : 0)
             .ToList();
+    }
 
     private Task Toggle(Guid sessionObjectiveId, Guid playerId, bool scored)
         => scored ? Unscore(sessionObjectiveId, playerId) : Score(sessionObjectiveId, playerId);

@@ -214,14 +214,16 @@ else
                         <StrategyCardView Card="card" Used="pc.IsExhausted" Highlight="@(s.ActiveStrategyCardId == card.Id)" />
                         @if (canControl)
                         {
+                            @* Full height too — this is the button that plays the card, so it cannot be the
+                               smallest one on the screen. *@
                             <div>
                                 @if (!pc.IsExhausted)
                                 {
-                                    <button class="btn btn-sm btn-gold btn-block" @onclick="() => PlayAction(active.Id, card.Id)">@Loc["turn.strategyAction"]</button>
+                                    <button class="btn btn-gold btn-block" @onclick="() => PlayAction(active.Id, card.Id)">@Loc["turn.strategyAction"]</button>
                                 }
                                 else
                                 {
-                                    <button class="btn btn-sm btn-ghost btn-block" @onclick="() => Unplay(active.Id, card.Id)"><MaterialIcon Name="undo" /> @Loc["turn.notDone"]</button>
+                                    <button class="btn btn-ghost btn-block" @onclick="() => Unplay(active.Id, card.Id)"><MaterialIcon Name="undo" /> @Loc["turn.notDone"]</button>
                                 }
                             </div>
                         }
@@ -232,10 +234,13 @@ else
 
         @if (canControl)
         {
-            <div style="margin-top:.7rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+            @* One height for every button on this row (`.turn-actions` drops the `btn-sm` sizing): pass, combat
+               and the two turn buttons are equally weighty things to press, and a row of three sizes reads as
+               three kinds of importance. "Previous turn" is abbreviated so it fits that height on a phone. *@
+            <div class="turn-actions" style="margin-top:.7rem;">
                 @if (active.HasPassed)
                 {
-                    <button class="btn btn-sm" @onclick="() => Pass(active.Id, false)">@Loc["turn.unpass"]</button>
+                    <button class="btn" @onclick="() => Pass(active.Id, false)">@Loc["turn.unpass"]</button>
                 }
                 else
                 {
@@ -245,13 +250,13 @@ else
                    is running — while one is, the band above carries the "combat over" button instead. *@
                 @if (s.CombatAId is null)
                 {
-                    <button class="btn btn-sm" @onclick="() => showCombatPick = true">@Loc["combat.declare"]</button>
+                    <button class="btn" @onclick="() => showCombatPick = true">@Loc["combat.declare"]</button>
                 }
                 @* No "record technology" button: the table is asked for its technologies after the action, in
                    one popup on every device (TechPromptModal). Corrections stay in the Technologies tab. *@
                 <div class="spacer" style="flex:1"></div>
-                <button class="btn btn-sm" @onclick="Prev"><MaterialIcon Name="chevron_left" /> @Loc["turn.previous"]</button>
-                <button class="btn btn-sm btn-primary" @onclick="Next">@Loc["turn.advance"] <MaterialIcon Name="chevron_right" /></button>
+                <button class="btn" @onclick="Prev"><MaterialIcon Name="chevron_left" /> @Loc["turn.previousShort"]</button>
+                <button class="btn btn-primary" @onclick="Next">@Loc["turn.advance"] <MaterialIcon Name="chevron_right" /></button>
             </div>
             @if (!active.HasPassed && !canPass) { <div class="faint" style="font-size:.72rem;margin-top:.3rem;">@Loc["turn.passHint"]</div> }
         }

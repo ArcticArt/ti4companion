@@ -46,7 +46,9 @@
                     var taken = Removed(s);
                     var cards = Workspace(s);
                     <div class="rt-pick-head">
-                        <span class="rt-pick-count @(taken >= allowed ? "full" : "")">
+                        @* Red once MORE tape is off than the card allows — the app counts, it does not refuse,
+                           so the number is the whole warning until Done asks about it. *@
+                        <span class="rt-pick-count @(taken > allowed ? "over" : taken == allowed ? "full" : "")">
                             <strong>@taken</strong> / @allowed
                         </span>
                         <span class="rt-pick-of">
@@ -68,11 +70,11 @@
                             @foreach (var o in cards)
                             {
                                 var target = o;
-                                @* Tappable when the tape may come off — and always once it is off, so it can
-                                   go back on. A tape one of the variant's timing rules holds shut stays put
-                                   and says which rule (that override lives in the Locked question). *@
+                                @* Every card is tappable, including one a timing rule holds shut — that one
+                                   asks first (`askOverride`). The app enforces the variant so nobody has to
+                                   remember it, but the table is the authority on its own game. *@
                                 <ObjectiveDisplayCard So="o"
-                                                      Clickable="@(o.MarkerRemoved || Store.RedTapeBlockKey(o) is null)"
+                                                      Clickable="true"
                                                       Undo="@o.MarkerRemoved"
                                                       UndoText="@Loc["redtape.tapeOff"]"
                                                       UndoTitle="@Loc["redtape.tapeBackOn"]"
@@ -89,13 +91,36 @@
                 }
                 <div class="spacer" style="flex:1"></div>
                 @* In Pick mode this is the ONLY way out: the dialog no longer closes on the first tape, because
-                   the allowance can be more than one and the table needs to see what it has taken off. *@
-                <button class="btn @(Mode == SealMode.Pick ? "btn-gold" : "")" @onclick="Close">
+                   the allowance can be more than one and the table needs to see what it has taken off. It also
+                   asks when the count does not match the allowance (see DoneClicked). *@
+                <button class="btn @(Mode == SealMode.Pick ? (Off(s) > 0 ? "btn-danger" : "btn-gold") : "")"
+                        @onclick="DoneClicked">
                     @Loc[Mode == SealMode.Locked ? "redtape.leaveSealed" : "common.done"]
                 </button>
             </div>
         </div>
     </div>
+
+    @* Three questions, one shape, on top of the workspace: too many tapes off, too few, and a tape a timing
+       rule holds shut. All three are "the app counted, you decide" — none of them refuses anything. *@
+    @if (confirm is { } c)
+    {
+        <div class="modal-backdrop centered blurred rt-confirm-layer" @onclick="() => confirm = null">
+            <div class="modal rt-confirm" @onclick:stopPropagation>
+                <div class="modal-head">
+                    <h3 style="margin:0;">@Loc[c.TitleKey]</h3>
+                </div>
+                <div class="modal-body">
+                    <p style="margin:0;">@c.Body</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" @onclick="() => confirm = null">@Loc["common.cancel"]</button>
+                    <div class="spacer" style="flex:1"></div>
+                    <button class="btn btn-danger" @onclick="ConfirmAccept">@Loc[c.AcceptKey]</button>
+                </div>
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -136,9 +161,52 @@
     private int Removed(SessionStateDto s)
         => s.Objectives.Count(o => Opened(s).Contains(o.Id) && o.MarkerRemoved);
 
-    /// <summary>Pull the tape, or put it back — the same card, toggled. Nothing closes; see the Done button.</summary>
+    /// <summary>How far off the allowance the table is: positive = more tape off than the card allows.</summary>
+    private int Off(SessionStateDto s)
+        => Removed(s) - GameRules.RedTapeAllowedRemovals(s.RedTapeCarrierGoods);
+
+    /// <summary>An open question on top of the workspace (null = none). One record for all three, because they
+    /// differ only in wording and in what "yes" does.</summary>
+    private record Ask(string TitleKey, string Body, string AcceptKey, Func<Task> Accept);
+
+    private Ask? confirm;
+
+    private async Task ConfirmAccept()
+    {
+        if (confirm is not { } c) return;
+        confirm = null;
+        await c.Accept();
+    }
+
+    /// <summary>Pull the tape, or put it back — the same card, toggled. Nothing closes; see the Done button.
+    /// A tape one of the variant's TIMING rules holds shut asks first: the app enforces the variant so nobody
+    /// has to remember it, but the table may have a reason the app cannot know (and the override is logged).</summary>
     private Task Toggle(SessionObjectiveDto o)
-        => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, o.Id, !o.MarkerRemoved));
+    {
+        if (!o.MarkerRemoved && Store.RedTapeBlockKey(o) is { } key)
+        {
+            // Purged is not a lock — it is out of the game, and no confirmation changes that.
+            if (o.Purged) return Task.CompletedTask;
+            confirm = new Ask("redtape.lockedAskTitle",
+                              Loc[key + "Long"] + " " + Loc["redtape.lockedAskWarn"],
+                              "redtape.removeAnyway",
+                              () => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, o.Id, true, true)));
+            return Task.CompletedTask;
+        }
+        return Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, o.Id, !o.MarkerRemoved));
+    }
+
+    /// <summary>"Done" — but if the number of tapes taken off does not match what the card allows, say so
+    /// once. Both directions matter: one too many changes who can score, one too few is a forgotten right.</summary>
+    private async Task DoneClicked()
+    {
+        if (Mode != SealMode.Pick || Store.Session is not { } s) { await Close(); return; }
+        var off = Off(s);
+        if (off == 0) { await Close(); return; }
+        confirm = off > 0
+            ? new Ask("redtape.tooManyTitle", string.Format(Loc["redtape.tooManyBody"], off), "redtape.tooManyOk", Close)
+            : new Ask("redtape.tooFewTitle", string.Format(Loc["redtape.tooFewBody"], -off), "redtape.tooFewOk", Close);
+    }
 
     private async Task Unseal(SessionObjectiveDto o, bool over)
     {

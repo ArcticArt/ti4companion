@@ -102,7 +102,9 @@
                     <span class="oc-box oc-radio"></span>
                     <span>@Loc["setup.variantTi4"]</span>
                 </label>
-                <label class="opt-check is-disabled" title='@Loc["common.comingSoon"]'>
+                @* Not dimmed (`is-soon`, not `is-disabled`): the point is that the option is legible and
+                   labelled, so "can we play that?" has a visible answer. Only the input is disabled. *@
+                <label class="opt-check is-soon" title='@Loc["common.comingSoon"]'>
                     <input type="radio" name="gameVariant" disabled />
                     <span class="oc-box oc-radio"></span>
                     <span>@Loc["setup.variantTwilightsFall"] <span class="soon">@Loc["common.comingSoon"]</span></span>
@@ -114,12 +116,8 @@
         <div class="game-option">
             <label>@Loc["home.expansions"]</label>
             <div class="go-checks">
-                @* Base is always in and cannot be turned off — shown, disabled, so the set reads complete. *@
-                <label class="opt-check is-fixed">
-                    <input type="checkbox" checked disabled />
-                    <span class="oc-box"></span>
-                    <span>@Loc["exp.Base"]</span>
-                </label>
+                @* No "base game" box: it is always in (the server ORs it back), so a permanently ticked and
+                   permanently disabled checkbox was a control that could never do anything. *@
                 @foreach (var x in new[] { Expansion.ProphecyOfKings, Expansion.Codex, Expansion.ThundersEdge })
                 {
                     var on = s.ActiveExpansions.HasFlag(x);
@@ -132,7 +130,7 @@
                 }
                 @* Discordant Stars is a fan expansion (34 more factions) and none of it is in the content DB
                    yet, so the box is there and off — the question gets asked, the answer is "not yet". *@
-                <label class="opt-check is-disabled" title='@Loc["common.comingSoon"]'>
+                <label class="opt-check is-soon" title='@Loc["common.comingSoon"]'>
                     <input type="checkbox" disabled />
                     <span class="oc-box"></span>
                     <span>@Loc["exp.DiscordantStars"] <span class="soon">@Loc["common.comingSoon"]</span></span>
@@ -273,7 +271,17 @@
 @if (step == SetupStep.Players)
 {
 <div class="panel">
-    <h3>@Loc["setup.title"]</h3>
+    <div class="setup-title-row">
+        <h3 style="margin:0;">@Loc["setup.title"]</h3>
+        @* The phase bar is gone during setup, so a non-host reads the ready count here — the host has it in
+           the navigation next to the "Next" it gates. *@
+        @if (!host)
+        {
+            <span class="setup-ready @(AllReady ? "ok" : "")">
+                @Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong>
+            </span>
+        }
+    </div>
     <p class="faint">@(host ? Loc["setup.startHint"] : Loc["setup.waiting"])</p>
 
     <div class="grid" style="gap:.7rem;">

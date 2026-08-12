@@ -8,6 +8,9 @@ using Ti4Companion.Shared;
 
 namespace Ti4Companion.ApiService.Services;
 
+/// <summary>The kinds of "you can do something now" a player is notified about, besides their own turn.</summary>
+public enum PushAction { StrategyPick, Vote, Score, Technology, Secondary }
+
 /// <summary>
 /// Sends the "you're up" Web Push notifications.
 ///
@@ -89,6 +92,34 @@ public class PushService(
     }
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(Guid Player, int Round), byte> _timeUpSent = new();
+
+    /// <summary>
+    /// A player can act on something that is not their turn: pick a strategy card, cast a vote, score in the
+    /// status phase, record a technology, resolve a secondary. Same shape as <see cref="NotifyTurn"/> — the
+    /// point of the feature is that a phone in a pocket learns about it, and "your turn" was only the first of
+    /// those moments.
+    /// <para>
+    /// One <paramref name="kind"/> per moment, used as the push TOPIC as well, so a second notification of the
+    /// same kind replaces the first instead of stacking. The wording lives here because the server is the only
+    /// place that knows the session's language.
+    /// </para></summary>
+    public void NotifyAction(Guid sessionId, Guid playerId, string playerName, string joinCode,
+        PushAction kind, Language lang)
+    {
+        if (!Enabled) return;
+        var de = lang == Language.De;
+        var body = kind switch
+        {
+            PushAction.StrategyPick => de ? $"{playerName}: Strategiekarte wählen" : $"{playerName}: pick a strategy card",
+            PushAction.Vote => de ? $"{playerName}: abstimmen" : $"{playerName}: time to vote",
+            PushAction.Score => de ? $"{playerName}: Aufträge werten" : $"{playerName}: score your objectives",
+            PushAction.Technology => de ? $"{playerName}: Technologie erfassen" : $"{playerName}: record your technology",
+            PushAction.Secondary => de ? $"{playerName}: Sekundärfähigkeit" : $"{playerName}: secondary ability",
+            _ => de ? $"{playerName}: du bist gefragt" : $"{playerName}: your move",
+        };
+        var tag = kind.ToString().ToLowerInvariant();
+        _ = Task.Run(() => SendToPlayerAsync(sessionId, playerId, Payload(body, joinCode, tag), tag));
+    }
 
     private static string Payload(string body, string joinCode, string tag) =>
         System.Text.Json.JsonSerializer.Serialize(new { title = "TI4 Companion", body, code = joinCode, tag });

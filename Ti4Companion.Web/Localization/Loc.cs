@@ -108,6 +108,8 @@ public class Loc
         ["turn.active"] = ("Active player", "Aktiver Spieler"),
         ["turn.advance"] = ("Next turn", "Nächster Zug"),
         ["turn.previous"] = ("Previous turn", "Vorheriger Zug"),
+        // Short form for the action row, where four buttons of one height have to fit a phone.
+        ["turn.previousShort"] = ("Prev. turn", "Zug zurück"),
         ["turn.startGame"] = ("Start game", "Spiel starten"),
         ["turn.toAction"] = ("Begin action phase", "Aktionsphase beginnen"),
         ["turn.endAction"] = ("End action phase", "Aktionsphase beenden"),
@@ -289,7 +291,18 @@ public class Loc
         ["redtape.removeAnyway"] = ("Remove it anyway", "Trotzdem entfernen"),
         ["redtape.leaveSealed"] = ("Leave it sealed", "Versiegelt lassen"),
         // The carrier card's own ability: "remove a marker of your choice".
-        ["redtape.pickTitle"] = ("Remove a marker", "Marker entfernen"),
+        // Plural: the card allows one marker per trade good on top of the primary, so it is rarely just one.
+        ["redtape.pickTitle"] = ("Remove markers", "Marker entfernen"),
+        // Done with a count that does not match the allowance. Neither is refused — the table is asked once.
+        ["redtape.tooManyTitle"] = ("More markers than the card allows", "Mehr Marker als die Karte erlaubt"),
+        ["redtape.tooManyBody"] = (
+            "{0} more tape(s) are off than this card removes. That changes who can score — leave it like this?",
+            "Es sind {0} Band/Bänder mehr ab, als diese Karte entfernt. Das ändert, wer werten kann — so lassen?"),
+        ["redtape.tooManyOk"] = ("Leave it like this", "So lassen"),
+        ["redtape.tooFewTitle"] = ("Markers left over", "Marker übrig"),
+        ["redtape.tooFewBody"] = ("You may still take {0} tape(s) off. Finish anyway?",
+                                  "Du darfst noch {0} Band/Bänder abnehmen. Trotzdem fertig?"),
+        ["redtape.tooFewOk"] = ("Finish anyway", "Trotzdem fertig"),
         ["redtape.pickHint"] = ("Tap a card to pull its tape — tap it again to put the tape back.",
                                 "Karte antippen, um das Band abzuziehen — nochmal antippen legt es wieder drauf."),
         ["redtape.pickNone"] = ("No tape can come off right now.", "Gerade kann kein Band abgenommen werden."),

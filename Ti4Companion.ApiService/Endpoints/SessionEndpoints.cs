@@ -308,7 +308,7 @@ public static class SessionEndpoints
     // Phase / round flow
     // -----------------------------------------------------------------------
 
-    private static async Task<IResult> StartGame(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> StartGame(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -321,6 +321,8 @@ public static class SessionEndpoints
         // The 2 starting public objectives are chosen physically and recorded by the host during
         // setup (see ObjectivesTab) — they are no longer auto-revealed here.
         session.Phase = GamePhase.Strategy;
+        // The speaker picks first, and may well be looking at their phone rather than at the table.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, MaxCards(session)), PushAction.StrategyPick);
         // Everybody who was going to join has joined: the wall belongs to the game now, so it leaves the QR
         // area for the objectives. Only a default - the QR is one of the four display areas and any player
         // can switch back to it at any time.
@@ -385,7 +387,7 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
-    private static async Task<IResult> EndActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> EndActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -408,6 +410,8 @@ public static class SessionEndpoints
         session.StatusStage = StatusStage.Scoring;
         foreach (var p in session.Players) p.StatusDone = false;
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Status, round: session.CurrentRound);
+        // Scoring runs in initiative order, so the first scorer is the one who has to do something now.
+        NotifyAction(session, push, TurnService.CurrentScorer(session, FactionInitiative.Overrides), PushAction.Score);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -435,7 +439,7 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> NextRound(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> NextRound(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -478,6 +482,8 @@ public static class SessionEndpoints
 
         Log(db, session, SessionLogKind.RoundChange, GetCaller(session, http)?.Id, round: session.CurrentRound);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Strategy, round: session.CurrentRound);
+        // New round, cards back in the middle: the speaker picks first.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, MaxCards(session)), PushAction.StrategyPick);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -535,6 +541,7 @@ public static class SessionEndpoints
         // The turn is over → this player's clock stops and the others' can start (see OpenSecondaries).
         OpenSecondaries(db, session, GetCaller(session, http)?.Id);
         RaiseTechPromptWithoutRound(db, session);
+        NotifyTechPrompt(session, push);
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
         if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
@@ -688,6 +695,7 @@ public static class SessionEndpoints
                 CloseSecondaries(db, session, GetCaller(session, http)?.Id);
                 OpenSecondaries(db, session, GetCaller(session, http)?.Id);
                 RaiseTechPromptWithoutRound(db, session);
+                NotifyTechPrompt(session, push);
             }
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
@@ -704,7 +712,7 @@ public static class SessionEndpoints
     // Strategy cards
     // -----------------------------------------------------------------------
 
-    private static async Task<IResult> AssignStrategyCard(Guid id, Guid playerId, AssignStrategyCardRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> AssignStrategyCard(Guid id, Guid playerId, AssignStrategyCardRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
@@ -730,10 +738,11 @@ public static class SessionEndpoints
 
         // Accumulated trade goods stay on the card until the action phase begins (see StartActionPhase),
         // so picking and then returning a card no longer discards them.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, maxCards), PushAction.StrategyPick);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> UnassignStrategyCard(Guid id, Guid playerId, int cardId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> UnassignStrategyCard(Guid id, Guid playerId, int cardId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
@@ -741,6 +750,9 @@ public static class SessionEndpoints
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();
         player.StrategyCards.RemoveAll(c => c.StrategyCardId == cardId);
         Log(db, session, http, SessionLogKind.StrategyReturn, target: playerId, detail: cardId.ToString());
+        // A returned card gives the pick back to THIS player (see TurnService.CurrentPicker), so they are the
+        // one to tell.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, MaxCards(session)), PushAction.StrategyPick);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -916,13 +928,17 @@ public static class SessionEndpoints
 
     // Status phase: mark a player done scoring so the turn moves to the next initiative. Self or host,
     // and reversible — someone who clicked too early gets their turn back.
-    private static async Task<IResult> SetStatusDone(Guid id, Guid playerId, SetStatusDoneRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> SetStatusDone(Guid id, Guid playerId, SetStatusDoneRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
         if (session is null || player is null) return Results.NotFound();
         if (!CallerIsHost(session, http) && GetCaller(session, http)?.Id != playerId) return Forbidden();
         player.StatusDone = req.Done;
+        // Handing over: whoever is up next has something to do. Only on "done", never on the undo — that is a
+        // correction, and a phone buzzing about it says the opposite of what happened.
+        if (req.Done)
+            NotifyAction(session, push, TurnService.CurrentScorer(session, FactionInitiative.Overrides), PushAction.Score);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1018,6 +1034,11 @@ public static class SessionEndpoints
         if (session.TechPromptOpen) return;
         session.TechPromptOpen = true;
         session.TechPromptOwnerId = owner;
+        // Everyone, deliberately. Narrowing it to "the ones who took the secondary" would be better — the
+        // table would be asked twice instead of seven times — but that set no longer exists by the time the
+        // round closes: each player's pending flag is cleared as they tick themselves off, and the last one
+        // out closes the round. Doing it properly needs one more per-player flag ("took the secondary this
+        // round"); see the note in CLAUDE.md before adding it.
         foreach (var p in session.Players) p.TechPromptPending = true;
         Log(db, session, SessionLogKind.TechPromptOpen, owner, detail: card.ToString());
     }
@@ -1078,7 +1099,7 @@ public static class SessionEndpoints
     // A round already open keeps its card and owner — the turn will have moved on by then (the others resolve
     // in parallel, which is the point), and re-deriving them from the *current* active player would hand the
     // round to whoever is up now and reject every call as "no strategy action is running".
-    private static async Task<IResult> SetSecondaryPlayers(Guid id, SetSecondaryPlayersRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> SetSecondaryPlayers(Guid id, SetSecondaryPlayersRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -1112,21 +1133,26 @@ public static class SessionEndpoints
             // One log entry per player, per direction: that is what the durations are diffed from.
             Log(db, session, take ? SessionLogKind.SecondaryStart : SessionLogKind.SecondaryDone,
                 caller?.Id, target: p.Id, detail: session.SecondaryCardId?.ToString());
+            // Just put ON the clock by somebody else — that is exactly a moment worth a notification.
+            if (take) NotifyAction(session, push, p.Id, PushAction.Secondary);
         }
         if (hadAny && session.Players.All(p => !p.SecondaryPending)) CloseSecondaries(db, session, caller?.Id);
+        NotifyTechPrompt(session, push);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
     // Owner or host: the secondary round is over, whether or not anyone is still marked. Its own route so
     // that "everyone is done" is never confused with "nobody has answered yet" (an empty set means the
     // latter — the round has just been opened by the turn ending).
-    private static async Task<IResult> CloseSecondary(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> CloseSecondary(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         var caller = GetCaller(session, http);
         if (!CallerIsHost(session, http) && caller?.Id != session.SecondaryOwnerId) return Forbidden();
         CloseSecondaries(db, session, caller?.Id);
+        // Closing a Technology round raises the "record what you researched" prompt — tell the table.
+        NotifyTechPrompt(session, push);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1150,7 +1176,7 @@ public static class SessionEndpoints
     }
 
     // "Done" for one player's secondary — stops their clock. Self or host: it is their own time.
-    private static async Task<IResult> SetSecondaryDone(Guid id, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> SetSecondaryDone(Guid id, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -1166,6 +1192,7 @@ public static class SessionEndpoints
         // Through the shared helper, or the round-close log entry would be missing on this path — and that
         // entry is what starts the next player's clock again.
         if (session.Players.All(p => !p.SecondaryPending)) CloseSecondaries(db, session, caller?.Id);
+        NotifyTechPrompt(session, push);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1193,6 +1220,36 @@ public static class SessionEndpoints
         }
         session.SecondaryCardId = null;
         session.SecondaryOwnerId = null;
+    }
+
+    /// <summary>The strategy-card allotment for this table: the printed rule unless the host pinned a count.</summary>
+    private static int MaxCards(GameSession s)
+        => GameRules.StrategyCardsPerPlayer(s.Players.Count, s.StrategyCardsPerPlayer);
+
+    /// <summary>Tell one player that something is waiting for them — a strategy card to pick, a vote to cast,
+    /// objectives to score, a technology to record, a secondary to resolve. The phone in a pocket is the whole
+    /// point of push; "your turn" was only the first of these moments.
+    /// <para>Only called where the moment really ARRIVES, never on a host correction: a notification is a
+    /// tap on the shoulder, and one that fires because somebody fixed a number is noise.</para></summary>
+    private static void NotifyAction(GameSession s, PushService push, Guid? playerId, PushAction kind)
+    {
+        if (playerId is not Guid pid) return;
+        if (s.Players.FirstOrDefault(p => p.Id == pid) is not { } player) return;
+        push.NotifyAction(s.Id, pid, player.Name, s.JoinCode, kind, s.DefaultLanguage);
+    }
+
+    /// <summary>Same, for everyone the session is currently waiting on.</summary>
+    private static void NotifyAll(GameSession s, PushService push, IEnumerable<Player> players, PushAction kind)
+    {
+        foreach (var p in players) push.NotifyAction(s.Id, p.Id, p.Name, s.JoinCode, kind, s.DefaultLanguage);
+    }
+
+    /// <summary>Whoever still owes a technology entry. Called after anything that may have raised the prompt,
+    /// where a PushService is at hand — the raising itself happens deep inside CloseSecondaries.</summary>
+    private static void NotifyTechPrompt(GameSession s, PushService push)
+    {
+        if (!s.TechPromptOpen) return;
+        NotifyAll(s, push, s.Players.Where(p => p.TechPromptPending), PushAction.Technology);
     }
 
     /// <summary>Tell the player who is now up that it is their turn. Only called where a turn really moves
@@ -1306,7 +1363,13 @@ public static class SessionEndpoints
         // the override the answer is still no — the UI only sends it after the host confirmed a dialog.
         if (req.Removed && !req.Override && RedTape.WhyCannotRemove(session, obj) is { } why)
             return Results.BadRequest(new { error = why });
-        if (req.Removed && req.Override && !CallerIsHost(session, http)) return Forbidden();
+        // Who may overrule a timing rule: the host, or the player who is UP — they are the one holding the
+        // carrier card and the one the rule applies to, and the "remove markers" dialog is where they are
+        // resolving it (2026-08-12; it used to be host-only, which left a non-host player's confirmed override
+        // silently refused). Either way it is logged below.
+        if (req.Removed && req.Override
+            && !CallerIsHost(session, http)
+            && GetCaller(session, http)?.Id != session.ActivePlayerId) return Forbidden();
         // Logged only when a rule really was in the way — the table has to be able to see that the app was
         // overruled, and by whom.
         if (req.Removed && req.Override && RedTape.WhyCannotRemove(session, obj) is not null)
@@ -1482,7 +1545,7 @@ public static class SessionEndpoints
     }
 
     // Host opens the vote on the revealed agenda (open or face-down). Influence then locks.
-    private static async Task<IResult> StartVoting(Guid id, StartVotingRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> StartVoting(Guid id, StartVotingRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -1494,6 +1557,8 @@ public static class SessionEndpoints
         session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         Log(db, session, http, SessionLogKind.AgendaStartVote, detail: req.Hidden ? "hidden" : "open");
+        // Everybody votes, so everybody is told — this is the one moment the whole table owes an answer at once.
+        NotifyAll(session, push, session.Players, PushAction.Vote);
         return await SaveAndReturn(db, hub, session, ct);
     }
 

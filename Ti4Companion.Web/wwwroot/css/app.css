@@ -295,6 +295,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Base game: on, and not up for discussion — shown so the set reads complete. */
 .opt-check.is-fixed { opacity: .75; cursor: default; }
 .opt-check.is-fixed:hover { border-color: var(--panel-border); }
+/* Offered but not yet possible. NOT dimmed like `is-disabled`: it exists to be read, so only the box is off. */
+.opt-check.is-soon { cursor: default; }
+.opt-check.is-soon:hover { border-color: var(--panel-border); }
+.opt-check.is-soon .oc-box { opacity: .45; }
 /* "coming soon" next to an option that is deliberately offered and off (Discordant Stars, Twilight's Fall):
    the question is visibly asked, the answer is "not yet". */
 .opt-check .soon { margin-left: .35rem; font-size: .62rem; text-transform: uppercase; letter-spacing: .05em;
@@ -367,8 +371,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .phase-ready { font-size: .9rem; color: var(--text-dim); }
 .phase-ready strong { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: 1.05rem; }
 /* Same count, but in the setup navigation between Back and Next — it is what gates that button, so it belongs
-   beside it. Green once the table is complete, which is the only state that matters there. */
-.setup-ready { font-size: .82rem; color: var(--text-dim); white-space: nowrap; }
+   beside it. Green once the table is complete, which is the only state that matters there. `align-self`
+   because the nav's items are stretched by default and the text then sat at the top of the row. */
+.setup-title-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.setup-ready { font-size: .82rem; color: var(--text-dim); white-space: nowrap; align-self: center; }
 .setup-ready strong { font-family: 'Orbitron', sans-serif; color: var(--gold); }
 .setup-ready.ok strong { color: #8fe0bd; }
 
@@ -514,7 +520,7 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 .stage-seg:not(:last-child)::after { content: "›"; position: absolute; right: -.75rem; color: var(--text-faint); opacity: .5; font-weight: 400; }
 .stage-seg.done { color: var(--text-dim); }
 .stage-seg.on { color: var(--accent); text-shadow: 0 0 10px rgba(79,195,247,.75), 0 0 20px rgba(79,195,247,.45); }
-.stage-nav { margin-left: auto; display: flex; gap: .4rem; }
+.stage-nav { margin-left: auto; display: flex; align-items: center; gap: .4rem; }
 
 /* Reveal-list stage badge: centred circle. Stage I gold, Stage II blue. */
 .stage-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
@@ -764,6 +770,11 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 .turn-banner .tb-sub { font-size: .85rem; color: var(--danger); font-weight: 600; }
 
 /* ---- Turn timer (per player, per round; informational only) ---- */
+/* The action row under the player card: pass / combat / prev / next, all the same height (the plain `.btn`
+   one) because they are equally weighty things to press. `stretch` so a wrapped line keeps the height too. */
+.turn-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; }
+.turn-actions .btn { min-height: 2.5rem; }
+
 .turn-timer { display: inline-flex; align-items: baseline; gap: .3em; padding: .12em .5em; border-radius: 8px;
     font-family: 'Orbitron', sans-serif; font-variant-numeric: tabular-nums; font-size: 1.35rem; line-height: 1.2;
     background: var(--panel-2); border: 1px solid var(--panel-border); color: var(--text); }
@@ -797,11 +808,20 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 .chip-passed { background: rgba(224,85,106,.18); color: #f1a3ae; border-color: #6b2a35; }
 .chip-done { background: rgba(70,192,138,.16); color: #8fe0bd; border-color: #2c5e49; }
 .chip-active { background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
-/* A chip that IS a button (the host picking whose technologies to enter). `.chip` sets no colour, and a button
-   does not inherit one — it would come out in the UA's black. Same trap as `.rt-ask-item`. */
-.tp-who { color: var(--text); background: var(--panel-2, rgba(255,255,255,.03)); font: inherit;
-    font-size: .68rem; appearance: none; cursor: pointer; }
-.tp-who:hover { border-color: var(--gold-dim); color: var(--gold); }
+/* The technology prompt's "still to enter" row and the seat being filled in. Names are at reading size, not
+   chip-size: on the table device the host reads these across the table. `color` is set explicitly because the
+   same element is a <button> for the host and a <span> for everyone else, and a button does not inherit it
+   (same trap as `.rt-ask-item`). */
+.tp-waiting { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; margin-bottom: .7rem; }
+.tp-waiting-lbl { font-size: .78rem; }
+.tp-who { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .5rem .2rem .3rem;
+    border: 1px solid var(--panel-border); border-radius: 999px; background: var(--panel-2, rgba(255,255,255,.03));
+    color: var(--text); font: inherit; font-size: .95rem; font-weight: 600; appearance: none; }
+button.tp-who { cursor: pointer; }
+button.tp-who:hover { border-color: var(--gold-dim); }
+.tp-who.on { border-color: var(--player-color, var(--gold-dim)); background: rgba(217,176,74,.12); }
+.tp-target { display: flex; align-items: center; gap: .6rem; padding: .4rem .1rem; }
+.tp-target-name { font-family: 'Orbitron', sans-serif; font-size: 1.15rem; color: var(--text); }
 
 /* ---- code chip ---- */
 .codechip { font-family: 'Orbitron', monospace; letter-spacing: .25em; font-size: 1.1rem; color: var(--gold); background: #0a1020; border: 1px dashed var(--gold-dim); padding: .2rem .6rem; border-radius: 8px; }
@@ -1445,8 +1465,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .install-steps li > span:last-child { font-size: .88rem; line-height: 1.35; }
 
 /* Editing one player: name, faction, colour and removal. Wide enough for the faction grid to breathe. */
-.player-edit-modal { max-width: 620px; }
-.player-edit-modal .modal-body { max-height: 60vh; }
+/* Wider than a plain dialog and with a narrower label column: the faction grid and the colour swatches want
+   the room, and 14rem of empty space next to the word "Faction" was giving it to nothing. */
+.player-edit-modal { max-width: min(94vw, 860px); }
+.player-edit-modal .modal-body { max-height: 68vh; }
+.player-edit-modal .game-option { grid-template-columns: minmax(5.5rem, 7rem) minmax(0, 1fr); gap: .35rem .7rem; }
+@media (max-width: 560px) { .player-edit-modal .game-option { grid-template-columns: 1fr; } }
 .pe-danger { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
     margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--panel-border); }
 
@@ -1518,6 +1542,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .rt-pick-count { font-family: 'Orbitron', sans-serif; font-size: 1.25rem; color: var(--text-dim); }
 .rt-pick-count strong { color: var(--gold); }
 .rt-pick-count.full strong { color: #8fe0bd; }
+.rt-pick-count.over strong { color: #f1a3ae; }
+/* The three questions on top of the workspace (over / under / a rule-locked tape). Above the dialog it asks
+   about, so the z-index is the point (`.modal-backdrop` is 1200). */
+.rt-confirm-layer { z-index: 1300; }
+.modal.rt-confirm { max-width: min(92vw, 26rem); }
 .rt-pick-of { font-size: .8rem; color: var(--text-dim); }
 /* The cards are the workspace, so the grid may be narrower than the status one. */
 .rt-pick-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }

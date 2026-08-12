@@ -77,19 +77,21 @@
                     <label for="peName">@Loc["players.name"]</label>
                     <input id="peName" type="text" @bind="draftName" @bind:event="oninput" />
                 </div>
+                @* Colour BEFORE the faction grid: the grid is thirty-odd symbols tall, and with it in between
+                   changing a colour on a phone meant scrolling past all of them to find the swatches. *@
+                <div class="game-option">
+                    <label>@Loc["players.color"]</label>
+                    <div>
+                        <PlayerColorPicker Current="@draftColor" OnPick="hex => draftColor = hex"
+                                           TakenByResolver="hex => TakenBy(hex, ed.Id)" />
+                    </div>
+                </div>
                 <div class="game-option">
                     <label>@Loc["players.faction"]</label>
                     <div>
                         @* Other players' factions are filtered out, this player's own stays selectable. *@
                         <FactionPicker Factions="Store.ActiveFactions()" Current="@draftFaction"
                                        Taken="@TakenFactions(ed.Id)" OnPick="id => draftFaction = id" />
-                    </div>
-                </div>
-                <div class="game-option">
-                    <label>@Loc["players.color"]</label>
-                    <div>
-                        <PlayerColorPicker Current="@draftColor" OnPick="hex => draftColor = hex"
-                                           TakenByResolver="hex => TakenBy(hex, ed.Id)" />
                     </div>
                 </div>
 

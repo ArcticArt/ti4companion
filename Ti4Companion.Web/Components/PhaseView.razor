@@ -11,27 +11,19 @@
     var host = Store.IsHost;
 }
 
+@* The whole bar is gone during setup (2026-08-12, on request): it had nothing left to say there. The phases
+   have not started, the "start" button lives on the last setup step, and the ready count sits in the setup
+   navigation for the host and above the player list for everyone else (see SetupView). *@
+@if (s.Phase != GamePhase.Setup)
+{
 <div class="panel phase-bar">
-    @* In-game phases as a connected leiste (Setup is intentionally not a segment). During setup the
-       leiste is hidden and the ready count is shown instead. *@
-    @* During setup the host's ready count sits in the setup navigation, right next to the "Next" it gates
-       (see SetupView) — so here it is only for everyone else, who has no navigation. *@
-    @if (s.Phase == GamePhase.Setup)
-    {
-        @if (!host)
+    @* In-game phases as a connected leiste (Setup is intentionally not a segment). *@
+    <div class="phase-leiste">
+        @foreach (var ph in new[] { GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda })
         {
-            <div class="phase-ready">@Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong></div>
+            <div class="pseg @(s.Phase == ph ? "on" : (int)s.Phase > (int)ph ? "done" : "")">@Loc[$"phase.{ph}"]</div>
         }
-    }
-    else
-    {
-        <div class="phase-leiste">
-            @foreach (var ph in new[] { GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda })
-            {
-                <div class="pseg @(s.Phase == ph ? "on" : (int)s.Phase > (int)ph ? "done" : "")">@Loc[$"phase.{ph}"]</div>
-            }
-        </div>
-    }
+    </div>
     <div class="spacer" style="flex:1"></div>
     <div class="row-wrap" style="gap:.4rem;align-items:center;">
         @* Phase transitions are reserved for the host. *@
@@ -43,12 +35,6 @@
         {
             switch (s.Phase)
             {
-                case GamePhase.Setup:
-                    @* No "start" here anymore: it is the last thing on the LAST setup step, so the host cannot
-                       reach it without having passed the seating order and the objectives. That walk is also
-                       what replaced the old "is the seating right?" dialog — it was asking about a step the
-                       host now has to go through anyway. *@
-                    break;
                 case GamePhase.Strategy:
                     @if (!allPicked) { <span class="faint">@Loc["strategy.needAllPicks"]</span> }
                     <button class="btn btn-primary" disabled="@(!allPicked)" @onclick="ToAction">@Loc["turn.toAction"] <MaterialIcon Name="chevron_right" /></button>
@@ -79,6 +65,7 @@
         }
     </div>
 </div>
+}
 
 @switch (s.Phase)
 {
