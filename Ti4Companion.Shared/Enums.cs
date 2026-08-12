@@ -362,10 +362,12 @@ public enum SessionLogKind
     /// able to see when that happened, since there is no account behind it, only the join code.</summary>
     SeatClaim = 31,
 
-    /// <summary>A player has the technology picker open (Target = that player) and closed it again. The
+    /// <summary>A player had the technology picker open (Target = that player) and closed it again. The
     /// interval is excluded from time-on-turn exactly like a combat is: looking up a technology in the app is
     /// the app's overhead, not the player's thinking time. Keep the numeric values stable — the statistics
-    /// read them.</summary>
+    /// read them.
+    /// <para><b>No longer emitted</b> since the per-player picker became the table-wide prompt below; kept
+    /// because old logs contain them and the statistics still subtract them.</para></summary>
     TechPickStart = 32,
     TechPickEnd = 33,
 
@@ -384,5 +386,13 @@ public enum SessionLogKind
     /// Keep the numeric values stable.
     /// </para></summary>
     SecondaryRoundOpen = 35,
-    SecondaryRoundClose = 36
+    SecondaryRoundClose = 36,
+
+    /// <summary>The table is recording the technologies from a Technology action, and is done again
+    /// (Detail = the card number on open). Like a secondary round this is a round-level bracket, and for the
+    /// same reason: **the clock stands still while it is open**, so the interval is subtracted from
+    /// time-on-turn. It closes when every player has said they are done, or when the player who played the
+    /// card (or the host) moves the table on. Keep the numeric values stable.</summary>
+    TechPromptOpen = 37,
+    TechPromptClose = 38
 }

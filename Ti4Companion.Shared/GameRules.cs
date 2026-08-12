@@ -85,4 +85,10 @@ public static class GameRules
 
     /// <summary>Bureaucracy: "you may not choose a Stage II objective in the first 3 rounds".</summary>
     public const int RedTapeStageIILockedThrough = 3;
+
+    /// <summary>How many markers the carrier card's holder may take off this round: one for the primary
+    /// ability, plus the variant's SPECIAL — "remove Red Tape counters equal to the number of trade goods on
+    /// this card". A reminder the app shows and counts, not a rule it enforces: which markers come off is the
+    /// table's decision, and so is miscounting it.</summary>
+    public static int RedTapeAllowedRemovals(int carrierGoods) => 1 + (carrierGoods < 0 ? 0 : carrierGoods);
 }

@@ -102,7 +102,10 @@ public static class SessionEndpoints
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores/{playerId:guid}", UnscoreObjective);
 
         // ---- Technologies (per player) ----
-        g.MapPost("/{id:guid}/players/{playerId:guid}/tech-pick", SetTechPick); // picker open/closed → clock stops
+        // The table records what it researched after a Technology action; the clock stands still until it is
+        // done (see RaiseTechPrompt).
+        g.MapPost("/{id:guid}/players/{playerId:guid}/tech-prompt-done", SetTechPromptDone);
+        g.MapPost("/{id:guid}/tech-prompt/close", CloseTechPromptRoute);
         g.MapPost("/{id:guid}/players/{playerId:guid}/technologies", AddTechnology);
         g.MapDelete("/{id:guid}/players/{playerId:guid}/technologies/{techId}", RemoveTechnology);
 
@@ -344,6 +347,12 @@ public static class SessionEndpoints
         // goods accumulated on the card they picked, and every card no one picked gains 1 more.
         // Keeping them on the card through the whole strategy phase means a pick→unpick doesn't lose them.
         var picked = session.Players.SelectMany(p => p.StrategyCards.Select(c => c.StrategyCardId)).ToHashSet();
+        // Red Tape's SPECIAL: "remove Red Tape counters equal to the number of trade goods on this card" — the
+        // count is read HERE, in the one moment it still exists, and remembered for the round. The goods are
+        // wiped in the same breath (the player collected them), so the action phase could not work it out.
+        session.RedTapeCarrierGoods = picked.Contains(session.RedTapeCardNumber)
+            ? session.StrategyCardStates.FirstOrDefault(x => x.StrategyCardId == session.RedTapeCardNumber)?.TradeGoods ?? 0
+            : 0;
         for (var cardId = 1; cardId <= 8; cardId++)
         {
             if (picked.Contains(cardId))
@@ -392,7 +401,7 @@ public static class SessionEndpoints
         // evening.
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
         CloseCombat(db, session, GetCaller(session, http)?.Id);
-        CloseTechPick(db, session, GetCaller(session, http)?.Id);
+        CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
         session.SpeakerPending = false;
         // Fresh status phase: back to stage 1, scoring starts over at the lowest initiative, checklist blank.
         session.StatusStepsDone = StatusStep.None;
@@ -435,7 +444,7 @@ public static class SessionEndpoints
         LogAgendaResult(db, session);   // capture the last agenda's result before the round resets
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
         CloseCombat(db, session, GetCaller(session, http)?.Id);
-        CloseTechPick(db, session, GetCaller(session, http)?.Id);
+        CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
         // A random-removal question nobody answered in an EARLIER round is stale — the moment has passed, and
         // leaving it open would wedge every later one (only one question is ever open). Same reasoning as the
         // escape hatches on the Politics block. A question raised in the round now ending stays open: the host
@@ -481,9 +490,13 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
-        // A new action on the table closes the previous one's secondary round: those clocks outlive the turn
-        // advance on purpose, so this (and the end of the phase) is what bounds them.
-        if (req.StrategyCardId is not null) CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+        // A new action on the table ends whatever the previous one was still holding: its secondary round and
+        // a technology prompt nobody finished. The table has visibly moved on, so neither may keep the clock.
+        if (req.StrategyCardId is not null)
+        {
+            CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+            CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
+        }
         session.ActiveStrategyCardId = req.StrategyCardId;
         // Politics: the appointment is the card. Playing it arms the block on ending the turn; taking the
         // card back off the table (↺ "not done") disarms it again.
@@ -509,9 +522,10 @@ public static class SessionEndpoints
         if (session.SpeakerPending) return SpeakerFirst();
         var overrides = FactionInitiative.Overrides;
         // A new turn begins: a combat from the last one is over whether or not anybody said so, and so is a
-        // technology picker somebody left open.
+        // technology prompt nobody finished — both stop the clock, so neither may outlive the turn. Closed
+        // BEFORE the two calls below, which may raise a fresh prompt for the turn that is ending.
         CloseCombat(db, session, GetCaller(session, http)?.Id);
-        CloseTechPick(db, session, GetCaller(session, http)?.Id);
+        CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
         // A secondary ability happens BETWEEN two turns, so a round from the previous turn is over before
         // this one's opens. It used to outlive the turn advance deliberately ("the next player gets on with
         // it while the others resolve") — but that also meant the next player's clock ran while the table was
@@ -520,6 +534,7 @@ public static class SessionEndpoints
         CloseSecondaries(db, session, GetCaller(session, http)?.Id);
         // The turn is over → this player's clock stops and the others' can start (see OpenSecondaries).
         OpenSecondaries(db, session, GetCaller(session, http)?.Id);
+        RaiseTechPromptWithoutRound(db, session);
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
         if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
@@ -667,9 +682,12 @@ public static class SessionEndpoints
             var overrides = FactionInitiative.Overrides;
             if (playerId == session.ActivePlayerId)
             {
-                // Same as in AdvanceTurn: the previous round is closed before this turn's opens.
+                // Same as in AdvanceTurn: whatever stopped the clock on this turn ends with it, then the
+                // previous secondary round is closed before this turn's opens.
+                CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
                 CloseSecondaries(db, session, GetCaller(session, http)?.Id);
                 OpenSecondaries(db, session, GetCaller(session, http)?.Id);
+                RaiseTechPromptWithoutRound(db, session);
             }
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
@@ -852,6 +870,9 @@ public static class SessionEndpoints
         session.CombatAId = null;
         session.CombatBId = null;
         session.TechPickPlayerId = null;
+        session.TechPromptOpen = false;
+        session.TechPromptOwnerId = null;
+        session.RedTapeCarrierGoods = 0;
         session.RedTapeRandomRound = 0;
         session.RedTapeRandomPendingRound = 0;      // no open question carries into the next match
         session.DisplayMode = DisplayMode.JoinQr;   // a fresh table starts on the join code again
@@ -861,6 +882,7 @@ public static class SessionEndpoints
             p.IsReady = false;
             p.StatusDone = false;
             p.SecondaryPending = false;
+            p.TechPromptPending = false;
             p.Influence = 0;
             p.StrategyCards.Clear();
             p.Technologies.Clear();
@@ -982,36 +1004,70 @@ public static class SessionEndpoints
         Log(db, session, SessionLogKind.CombatEnd, actor, target: b);
     }
 
-    /// <summary>Close an open technology picker. Called from the same places as <see cref="CloseCombat"/> and
-    /// for the same reason: it stops a clock, so a popup somebody walked away from must not stop it for the
-    /// rest of the evening.</summary>
-    private static void CloseTechPick(Ti4DbContext db, GameSession session, Guid? actor)
+    /// <summary>Ask the whole table to record what it researched, and STOP THE CLOCK while it does. Raised
+    /// when the Technology card's secondary round closes (see <see cref="CloseSecondaries"/>), because that is
+    /// when everyone who researched — the primary player and the secondaries — is finally done taking it.
+    /// <para>
+    /// A round, not a per-player popup: every player owes an entry, and the interval only ends when nobody is
+    /// pending any more or the card's owner (or the host) moves the table on. That is the same shape as the
+    /// secondary round, for the same reason — several people are busy at once, and none of it is the next
+    /// player's thinking time.
+    /// </para></summary>
+    private static void RaiseTechPrompt(Ti4DbContext db, GameSession session, Guid? owner, int card)
     {
-        if (session.TechPickPlayerId is not Guid who) return;
-        session.TechPickPlayerId = null;
-        Log(db, session, SessionLogKind.TechPickEnd, actor, target: who);
+        if (session.TechPromptOpen) return;
+        session.TechPromptOpen = true;
+        session.TechPromptOwnerId = owner;
+        foreach (var p in session.Players) p.TechPromptPending = true;
+        Log(db, session, SessionLogKind.TechPromptOpen, owner, detail: card.ToString());
     }
 
-    // Open or close the technology picker for one player. Self or host — it is that player's own clock, and
-    // the host runs the table device. Idempotent: opening it for whoever already has it changes nothing.
-    private static async Task<IResult> SetTechPick(Guid id, Guid playerId, SetTechPickRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    /// <summary>The table is done recording (everybody said so, somebody moved it on, or a phase/turn boundary
+    /// arrived). This is what starts the clock again.</summary>
+    private static void CloseTechPrompt(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        if (!session.TechPromptOpen) return;
+        session.TechPromptOpen = false;
+        session.TechPromptOwnerId = null;
+        foreach (var p in session.Players) p.TechPromptPending = false;
+        Log(db, session, SessionLogKind.TechPromptClose, actor);
+    }
+
+    /// <summary>Without secondary tracking there is no round to close, so the prompt is due at the end of the
+    /// turn the Technology action was played on — the same moment, minus the round in between.</summary>
+    private static void RaiseTechPromptWithoutRound(Ti4DbContext db, GameSession session)
+    {
+        if (!session.PromptTechOnAction || session.TechPromptOpen) return;
+        if (session.SecondaryCardId is not null) return;               // a round is running; it will raise it
+        if (session.ActiveStrategyCardId != GameRules.TechnologyStrategyCard) return;
+        RaiseTechPrompt(db, session, session.ActivePlayerId, GameRules.TechnologyStrategyCard);
+    }
+
+    // One player is done recording. Self or host. The last one out closes the round, so the clock starts again
+    // without anybody having to press anything else.
+    private static async Task<IResult> SetTechPromptDone(Guid id, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
-        if (session.Players.All(p => p.Id != playerId)) return Results.NotFound();
+        var player = session.Players.FirstOrDefault(p => p.Id == playerId);
+        if (player is null) return Results.NotFound();
         var caller = GetCaller(session, http);
-        if (caller is null || (caller.Id != playerId && !caller.IsHost)) return Forbidden();
+        if (!CallerIsHost(session, http) && caller?.Id != playerId) return Forbidden();
+        if (!session.TechPromptOpen) return await SaveAndReturn(db, hub, session, ct);   // nothing standing
+        player.TechPromptPending = false;
+        if (session.Players.All(p => !p.TechPromptPending)) CloseTechPrompt(db, session, caller?.Id);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
 
-        if (req.Open)
-        {
-            if (session.TechPickPlayerId == playerId) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
-            // Only one picker at a time: two open clocks would both claim the same seconds.
-            CloseTechPick(db, session, caller.Id);
-            session.TechPickPlayerId = playerId;
-            Log(db, session, SessionLogKind.TechPickStart, caller.Id, target: playerId);
-        }
-        else CloseTechPick(db, session, caller.Id);
-
+    // "Move on" — the player who played the card, or the host, ends the recording for everyone. A table should
+    // never be held up by one phone somebody put down.
+    private static async Task<IResult> CloseTechPromptRoute(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (!CallerIsHost(session, http) && caller?.Id != session.TechPromptOwnerId) return Forbidden();
+        CloseTechPrompt(db, session, caller?.Id);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1126,7 +1182,15 @@ public static class SessionEndpoints
         }
         // The round itself is over: this is what un-freezes the active player's clock (see SecondaryRoundOpen).
         if (session.SecondaryCardId is int closing)
+        {
             Log(db, session, SessionLogKind.SecondaryRoundClose, actor, detail: closing.ToString());
+            // Technology: everyone who took it has just finished, so NOW is the moment to ask the table to
+            // record what it researched — the primary player and the secondaries alike. Asking while the
+            // action was still being played (the old band in ActionView) came too early for everyone but
+            // the player holding the card.
+            if (closing == GameRules.TechnologyStrategyCard && session.PromptTechOnAction)
+                RaiseTechPrompt(db, session, session.SecondaryOwnerId, closing);
+        }
         session.SecondaryCardId = null;
         session.SecondaryOwnerId = null;
     }

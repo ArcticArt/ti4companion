@@ -128,15 +128,33 @@ public class GameSession
     public Guid? CombatAId { get; set; }
     public Guid? CombatBId { get; set; }
 
-    /// <summary>Offer to record a technology right after the Technology strategy action was played.
+    /// <summary>Offer to record a technology after the Technology strategy action has been resolved.
     /// A table decision — the app never forces the entry.</summary>
     public bool PromptTechOnAction { get; set; }
 
-    /// <summary>Who currently has the technology picker open (null = nobody). Session state rather than a
-    /// per-device flag for one reason: while it is open, that player's TIME ON TURN stops, exactly as a combat
-    /// stops it — hunting for a technology in a list is the app's overhead, not the player's thinking time.
-    /// A clock that only stopped on the device holding the popup would disagree with the wall.</summary>
+    /// <summary>That offer is currently standing: every device shows the technology popup for its own seat
+    /// (see TechPromptModal). Raised when the Technology card's SECONDARY round closes — the primary and the
+    /// secondaries all research, so the sensible moment is when the table is done taking it, not while the
+    /// action is still being played. Session state, because the whole table is asked at once. Cleared at the
+    /// next turn/phase/round boundary, so a prompt nobody answered cannot stand for the rest of the
+    /// evening.</summary>
+    public bool TechPromptOpen { get; set; }
+
+    /// <summary>Superseded by <see cref="TechPromptOpen"/>: the technology picker used to be one player's
+    /// popup opened from a button on the player card, and that button is gone — recording happens table-wide
+    /// after the action instead. Kept only so no migration has to drop a column; nothing reads it any
+    /// more.</summary>
     public Guid? TechPickPlayerId { get; set; }
+
+    /// <summary>Who played the Technology card the standing prompt belongs to — they, or the host, can move
+    /// the table on before everybody has answered.</summary>
+    public Guid? TechPromptOwnerId { get; set; }
+
+    /// <summary>How many trade goods were lying on the Red Tape carrier card when it was taken this round
+    /// (0 if nobody took it). The variant's SPECIAL removes one further marker per good, and the number only
+    /// exists at the START of the action phase — the goods are collected and zeroed in the same step, so it is
+    /// captured there and kept for the round.</summary>
+    public int RedTapeCarrierGoods { get; set; }
 
     /// <summary>Superseded by <c>DisplayMode.JoinQr</c> (the QR became one of the wall areas, so a separate
     /// flag would be a second source of truth for one screen). Kept only so no migration has to drop a
@@ -167,6 +185,10 @@ public class Player
     /// This is the only point where several players' clocks legitimately run at once — and therefore the
     /// only place "decision time on secondaries" can be measured without asking the table for extra input.</summary>
     public bool SecondaryPending { get; set; }
+    /// <summary>A Technology action has been resolved and this player has not yet said they are done recording
+    /// what they researched (see <c>GameSession.TechPromptOpen</c>). The table's clock stands still until
+    /// nobody is pending — or until the card's owner / the host moves it on.</summary>
+    public bool TechPromptPending { get; set; }
     /// <summary>True once the player has confirmed faction and colour and is ready to start.</summary>
     public bool IsReady { get; set; }
     /// <summary>The session creator. Stable regardless of seat order; grants host privileges.</summary>

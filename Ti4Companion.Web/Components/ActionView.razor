@@ -72,20 +72,10 @@ else if (s.SpeakerPending)
         <span class="faint"> — @string.Format(Loc["politics.waitingFor"], active?.Name ?? "—")</span>
     </div>
 }
-@* Technology: offer the tech entry. The nudge is a table option; the participants of the secondary get it
-   too, because they are the ones researching alongside the primary. *@
-@if (s.ActiveStrategyCardId == GameRules.TechnologyStrategyCard
-     && (canControl || (Store.MyPlayerId is Guid me2 && s.Players.Any(p => p.Id == me2 && p.SecondaryPending)))
-     && (s.PromptTechOnAction || Store.TurnTimerEnabled))
-{
-    <div class="panel tech-prompt" style="margin-top:.6rem;">
-        <span class="tp-text">@Loc["tech.promptText"]</span>
-        <div class="spacer" style="flex:1"></div>
-        <button class="btn btn-gold btn-sm" @onclick="() => OpenTechPick(Store.MyPlayerId ?? active?.Id)">
-            @Loc["tech.promptOpen"] <MaterialIcon Name="chevron_right" />
-        </button>
-    </div>
-}
+@* Technology has no band here any more. It used to offer the entry while the action was still being played,
+   which is too early for everyone but the player holding the card — the players taking the secondary research
+   as well. The table is now asked once, after that round, on every device at the same time (see
+   TechPromptModal in the shell). *@
 @* Combat. The battle itself happens on the table — the app only needs to know one is running: the wall puts
    the two of them opposite each other with their technologies, and the turn clock stops (a battle with
    somebody else is not the active player's thinking time). Anyone involved, or the host, can end it. *@
@@ -130,20 +120,13 @@ else if (s.SpeakerPending)
     </div>
 }
 
-@* Technology: the picker as a popup, so it is right where the action was played instead of a trip to another
-   tab — and while it is open the player's own clock stops (server-side, see SetTechPick). *@
-@if (techPickFor is Guid tpFor)
-{
-    <TechPickModal PlayerId="@tpFor" OnClose="CloseTechPick" />
-}
-
 @* Red Tape's carrier card: "remove a marker of your choice" — the choice, as a list of the ones it may be. *@
 <RedTapeSealModal Mode="@sealMode" OnClose="() => sealMode = null" />
 
 @* Red Tape variant: the carrier card's own step, which the variant puts BEFORE everything else on the card.
    An offer like the others — the app tapes the objectives and refuses to score a taped one, but which tape
    comes off is the table's decision (and the rest of the variant's rules stay with them). *@
-@if (Store.RedTapeOn && s.ActiveStrategyCardId == s.RedTapeCardNumber && canControl)
+@if (Store.RedTapeOn && PlayedNow(s, active, s.RedTapeCardNumber) && canControl)
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">
@@ -161,7 +144,7 @@ else if (s.SpeakerPending)
 @* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). The
    choice is a popup listing what this player may score, like the technology picker and the Red Tape one —
    sending them to the objectives tab meant finding the card and the right marker two screens away. *@
-@if (s.ActiveStrategyCardId == GameRules.ImperialStrategyCard && canControl && active is not null)
+@if (PlayedNow(s, active, GameRules.ImperialStrategyCard) && canControl && active is not null)
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">@Loc["imperial.promptText"]</span>
@@ -177,7 +160,7 @@ else if (s.SpeakerPending)
 {
     <div class="panel" style="margin-top:.6rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
-            <h3 style="margin:0;">@Loc.Pick(activeCard.Name, activeCard.NameDe)</h3>
+            <h3 style="margin:0;">@CardDisplay.Name(Loc, s, activeCard)</h3>
             <button class="btn btn-sm" @onclick="EndHighlight"><MaterialIcon Name="close" /> @Loc["turn.endHighlight"]</button>
         </div>
         <StrategyCardView Card="activeCard" ShowText="true" />
@@ -194,7 +177,7 @@ else if (s.SpeakerPending)
     var secRunning = s.Players.Count(p => p.SecondaryPending);
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">
-            @Loc["secondary.title"]: <strong>@(Store.Card(secCard) is { } sc ? Loc.Pick(sc.Name, sc.NameDe) : "—")</strong>
+            @Loc["secondary.title"]: <strong>@(Store.Card(secCard) is { } sc ? CardDisplay.Name(Loc, s, sc) : "—")</strong>
             @if (secOwner is not null) { <span class="faint"> · @string.Format(Loc["secondary.playedBy"], secOwner.Name)</span> }
             @if (secRunning > 0) { <span class="faint"> · @Loc["secondary.running"]: @secRunning</span> }
         </span>
@@ -264,7 +247,8 @@ else
                 {
                     <button class="btn btn-sm" @onclick="() => showCombatPick = true">@Loc["combat.declare"]</button>
                 }
-                <button class="btn btn-sm" @onclick="() => OpenTechPick(active.Id)">@Loc["tech.pickTitle"]</button>
+                @* No "record technology" button: the table is asked for its technologies after the action, in
+                   one popup on every device (TechPromptModal). Corrections stay in the Technologies tab. *@
                 <div class="spacer" style="flex:1"></div>
                 <button class="btn btn-sm" @onclick="Prev"><MaterialIcon Name="chevron_left" /> @Loc["turn.previous"]</button>
                 <button class="btn btn-sm btn-primary" @onclick="Next">@Loc["turn.advance"] <MaterialIcon Name="chevron_right" /></button>
@@ -286,25 +270,17 @@ else
     /// <summary>Who is scoring via Imperial's primary on THIS device (null = the popup is closed).</summary>
     private Guid? imperialFor;
 
-    /// <summary>Whose technology picker is open on THIS device (null = none). The server also knows, because
-    /// it stops that player's clock; this is only which popup to render here.</summary>
-    private Guid? techPickFor;
-
-    private async Task OpenTechPick(Guid? playerId)
-    {
-        if (playerId is not Guid pid) return;
-        techPickFor = pid;
-        // Tell the server before the list even renders: the clock has to stop from the moment they asked, not
-        // from whenever the popup finished painting.
-        await Store.Mutate(Store.Api.SetTechPickAsync(Sid, pid, true));
-    }
-
-    private async Task CloseTechPick()
-    {
-        if (techPickFor is not Guid pid) return;
-        techPickFor = null;
-        await Store.Mutate(Store.Api.SetTechPickAsync(Sid, pid, false));
-    }
+    /// <summary>This card's action is the one being resolved right now: either it is on the table (the wall
+    /// highlight) or the player who is up has already performed it this round.
+    /// <para>
+    /// The second half is why "end highlight" no longer takes the card's own step with it. That button is
+    /// about the WALL — it stops the big card taking over the screen — but it also cleared
+    /// <c>ActiveStrategyCardId</c>, and with it the Red Tape and Imperial buttons, leaving the player in the
+    /// middle of resolving a card with nothing left to press.
+    /// </para></summary>
+    private static bool PlayedNow(SessionStateDto s, PlayerDto? active, int card)
+        => s.ActiveStrategyCardId == card
+           || (active?.StrategyCards.Any(c => c.StrategyCardId == card && c.IsExhausted) ?? false);
 
     private Task EndHighlight() => Store.Mutate(Store.Api.SetActiveStrategyAsync(Sid, null));
     private Task Next() => Store.Mutate(Store.Api.AdvanceTurnAsync(Sid));

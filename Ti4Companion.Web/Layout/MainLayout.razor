@@ -109,6 +109,10 @@
 @if (Store.Session is not null)
 {
     <SecondaryModal />
+    @* "Record what you researched", after a Technology action — every device, its own seat, and the clock
+       stands still until the table is done. In the shell for the same reason as the secondary round: it is
+       raised by somebody else's action. *@
+    <TechPromptModal />
     @* Red Tape Lite's purge / random-removal questions. Same reason they live in the shell: they are raised by
        a phase change or by somebody else pulling a tape, so they must show whatever tab this device is on. *@
     <RedTapeModal />

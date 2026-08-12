@@ -182,7 +182,9 @@ public record PlayerDto(
     /// <summary>Status phase: done scoring, so the turn has moved on.</summary>
     bool StatusDone = false,
     /// <summary>Strategy action: this player is taking the secondary and hasn't finished — their clock runs.</summary>
-    bool SecondaryPending = false);
+    bool SecondaryPending = false,
+    /// <summary>Technology action: this player still owes an entry, so the table's clock stands still.</summary>
+    bool TechPromptPending = false);
 
 /// <summary><paramref name="CustomName"/>/<paramref name="CustomPoints"/> are set for an objective added
 /// by hand (e.g. a secret made public via "Classified Document Leaks") rather than from the content set.</summary>
@@ -263,6 +265,16 @@ public record SessionStateDto(
     Guid? CombatBId = null,
     /// <summary>Who has the technology picker open (null = nobody). Their time on turn is stopped while it is.</summary>
     Guid? TechPickPlayerId = null,
+    /// <summary>The table is being asked to record the technologies from the Technology action (the option
+    /// <c>PromptTechOnAction</c>, raised when that card's secondary round closed). Every device shows the
+    /// popup for its own seat; the host can also fill in for the others. <b>The clock stands still while it
+    /// is open.</b></summary>
+    bool TechPromptOpen = false,
+    /// <summary>Who played that Technology card — they and the host may move the table on early.</summary>
+    Guid? TechPromptOwnerId = null,
+    /// <summary>Trade goods that were on the Red Tape carrier card when it was taken this round: the variant's
+    /// SPECIAL allows one further marker per good, so the allowance is <c>1 + this</c>.</summary>
+    int RedTapeCarrierGoods = 0,
     /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
     string? CustomVoteTitle = null,
     /// <summary>What the free vote elects (null unless one is running).</summary>
@@ -329,9 +341,8 @@ public record SetObjectiveMarkerRequest(bool Removed, bool Override = false);
 /// irreversible and change who can still win, so the app proposes and the table decides.</summary>
 public record RedTapeAnswerRequest(bool Confirm);
 
-/// <summary>Open or close a player's technology picker. While it is open their time on turn stops — looking a
-/// technology up in the app is the app's overhead, not their thinking time.</summary>
-public record SetTechPickRequest(bool Open);
+// The per-player technology picker (and its request record) is gone: recording is a table-wide prompt after
+// the action now, so the two routes for it carry no body at all.
 
 /// <summary>Seat order as one list, in table order. Assigning it in a single call keeps the order
 /// consistent — reordering player by player would leave duplicate seats visible in between.</summary>

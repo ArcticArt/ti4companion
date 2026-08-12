@@ -132,9 +132,15 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/status-stage", new SetStatusStageRequest(stage));
     public Task<SessionStateDto?> SetObjectiveMarkerAsync(Guid id, Guid sessionObjectiveId, bool removed, bool over = false)
         => PostFor($"api/sessions/{id}/objectives/{sessionObjectiveId}/marker", new SetObjectiveMarkerRequest(removed, over));
-    /// <summary>Open or close a player's technology picker — while it is open their time on turn stops.</summary>
-    public Task<SessionStateDto?> SetTechPickAsync(Guid id, Guid playerId, bool open)
-        => PostFor($"api/sessions/{id}/players/{playerId}/tech-pick", new SetTechPickRequest(open));
+    /// <summary>This player is done recording what they researched. When nobody is pending any more the
+    /// prompt closes by itself and the clock starts again.</summary>
+    public Task<SessionStateDto?> SetTechPromptDoneAsync(Guid id, Guid playerId)
+        => PostFor($"api/sessions/{id}/players/{playerId}/tech-prompt-done", new { });
+
+    /// <summary>Move the table on: the player who played the Technology card, or the host, ends the recording
+    /// for everyone.</summary>
+    public Task<SessionStateDto?> CloseTechPromptAsync(Guid id)
+        => PostFor($"api/sessions/{id}/tech-prompt/close", new { });
 
     // Red Tape Lite's two questions. The app proposes, the table answers — nothing is removed or purged until
     // one of these is called with confirm: true.

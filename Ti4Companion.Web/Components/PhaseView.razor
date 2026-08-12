@@ -14,9 +14,14 @@
 <div class="panel phase-bar">
     @* In-game phases as a connected leiste (Setup is intentionally not a segment). During setup the
        leiste is hidden and the ready count is shown instead. *@
+    @* During setup the host's ready count sits in the setup navigation, right next to the "Next" it gates
+       (see SetupView) — so here it is only for everyone else, who has no navigation. *@
     @if (s.Phase == GamePhase.Setup)
     {
-        <div class="phase-ready">@Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong></div>
+        @if (!host)
+        {
+            <div class="phase-ready">@Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong></div>
+        }
     }
     else
     {

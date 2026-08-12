@@ -3,7 +3,11 @@
 @inject IJSRuntime JS
 
 @*
-    "A new version is available" — a bar at the bottom, with a reload that actually gets the new version.
+    "A new version is available" — a large card at the bottom, with a reload that actually gets the new version.
+
+    It was a small pill and got overlooked, which for this notice is the whole failure mode: a table can play a
+    whole evening on the old build without knowing. So it is big, gold, glowing and says what the reload does.
+    Still NOT a modal: the game must stay playable, and "later" has to remain an answer.
 
     Why this has to exist: the published service worker answers every navigation out of its cache, and it does
     NOT call skipWaiting. So after a deploy the app keeps serving the OLD files to anyone who merely presses
@@ -18,12 +22,16 @@
 @if (waiting && !dismissed)
 {
     <div class="update-bar" role="status">
-        <span class="ub-text">@Loc[stuck ? "update.stuck" : "update.available"]</span>
+        <MaterialIcon Name="refresh" Class="ub-icon" SizeCss="1em" />
+        <div class="ub-body">
+            <div class="ub-title">@Loc["update.available"]</div>
+            <div class="ub-text">@Loc[stuck ? "update.stuck" : "update.hint"]</div>
+        </div>
         @if (!stuck)
         {
-            <button class="btn btn-gold btn-sm" @onclick="Apply">@Loc["update.reload"]</button>
+            <button class="btn btn-gold btn-lg ub-go" @onclick="Apply">@Loc["update.reload"]</button>
         }
-        <button class="btn btn-ghost btn-sm" @onclick="() => dismissed = true" title='@Loc["common.close"]'><MaterialIcon Name="close" /></button>
+        <button class="btn btn-ghost ub-close" @onclick="() => dismissed = true" title='@Loc["common.close"]'><MaterialIcon Name="close" /></button>
     </div>
 }
 

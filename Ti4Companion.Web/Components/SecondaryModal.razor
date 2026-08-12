@@ -23,7 +23,7 @@
                 <h3 style="margin:0;">@Loc["secondary.title"]</h3>
                 @if (card is not null)
                 {
-                    <span class="chip chip-active">@Loc.Pick(card.Name, card.NameDe)</span>
+                    <span class="chip chip-active">@CardDisplay.Name(Loc, Store.Session, card)</span>
                 }
                 @if (owner is not null)
                 {

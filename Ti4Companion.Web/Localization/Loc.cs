@@ -46,7 +46,10 @@ public class Loc
         // The start page's list of sessions THIS DEVICE has played (max SessionStore.MaxRecent).
         // A deploy landed while the app was open; see UpdateNotice.razor.
         ["update.available"] = ("A new version is available.", "Eine neue Version ist verfügbar."),
-        ["update.reload"] = ("Reload", "Neu laden"),
+        // What the reload does, and that it is safe: the game itself lives on the server, so nothing is lost.
+        ["update.hint"] = ("Reload to switch to it — the running game is not affected.",
+                           "Neu laden, um sie zu übernehmen — die laufende Partie bleibt davon unberührt."),
+        ["update.reload"] = ("Reload now", "Jetzt neu laden"),
         ["update.stuck"] = ("Close every tab of this page, then open it again to finish updating.",
                             "Schließe alle Tabs dieser Seite und öffne sie neu, um das Update abzuschließen."),
         // Start page: the senate backdrop can be switched off (and stays off), see SessionStore.SenateEnabled.
@@ -56,6 +59,10 @@ public class Loc
         ["home.recentTitle"] = ("Sessions on this device", "Sessions auf diesem Gerät"),
         ["home.recentAs"] = ("as", "als"),
         ["home.recentUnnamed"] = ("Session", "Session"),
+        // The timestamp on each row. It is what THIS DEVICE last saw, which is all a local list can know —
+        // somebody else may have played on afterwards.
+        ["home.recentWhenHint"] = ("Last activity of this device in that session",
+                                   "Letzte Aktivität dieses Geräts in der Session"),
         ["home.recentNone"] = ("No sessions on this device yet — create one or join with a code.",
                                "Auf diesem Gerät noch keine Sessions — erstelle eine oder tritt mit einem Code bei."),
         ["home.notfound"] = ("No session found for that code.", "Keine Session für diesen Code gefunden."),
@@ -147,6 +154,64 @@ public class Loc
         ["redtape.liteHint"] = (
             "Setup: reveal seven (or six) Stage I and five Stage II objectives; the first Stage I objectives start untaped. Only five Stage I can ever score — when the fifth tape comes off, Stage I #6 and #7 are purged — and no Stage II tape comes off before those five are clear. Variant by van nguyen.",
             "Aufbau: sieben (oder sechs) Stufe-I- und fünf Stufe-II-Aufträge aufdecken; die ersten Stufe-I-Aufträge liegen frei. Nur fünf Stufe-I-Aufträge können überhaupt gewertet werden — sobald das fünfte Band fällt, werden Stufe I Nr. 6 und 7 entfernt — und kein Stufe-II-Band geht ab, bevor diese fünf frei sind. Variante von van nguyen."),
+        // "What is Red Tape?" (RedTapeHelpModal). Our own summary of the two variants' mechanics and of what
+        // the app does about them — NOT a copy of the authors' posts, which are linked instead. Each block is
+        // one string with `\n` between the bullets, like the strategy cards' ability text.
+        ["redtape.helpTitle"] = ("What is Red Tape?", "Was ist Red Tape?"),
+        ["redtape.helpLead"] = (
+            "Two community variants that lay every public objective face-up at the start of the game, with a marker over the victory points of most of them. A taped objective cannot be scored until its marker comes off — so the whole table can plan ahead, whether or not anybody remembers the deck. What differs between the variants is how a marker comes off, and how many objectives can ever score.",
+            "Zwei Community-Varianten: Alle öffentlichen Aufträge liegen von Anfang an offen, bei den meisten aber mit einem Marker über den Siegpunkten. Ein versiegelter Auftrag kann erst gewertet werden, wenn sein Marker fällt — so kann der ganze Tisch vorausplanen, ob sich jemand die Kartensätze merkt oder nicht. Die Varianten unterscheiden sich darin, wie ein Marker fällt und wie viele Aufträge überhaupt gewertet werden können."),
+        ["redtape.helpBy"] = ("variant by {0}", "Variante von {0}"),
+        ["redtape.helpSetup"] = ("Setup", "Aufbau"),
+        ["redtape.helpLimits"] = ("Scoring limits", "Wertungsgrenzen"),
+        ["redtape.helpDuring"] = ("During the game", "Im Spiel"),
+        ["redtape.helpInApp"] = ("In this app", "In dieser App"),
+        ["redtape.helpPost"] = ("The original post on Reddit", "Der Originalbeitrag auf Reddit"),
+        ["redtape.helpBurSetup"] = (
+            "Five Stage I and five Stage II objectives go on the table face-up.\n" +
+            "Every one of them gets a marker except the first two Stage I, which count as revealed.",
+            "Fünf Stufe-I- und fünf Stufe-II-Aufträge liegen offen aus.\n" +
+            "Alle bekommen einen Marker außer den ersten zwei Stufe-I-Aufträgen, die als aufgedeckt gelten."),
+        ["redtape.helpBurPlay"] = (
+            "One strategy card carries the ability — Diplomacy or Imperial, whichever your table replaces.\n" +
+            "Its primary removes one marker of your choice; not from a Stage II objective in the first three rounds.\n" +
+            "And on taking the card: one further marker per trade good that was lying on it.\n" +
+            "The status phase reveals nothing any more (everything is already face-up) — instead the game ends there if no unrevealed public objective is left.",
+            "Eine Strategiekarte trägt die Fähigkeit — Diplomatie oder Imperium, je nachdem, welche euer Tisch ersetzt.\n" +
+            "Ihre primäre Fähigkeit entfernt einen Marker nach Wahl; in den ersten drei Runden keinen von einem Stufe-II-Auftrag.\n" +
+            "Und beim Nehmen der Karte: ein weiterer Marker pro Handelsware, die darauf lag.\n" +
+            "In der Statusphase wird nichts mehr aufgedeckt (es liegt schon alles offen) — stattdessen endet dort das Spiel, wenn kein nicht aufgedeckter öffentlicher Auftrag mehr übrig ist."),
+        ["redtape.helpBurApp"] = (
+            "Pick \"Bureaucracy\" and say which card carries it. The app tapes the objectives, refuses to score a taped one and holds Stage II shut for three rounds — you can overrule that, and the override is logged.\n" +
+            "The card shows its added text, the status phase shows the game-end check instead of the reveal step, and playing the card asks which marker comes off.",
+            "„Bureaucracy“ wählen und sagen, welche Karte sie trägt. Die App versiegelt die Aufträge, verweigert die Wertung eines versiegelten und hält Stufe II drei Runden zu — das lässt sich übergehen, und das wird protokolliert.\n" +
+            "Die Karte zeigt ihren Zusatztext, die Statusphase zeigt die Spielende-Prüfung statt des Aufdeck-Schritts, und beim Spielen der Karte fragt die App, welcher Marker fällt."),
+        ["redtape.helpLiteSetup"] = (
+            "Seven (or six) Stage I and five Stage II objectives go on the table face-up.\n" +
+            "Every one of them gets a marker except the first Stage I objectives.",
+            "Sieben (oder sechs) Stufe-I- und fünf Stufe-II-Aufträge liegen offen aus.\n" +
+            "Alle bekommen einen Marker außer den ersten Stufe-I-Aufträgen."),
+        ["redtape.helpLiteLimits"] = (
+            "Only five Stage I objectives can ever score.\n" +
+            "The moment the fifth marker comes off Stage I, the ones still taped leave the game for good.\n" +
+            "No Stage II marker comes off before those five are clear.",
+            "Nur fünf Stufe-I-Aufträge können überhaupt gewertet werden.\n" +
+            "Sobald der fünfte Marker von Stufe I fällt, verlassen die noch versiegelten das Spiel endgültig.\n" +
+            "Kein Stufe-II-Marker fällt, bevor diese fünf frei sind."),
+        ["redtape.helpLitePlay"] = (
+            "The ability sits on Diplomacy as printed — Lite replaces no card.\n" +
+            "Whoever took Diplomacy removes one marker of their choice with the primary; that round nothing comes off at random.\n" +
+            "If nobody took it, one marker comes off AT RANDOM instead: in round 1 right after the strategy phase, and afterwards at the end of every status phase.",
+            "Die Fähigkeit liegt auf der gedruckten Diplomatie — Lite ersetzt keine Karte.\n" +
+            "Wer Diplomatie genommen hat, entfernt mit der primären Fähigkeit einen Marker nach Wahl; in dieser Runde fällt keiner zufällig.\n" +
+            "Hat sie niemand genommen, fällt stattdessen ein ZUFÄLLIGER Marker: in Runde 1 direkt nach der Strategiephase, danach jeweils am Ende der Statusphase."),
+        ["redtape.helpLiteApp"] = (
+            "Pick \"Red Tape Lite\" — the carrier is always Diplomacy. The app applies all of the above and greys out exactly what the rules forbid.\n" +
+            "The two irreversible steps are only ever PROPOSED: purging the leftover Stage I objectives and the random removal are questions the host answers, and both go into the match log.",
+            "„Red Tape Lite“ wählen — Trägerkarte ist immer Diplomatie. Die App setzt alles Obige um und graut genau das aus, was die Regeln verbieten.\n" +
+            "Die zwei unumkehrbaren Schritte werden nur VORGESCHLAGEN: das Entfernen der übrigen Stufe-I-Aufträge und die Zufallsentnahme sind Fragen, die der Host beantwortet, und beide landen im Spielprotokoll."),
+        // The card's own name once Bureaucracy replaces Imperial with it (see CardDisplay).
+        ["redtape.bureaucracyCard"] = ("Bureaucracy", "Bürokratie"),
         ["redtape.card"] = ("Card that removes the tape", "Karte, die das Band entfernt"),
         ["redtape.cardHint"] = (
             "Replace either — but not both — Diplomacy or Imperial with the matching Bureaucracy card. Everything else on it stays the printed card.",
@@ -225,8 +290,14 @@ public class Loc
         ["redtape.leaveSealed"] = ("Leave it sealed", "Versiegelt lassen"),
         // The carrier card's own ability: "remove a marker of your choice".
         ["redtape.pickTitle"] = ("Remove a marker", "Marker entfernen"),
-        ["redtape.pickHint"] = ("Pick the objective whose tape comes off.", "Wähle den Auftrag, dessen Band abgeht."),
+        ["redtape.pickHint"] = ("Tap a card to pull its tape — tap it again to put the tape back.",
+                                "Karte antippen, um das Band abzuziehen — nochmal antippen legt es wieder drauf."),
         ["redtape.pickNone"] = ("No tape can come off right now.", "Gerade kann kein Band abgenommen werden."),
+        // The allowance: one for the primary ability plus the card's trade goods (see GameRules).
+        ["redtape.pickCounted"] = ("markers removed", "Marker entfernt"),
+        ["redtape.tapeOff"] = ("tape off", "Band ab"),
+        ["redtape.tapeBackOn"] = ("Tap to put the tape back", "Antippen, um das Band wieder aufzulegen"),
+        ["redtape.pickGoods"] = ("{0} trade good(s) were on the card", "{0} Handelsware(n) lagen auf der Karte"),
         ["redtape.takeOff"] = ("Tap the tape to remove it", "Zum Entfernen auf das Band tippen"),
         // The tape is the only label — a separate "SEALED" chip said the same thing twice, which is also
         // why this string is the ACTION and not the state: it is only ever shown where the tape really can
@@ -234,16 +305,27 @@ public class Loc
         ["redtape.tapToRemove"] = ("TAP THE TAPE", "AUF DAS BAND TIPPEN"),
         ["redtape.confirmRemove"] = ("TAP AGAIN TO REMOVE", "NOCHMAL TIPPEN ZUM ENTFERNEN"),
         ["redtape.seal"] = ("Seal", "Versiegeln"),
-        // Optional technology prompt after the Technology strategy action.
-        ["tech.promptTitle"] = ("Technology action", "Technologie-Aktion"),
-        ["tech.promptOption"] = ("Ask for the technology afterwards",
+        // The table-wide prompt after a Technology action (TechPromptModal) and its table option.
+        ["tech.optionTitle"] = ("Technology action", "Technologie-Aktion"),
+        ["tech.promptTitle"] = ("Record the technologies you researched",
+                                "Erforschte Technologien erfassen"),
+        ["tech.promptOption"] = ("Ask for the technologies afterwards",
                                  "Danach zur Techeingabe auffordern"),
+        ["tech.promptHint2"] = (
+            "Asks the whole table for its technologies once the Technology action is resolved. A reminder, not a requirement.",
+            "Fragt den ganzen Tisch nach seinen Technologien, sobald die Technologie-Aktion abgehandelt ist. Eine Erinnerung, keine Pflicht."),
         ["tech.promptHint"] = (
-            "Shows a shortcut to the technology tab after that action is played. A reminder, not a requirement.",
-            "Zeigt nach dieser Aktion eine Verknüpfung zum Technologie-Reiter. Eine Erinnerung, keine Pflicht."),
-        ["tech.promptText"] = ("Technology action played — record the researched technology?",
-                               "Technologie-Aktion gespielt — erforschte Technologie erfassen?"),
-        ["tech.promptOpen"] = ("Open technologies", "Technologien öffnen"),
+            "Pick a colour or search, then click a card. Tap \"Done\" when you have entered everything — the clock is standing still until everyone has.",
+            "Farbe wählen oder suchen, dann eine Karte anklicken. „Fertig“ antippen, wenn alles erfasst ist — bis alle fertig sind, steht die Uhr."),
+        ["tech.promptHintHost"] = (
+            "Everyone enters their own; you can also switch to another player and enter theirs. \"Move on\" ends it for the whole table.",
+            "Jeder erfasst seine eigenen; du kannst auch auf einen anderen Spieler wechseln und für ihn erfassen. „Weiter“ beendet es für den ganzen Tisch."),
+        ["tech.promptClockStopped"] = ("the clock is stopped", "die Uhr steht"),
+        ["tech.promptWaiting"] = ("Still to enter", "Fehlt noch"),
+        ["tech.promptAllDone"] = ("everyone is done", "alle fertig"),
+        ["tech.promptDone"] = ("Done", "Fertig"),
+        ["tech.promptDoneFor"] = ("Done for {0}", "Fertig für {0}"),
+        ["tech.promptMoveOn"] = ("Move on", "Weiter"),
         // Per-player turn timer (informational only — never enforced).
         ["timer.remaining"] = ("Time left this round", "Restzeit diese Runde"),
         ["timer.over"] = ("Time budget used up", "Zeitbudget aufgebraucht"),
@@ -290,6 +372,10 @@ public class Loc
         ["setup.imReady"] = ("I'm ready", "Ich bin bereit"),
         ["setup.waiting"] = ("Waiting for players to get ready…", "Warte, bis die Spieler bereit sind…"),
         ["setup.startHint"] = ("The host starts the game once everyone is ready.", "Der Host startet das Spiel, sobald alle bereit sind."),
+        // Why "Next" / "Start game" is off — shown as the button's tooltip AND as text (a touch device has no
+        // tooltips, and the table is holding one).
+        ["setup.needReady"] = ("Everyone has to be ready first — faction and colour for every player.",
+                               "Erst müssen alle bereit sein — Fraktion und Farbe für jeden Spieler."),
         ["setup.searchFaction"] = ("Search faction…", "Fraktion suchen…"),
         ["setup.needFactionColor"] = ("Choose a faction and a colour to ready up.", "Wähle Fraktion und Farbe, um bereit zu sein."),
         // The speaker is settled on the SEATING step — it decides who picks first, so it belongs with the
@@ -328,13 +414,22 @@ public class Loc
         ["setup.step.objectives"] = ("Objectives", "Aufträge"),
         ["setup.nameHint"] = ("What is this game called? It shows on the wall display.",
                               "Wie heißt diese Partie? Der Name steht auf der Wandanzeige."),
+        ["setup.sessionStepHint"] = ("What game is this, and how does your table play it?",
+                                     "Was für eine Partie ist das, und wie spielt euer Tisch sie?"),
+        // Which game. Only TI4 works today; Twilight's Fall is its own game mode and none of it is modelled.
+        ["setup.gameVariant"] = ("Game", "Spiel"),
+        ["setup.variantTi4"] = ("Twilight Imperium 4", "Twilight Imperium 4"),
+        ["setup.variantTwilightsFall"] = ("Twilight's Fall", "Twilight's Fall"),
+        ["setup.gameVariantHint"] = ("Twilight's Fall is a separate game mode with its own factions and cards — not modelled yet.",
+                                     "Twilight's Fall ist ein eigener Spielmodus mit eigenen Fraktionen und Karten — noch nicht abgebildet."),
         ["setup.expansionsHint"] = ("Decides which factions, technologies and cards the app offers. The base game is always in.",
                                     "Bestimmt, welche Fraktionen, Technologien und Karten die App anbietet. Das Grundspiel ist immer dabei."),
         ["setup.seatingHint"] = ("Drag by the handle or use the arrows. Then say who the speaker is — or roll for it.",
                                  "Am Griff ziehen oder die Pfeile nutzen. Dann den Sprecher festlegen — oder auslosen."),
         ["host.only"] = ("Host", "Host"),
         ["host.onlyHint"] = ("Only the host controls the phases.", "Nur der Host steuert die Phasen."),
-        ["host.takeOver"] = ("Play for this player", "Für diesen Spieler spielen"),
+        // "host.takeOver" lived here for the take-over toggle. That is gone (the host can always act for
+        // whoever is up, and previous/next turn is how you jump), and so is its label.
         ["host.pickFor"] = ("Pick for this player", "Für diesen Spieler wählen"),
         ["host.manage"] = ("Manage (host)", "Verwalten (Host)"),
 
@@ -615,11 +710,14 @@ public class Loc
         ["exp.ProphecyOfKings"] = ("Prophecy of Kings", "Prophecy of Kings"),
         ["exp.Codex"] = ("Codex", "Codex"),
         ["exp.ThundersEdge"] = ("Thunder's Edge", "Thunder's Edge"),
+        // Offered but off: none of its content is in the master DB yet (see common.comingSoon).
+        ["exp.DiscordantStars"] = ("Discordant Stars", "Discordant Stars"),
 
         ["common.save"] = ("Save", "Speichern"),
         ["common.cancel"] = ("Cancel", "Abbrechen"),
         ["common.done"] = ("Done", "Fertig"),
         ["common.close"] = ("Close", "Schließen"),
+        ["common.comingSoon"] = ("coming soon", "kommt noch"),
         ["common.back"] = ("Back", "Zurück"),
         // Secondary abilities of a strategy action (only with the turn timer in use).
         ["politics.speaker"] = ("Appoint the speaker", "Sprecher bestimmen"),

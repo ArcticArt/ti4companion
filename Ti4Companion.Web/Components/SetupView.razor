@@ -40,26 +40,38 @@
                     <MaterialIcon Name="casino" /> @Loc["setup.randomSpeaker"]
                 </button>
             }
+            @* The ready count sits between Back and Next, next to the button it gates — on the players step
+               it IS the reason Next is off, and reading it off the phase bar above meant looking somewhere
+               else for the answer. *@
+            @if (step == SetupStep.Players)
+            {
+                <span class="setup-ready @(AllReady ? "ok" : "")">
+                    @Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong>
+                </span>
+            }
             @if (step < SetupStep.Objectives)
             {
-                @* Seating gates the way forward: without a speaker nobody knows who picks first, and finding
-                   that out after the game has started is exactly the mess this step exists to prevent. *@
-                var blocked = step == SetupStep.Seating && s.SpeakerPlayerId is null;
-                <button class="btn btn-sm btn-gold" disabled="@(blocked || rolling)" title="@(blocked ? Loc["setup.needSpeaker"] : null)"
+                @* Every step that blocks says WHY, as the button's tooltip and (below) as visible text: a
+                   disabled button with no reason is the worst control in an app. *@
+                var reason = NextBlockedReason(step, s);
+                <button class="btn btn-sm btn-gold" disabled="@(reason is not null || rolling)"
+                        title="@(reason is null ? null : Loc[reason])"
                         @onclick="() => current = step + 1">@Loc["status.next"] <MaterialIcon Name="chevron_right" /></button>
             }
             else
             {
                 @* The one and only "start": you cannot get here without having passed seating and objectives,
                    which is what the old seat-order confirmation dialog was standing in for. *@
-                <button class="btn btn-sm btn-gold" disabled="@(!AllReady)" title="@(AllReady ? null : Loc["setup.startHint"])"
+                <button class="btn btn-sm btn-gold" disabled="@(!AllReady)" title="@(AllReady ? null : Loc["setup.needReady"])"
                         @onclick="StartGame">@Loc["turn.startGame"] <MaterialIcon Name="chevron_right" /></button>
             }
         </div>
     </div>
-    @if (step == SetupStep.Seating && s.SpeakerPlayerId is null)
+    @* The same reason as visible text, not only as a tooltip — a tooltip does not exist on a touch device,
+       which is what the table is holding. *@
+    @if (NextBlockedReason(step, s) is { } blockedReason)
     {
-        <p class="faint" style="margin:.4rem 0 0;font-size:.8rem;">@Loc["setup.needSpeaker"]</p>
+        <p class="faint" style="margin:.4rem 0 0;font-size:.8rem;">@Loc[blockedReason]</p>
     }
 }
 
@@ -70,13 +82,33 @@
 @if (step == SetupStep.Session)
 {
     <div class="panel" style="margin-top:.6rem;">
-        <h3 style="margin:0 0 .2rem;">@Loc["setup.step.name"]</h3>
-        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.nameHint"]</p>
+        <h3 style="margin:0 0 .2rem;">@Loc["setup.step.session"]</h3>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.sessionStepHint"]</p>
 
         <div class="game-option">
             <label for="sessionName">@Loc["home.sessionName"]</label>
             <input id="sessionName" type="text" value="@s.Name" @onchange="SetName" placeholder="@NamePlaceholder" />
             <span class="faint go-hint">@Loc["setup.nameHint"]</span>
+        </div>
+
+        @* Which game this is. Only one answer works today; Twilight's Fall is a different game mode (its own
+           factions, leaders and cards, all deliberately excluded from the content DB) and is shown so the
+           question is visibly asked rather than silently assumed. *@
+        <div class="game-option">
+            <label>@Loc["setup.gameVariant"]</label>
+            <div class="go-checks">
+                <label class="opt-check">
+                    <input type="radio" name="gameVariant" checked disabled />
+                    <span class="oc-box oc-radio"></span>
+                    <span>@Loc["setup.variantTi4"]</span>
+                </label>
+                <label class="opt-check is-disabled" title='@Loc["common.comingSoon"]'>
+                    <input type="radio" name="gameVariant" disabled />
+                    <span class="oc-box oc-radio"></span>
+                    <span>@Loc["setup.variantTwilightsFall"] <span class="soon">@Loc["common.comingSoon"]</span></span>
+                </label>
+            </div>
+            <span class="faint go-hint">@Loc["setup.gameVariantHint"]</span>
         </div>
 
         <div class="game-option">
@@ -98,6 +130,13 @@
                         <span>@Loc[$"exp.{x}"]</span>
                     </label>
                 }
+                @* Discordant Stars is a fan expansion (34 more factions) and none of it is in the content DB
+                   yet, so the box is there and off — the question gets asked, the answer is "not yet". *@
+                <label class="opt-check is-disabled" title='@Loc["common.comingSoon"]'>
+                    <input type="checkbox" disabled />
+                    <span class="oc-box"></span>
+                    <span>@Loc["exp.DiscordantStars"] <span class="soon">@Loc["common.comingSoon"]</span></span>
+                </label>
             </div>
             <span class="faint go-hint">@Loc["setup.expansionsHint"]</span>
         </div>
@@ -162,11 +201,19 @@
            objectives; only Bureaucracy REPLACES a strategy card, so only it asks which one. *@
         <div class="game-option">
             <label for="redTape">@Loc["redtape.title"]</label>
-            <select id="redTape" value="@((int)s.RedTapeVariant)" @onchange="SetRedTapeVariant">
-                <option value="0">@Loc["redtape.off"]</option>
-                <option value="1">@Loc["redtape.bureaucracy"]</option>
-                <option value="2">@Loc["redtape.lite"]</option>
-            </select>
+            <div class="go-inline">
+                <select id="redTape" value="@((int)s.RedTapeVariant)" @onchange="SetRedTapeVariant">
+                    <option value="0">@Loc["redtape.off"]</option>
+                    <option value="1">@Loc["redtape.bureaucracy"]</option>
+                    <option value="2">@Loc["redtape.lite"]</option>
+                </select>
+                @* The variants are a table decision, and the hint line cannot carry the rules. This opens the
+                   explanation (and links the posts) so nobody has to leave the app to look them up. *@
+                <button class="btn btn-sm btn-ghost go-help" @onclick="() => showRedTapeHelp = true"
+                        title='@Loc["redtape.helpTitle"]' aria-label='@Loc["redtape.helpTitle"]'>
+                    <MaterialIcon Name="help" />
+                </button>
+            </div>
             <span class="faint go-hint">@Loc[s.RedTapeVariant switch
                 {
                     RedTapeVariant.Bureaucracy => "redtape.bureaucracyHint",
@@ -188,7 +235,7 @@
                             <input type="radio" name="redTapeCard" checked="@(s.RedTapeCardNumber == n)"
                                    @onchange="() => SetRedTapeCard(num)" />
                             <span class="oc-box oc-radio"></span>
-                            <span>@n — @(card is null ? "" : Loc.Pick(card.Name, card.NameDe))</span>
+                            <span>@n — @(card is null ? "" : CardDisplay.Name(Loc, Store.Session, card))</span>
                         </label>
                     }
                 </div>
@@ -206,7 +253,7 @@
         }
 
         <div class="game-option">
-            <label>@Loc["tech.promptTitle"]</label>
+            <label>@Loc["tech.optionTitle"]</label>
             <div class="go-checks">
                 <label class="opt-check">
                     <input type="checkbox" checked="@s.PromptTechOnAction" @onchange="SetPromptTech" />
@@ -214,10 +261,13 @@
                     <span>@Loc["tech.promptOption"]</span>
                 </label>
             </div>
-            <span class="faint go-hint">@Loc["tech.promptHint"]</span>
+            <span class="faint go-hint">@Loc["tech.promptHint2"]</span>
         </div>
     </div>
 }
+
+@* The Red Tape explanation, opened from the question mark on that option. *@
+<RedTapeHelpModal Show="showRedTapeHelp" OnClose="() => showRedTapeHelp = false" />
 
 @* ---- Step 3: the players (and the only thing a non-host sees) ---- *@
 @if (step == SetupStep.Players)
@@ -364,7 +414,24 @@
     private SeatOrderList? seatOrder;
     private bool rolling;
 
+    /// <summary>The Red Tape explanation is open on this device (see RedTapeHelpModal).</summary>
+    private bool showRedTapeHelp;
+
     private bool AllReady => Store.Session!.Players.Count > 0 && Store.Session!.Players.All(p => p.IsReady);
+
+    /// <summary>Why "Next" is off on this step, as a loc key — or null when nothing blocks. One place for both
+    /// the disabled state and the reason, so a button can never be off without saying why.
+    /// <list type="bullet">
+    /// <item>Players: everybody has to be ready. Faction and colour are what "ready" means, and a game that
+    /// starts without them leaves the wall full of blanks.</item>
+    /// <item>Seating: a speaker, or nobody knows who picks a strategy card first.</item>
+    /// </list></summary>
+    private string? NextBlockedReason(SetupStep step, SessionStateDto s) => step switch
+    {
+        SetupStep.Players when !AllReady => "setup.needReady",
+        SetupStep.Seating when s.SpeakerPlayerId is null => "setup.needSpeaker",
+        _ => null,
+    };
 
     /// <summary>Roll for the speaker, visibly: the token hops between players before it settles (see
     /// <see cref="SeatOrderList.RollAsync"/>). A silent jump to a random name looks like a bug to everyone

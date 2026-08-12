@@ -2,6 +2,7 @@
 @page "/join/{Code}"
 @inherits Ti4ComponentBase
 @inject NavigationManager Nav
+@using System.Globalization
 
 <PageTitle>Twilight Imperium Companion</PageTitle>
 
@@ -60,6 +61,7 @@
                         {
                             <span class="chip">@Loc["home.recentAs"] @r.PlayerName</span>
                         }
+                        <span class="rs-when" title='@Loc["home.recentWhenHint"]'>@When(r.LastSeen)</span>
                     </button>
                 }
             </div>
@@ -194,6 +196,17 @@
     private List<RecentSession> recent = new();   // sessions this device can pick up again
 
     private string NamePlaceholder => Loc["players.you"];
+
+    /// <summary>When this device was last in that session, in ITS OWN local time. Formatted with an explicit
+    /// pattern per language and <see cref="CultureInfo.InvariantCulture"/> — the browser's culture decides
+    /// what `d` means, and a WASM app can be running under any of them (the same reason numbers going into
+    /// CSS are formatted invariant).</summary>
+    private string When(DateTimeOffset ts)
+    {
+        var local = ts.ToLocalTime();
+        var pattern = Loc.Lang == Language.De ? "dd.MM.yyyy, HH:mm" : "yyyy-MM-dd, HH:mm";
+        return local.ToString(pattern, CultureInfo.InvariantCulture);
+    }
 
     protected override async Task OnInitializedAsync()
     {

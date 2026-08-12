@@ -1,0 +1,209 @@
+@inherits Ti4ComponentBase
+
+@*
+    "Record what you researched" — the whole table at once, after a Technology action.
+
+    It replaced a band in the action view with a button on it. That band appeared while the action was still
+    being played, which was too early for everyone except the player holding the card: the players taking the
+    secondary research as well, and they are not done until the secondary round is. So the prompt is raised
+    when THAT round closes (server-side, see RaiseTechPrompt) and every device shows it for its own seat.
+
+    THE CLOCK STANDS STILL while it is open — the prompt is a logged interval like a combat, subtracted from
+    time on turn. Which is also why a player leaves it by saying they are DONE (their own row), rather than by
+    dismissing it locally: a device that just hid the popup would leave the table's clock stopped. The player
+    who played the card and the host can end it for everyone; every turn/phase boundary ends it too, so a
+    phone somebody put down cannot stop the clock for the rest of the evening.
+
+    The host additionally gets a row of player chips, to fill the technologies in for somebody who is not
+    holding their phone.
+*@
+@if (Visible && Store.Session is { } s && Store.PlayerById(Target) is { } target)
+{
+    var pending = s.Players.Where(p => p.TechPromptPending).ToList();
+    var host = Store.IsHost;
+    var owner = Store.PlayerById(s.TechPromptOwnerId);
+    var mine = Store.MyPlayerId;
+
+    <div class="modal-backdrop centered blurred">
+        <div class="modal techpick-modal">
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["tech.promptTitle"]</h3>
+                @if (owner is not null)
+                {
+                    <span class="faint">@string.Format(Loc["secondary.playedBy"], owner.Name)</span>
+                }
+                @* Say it, or a stopped clock looks like the timer is broken. *@
+                @if (Store.TurnTimerEnabled)
+                {
+                    <span class="chip chip-done">@Loc["tech.promptClockStopped"]</span>
+                }
+            </div>
+            <div class="modal-body">
+                <p class="faint" style="margin:0 0 .6rem;">@Loc[host ? "tech.promptHintHost" : "tech.promptHint"]</p>
+
+                @* Who the table is still waiting for. Also the host's way to fill in for one of them. *@
+                <div class="row-wrap" style="gap:.35rem;align-items:center;margin-bottom:.6rem;">
+                    <span class="faint" style="font-size:.78rem;">@Loc["tech.promptWaiting"]:</span>
+                    @if (pending.Count == 0)
+                    {
+                        <span class="chip chip-done">@Loc["tech.promptAllDone"]</span>
+                    }
+                    @foreach (var p in pending)
+                    {
+                        var pid = p.Id;
+                        @if (host && pid != Target)
+                        {
+                            <button class="chip tp-who" @onclick="() => switched = pid">@p.Name</button>
+                        }
+                        else
+                        {
+                            <span class="chip @(pid == Target ? "chip-active" : "")">@p.Name</span>
+                        }
+                    }
+                </div>
+
+                @* Whose technologies are being entered right now. *@
+                <div class="row-wrap" style="gap:.5rem;align-items:center;">
+                    <FactionBadge Faction="Store.Faction(target.FactionId)" Size="1.6" Ring="@target.ColorHex" />
+                    <strong>@target.Name</strong>
+                    <span class="faint" style="font-size:.78rem;">@string.Format(Loc["tech.pickOwned"], target.TechnologyIds.Count)</span>
+                </div>
+
+                <div class="row-wrap" style="gap:.5rem;align-items:center;margin-top:.5rem;">
+                    <input type="text" @bind="search" @bind:event="oninput" placeholder="@Loc["tech.search"]" style="flex:1 1 180px;" />
+                    <label class="opt-check">
+                        <input type="checkbox" @bind="allFactions" />
+                        <span class="oc-box"></span>
+                        <span>@Loc["tech.allFactions"]</span>
+                    </label>
+                </div>
+                <div class="color-picker" style="margin-top:.5rem;">
+                    @foreach (var c in Colors)
+                    {
+                        var col = c;
+                        <button class="color-btn @(selColor == c ? "sel" : "")" style="--cc:@TechHex(c)" @onclick="() => Toggle(col)">
+                            <TechIcon Color="c" Size="22" /> @Loc[$"color.{c}"]
+                        </button>
+                    }
+                </div>
+
+                @if (selColor is null && string.IsNullOrWhiteSpace(search))
+                {
+                    <p class="faint" style="margin:.7rem 0 0;">@Loc["tech.pickHint"]</p>
+                }
+                else
+                {
+                    var list = Catalog(target);
+                    @if (list.Count == 0)
+                    {
+                        <p class="faint" style="margin:.7rem 0 0;">@Loc["tech.noneFound"]</p>
+                    }
+                    else
+                    {
+                        <div class="tech-cat" style="margin-top:.6rem;">
+                            @foreach (var t in list)
+                            {
+                                var tech = t;
+                                <TechCard Tech="t" OnClick="() => Add(tech.Id)" />
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-actions">
+                @* Ending it for everybody: the card's owner, or the host running the table. *@
+                @if (host || mine == s.TechPromptOwnerId)
+                {
+                    <button class="btn" @onclick="CloseForAll">@Loc["tech.promptMoveOn"] <MaterialIcon Name="chevron_right" /></button>
+                }
+                <div class="spacer" style="flex:1"></div>
+                @* "Done" always applies to whoever's catalogue is open, so it can never tick off a different
+                   player than the one being looked at. For the host filling in for somebody else it says
+                   whose entry it is finishing. *@
+                @if (s.Players.Any(p => p.Id == Target && p.TechPromptPending))
+                {
+                    <button class="btn btn-gold" @onclick="() => Done(Target)">
+                        @(Target == Store.MyPlayerId
+                            ? Loc["tech.promptDone"]
+                            : string.Format(Loc["tech.promptDoneFor"], target.Name))
+                        <MaterialIcon Name="check" />
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly TechColor[] Colors =
+        { TechColor.Biotic, TechColor.Cybernetic, TechColor.Propulsion, TechColor.Warfare, TechColor.Unit };
+
+    private Guid Sid => Store.Session!.Id;
+    private string search = "";
+    private TechColor? selColor;
+    private bool allFactions;
+
+    /// <summary>Whose technologies are being entered on THIS device. Starts at our own seat; only the host can
+    /// move it, and only to somebody who still owes an entry.</summary>
+    private Guid? switched;
+
+    private Guid Target => switched ?? Store.MyPlayerId ?? Guid.Empty;
+
+    /// <summary>Shown while the prompt stands and this device holds a seat that is either still pending or
+    /// belongs to the host / the card's owner (they need the "move on" button). The wall has no seat at all,
+    /// so it never shows it — a projector cannot answer a question.</summary>
+    private bool Visible
+    {
+        get
+        {
+            if (Store.Session is not { TechPromptOpen: true } s) return false;
+            if (Store.MyPlayerId is not Guid me) return false;
+            return Store.IsHost || me == s.TechPromptOwnerId || s.Players.Any(p => p.Id == me && p.TechPromptPending);
+        }
+    }
+
+    private void Toggle(TechColor c) => selColor = selColor == c ? null : c;
+
+    // Taking a technology does NOT end this player's entry: a Technology action can bring in two.
+    private Task Add(string techId) => Store.Mutate(Store.Api.AddTechnologyAsync(Sid, Target, techId));
+
+    private async Task Done(Guid playerId)
+    {
+        await Store.Mutate(Store.Api.SetTechPromptDoneAsync(Sid, playerId));
+        // Back to our own seat, so the host does not stay parked on somebody else's catalogue.
+        if (playerId == Target) switched = null;
+    }
+
+    private async Task CloseForAll()
+    {
+        switched = null;
+        await Store.Mutate(Store.Api.CloseTechPromptAsync(Sid));
+    }
+
+    /// <summary>Same filter as the Technology tab: this player's own faction techs unless "all faction techs"
+    /// is on (Nekro), never one they already have, and only once a colour or a search narrows it down —
+    /// ninety-six cards at once is not a choice.</summary>
+    private List<TechnologyDto> Catalog(PlayerDto target)
+    {
+        var q = search.Trim();
+        var searching = q.Length > 0;
+        return Store.ActiveTechnologies()
+            .Where(t => t.FactionId is null || allFactions || t.FactionId == target.FactionId)
+            .Where(t => !target.TechnologyIds.Contains(t.Id))
+            .Where(t => searching
+                ? (Loc.Pick(t.Name, t.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase)
+                   || Loc.Pick(t.Text, t.TextDe).Contains(q, StringComparison.OrdinalIgnoreCase))
+                : (selColor is not null && t.Color == selColor))
+            .OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ThenBy(t => Loc.Pick(t.Name, t.NameDe))
+            .Take(60).ToList();
+    }
+
+    private static string TechHex(TechColor c) => c switch
+    {
+        TechColor.Biotic => "#4caf50",
+        TechColor.Propulsion => "#4a78d6",
+        TechColor.Cybernetic => "#e0c341",
+        TechColor.Warfare => "#d6534a",
+        _ => "#9aa7c0",
+    };
+}

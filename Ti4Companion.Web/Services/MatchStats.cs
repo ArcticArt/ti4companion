@@ -60,15 +60,18 @@ public class MatchStats
         }
         if (combatStart is { } openCombat) combats.Add((openCombat, now));
 
-        // Technology-picker intervals, excluded exactly like a combat and for the same reason: hunting for a
-        // technology in a list is the app's overhead, not the player's thinking time. The picker is closed by
-        // every turn/phase boundary server-side, so an open one cannot run away with the clock.
+        // Recording technologies, excluded exactly like a combat and for the same reason: entering what the
+        // table researched is the app's overhead, not anybody's thinking time. Two kinds of entry, one list:
+        // the old per-player picker (TechPickStart/End, no longer emitted but present in older logs) and the
+        // table-wide prompt after a Technology action (TechPromptOpen/Close). Both are closed by every
+        // turn/phase boundary server-side, so an open one cannot run away with the clock.
         var techPicks = new List<(DateTimeOffset From, DateTimeOffset To)>();
         DateTimeOffset? techStart = null;
         foreach (var e in ordered)
         {
-            if (e.Kind == SessionLogKind.TechPickStart) techStart ??= e.TimestampUtc;
-            else if (e.Kind == SessionLogKind.TechPickEnd && techStart is { } ts) { techPicks.Add((ts, e.TimestampUtc)); techStart = null; }
+            if (e.Kind is SessionLogKind.TechPickStart or SessionLogKind.TechPromptOpen) techStart ??= e.TimestampUtc;
+            else if ((e.Kind is SessionLogKind.TechPickEnd or SessionLogKind.TechPromptClose) && techStart is { } ts)
+            { techPicks.Add((ts, e.TimestampUtc)); techStart = null; }
         }
         if (techStart is { } openTech) techPicks.Add((openTech, now));
 

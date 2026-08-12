@@ -146,6 +146,12 @@ exception.
   but both are still time the table spent playing. Because a popup can be walked away from, the server closes
   either one at every turn and phase boundary. Imperial's primary opens a third popup, listing the objectives
   that player may actually score.
+- **Recording technologies** (optional, a table setting) is asked once the Technology action is resolved, not
+  while it is being played: the players taking the secondary research as well. Every device then shows the
+  catalogue for its own seat — the host can also switch to another player and enter theirs — and **the clock
+  stands still** until everybody has said they are done, or the player who played the card (or the host) moves
+  the table on. Like the other clock stops it is a logged interval, and every turn or phase boundary ends it,
+  so a phone somebody put down cannot stop the clock for the rest of the evening.
 - **Secondary abilities** (an optional extra, and only meaningful with the turn timer on) are followed as a
   *round*: it opens when the player who played the primary ends their turn, each participant is put on their
   own clock, and it closes when the last one is done. A secondary happens **between two turns**, so while the
@@ -168,7 +174,11 @@ exception.
   raised in can end before anyone answers it. The variant's *timing* rules can also be **overruled** by the
   host through an explicit dialog (and the override is logged) — the app enforces them so nobody has to
   remember them, but the table remains the authority on its own game. A purged objective is the exception:
-  that is not a lock, it is out of the game.
+  that is not a lock, it is out of the game. Removing markers is a small workspace rather than a one-shot
+  pick: every sealed objective is a card with its tape, tapping toggles the tape off and on again, and the
+  allowance shown at the top is one for the card's primary plus one per trade good that was on it when it was
+  taken (captured at the start of the action phase, because the goods are collected in the same step). The
+  setup option carries a "?" that explains both variants and links their authors' posts.
 - **Agenda:** a small state machine driven by `CurrentAgendaId` + `VotingStarted` + `AgendaVotesHidden`:
   1. *Influence entry* — every player enters their available influence (non-hosts see only their own).
   2. *Agenda revealed* — the host picks an agenda and starts the vote, open or **face-down**.

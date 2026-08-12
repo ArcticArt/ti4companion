@@ -284,7 +284,7 @@ else
                     <div class="big-strat" style="--c:@activeCard.ColorHex">
                         <div class="strat-head">
                             <span class="num">@activeCard.Initiative</span>
-                            <span class="sname">@Loc.Pick(activeCard.Name, activeCard.NameDe)</span>
+                            <span class="sname">@CardDisplay.Name(Loc, s, activeCard)</span>
                             @{ var owner = ordered.FirstOrDefault(p => p.StrategyCards.Any(c => c.StrategyCardId == activeCard.Id)); }
                             @if (owner is not null) { <span class="b-meta">— @owner.Name</span> }
                         </div>
@@ -337,7 +337,7 @@ else
                                             var card = Store.Card(pc.StrategyCardId);
                                             if (card is not null)
                                             {
-                                                <span class="s-pill @(pc.IsExhausted ? "used" : "")" style="--c:@card.ColorHex"><span class="pn">@card.Initiative</span> @Loc.Pick(card.Name, card.NameDe)</span>
+                                                <span class="s-pill @(pc.IsExhausted ? "used" : "")" style="--c:@card.ColorHex"><span class="pn">@card.Initiative</span> @CardDisplay.Name(Loc, s, card)</span>
                                             }
                                         }
                                     </div>
@@ -477,7 +477,7 @@ else
                                 @foreach (var card in availCards)
                                 {
                                     <div class="sec-card" style="--c:@card.ColorHex">
-                                        <span class="sec-name"><span class="pn">@card.Initiative</span> @Loc.Pick(card.Name, card.NameDe)</span>
+                                        <span class="sec-name"><span class="pn">@card.Initiative</span> @CardDisplay.Name(Loc, s, card)</span>
                                         <ul class="ability-bullets">@foreach (var line in Lines(Loc.Pick(card.SecondaryText, card.SecondaryTextDe))) { <li>@line</li> }</ul>
                                     </div>
                                 }

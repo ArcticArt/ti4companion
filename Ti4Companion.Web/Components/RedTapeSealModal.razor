@@ -37,25 +37,46 @@
                 }
                 else
                 {
-                    var removable = Removable(s);
-                    @if (removable.Count == 0)
+                    @* The tape workspace: every objective that was sealed when this was opened, as its own card
+                       WITH its tape. Tapping a card pulls the tape; tapping it again puts it back, so a mis-tap
+                       costs nothing and the card never disappears from under the finger. The counter at the top
+                       is the variant's allowance — one for the primary plus one per trade good that was on the
+                       card (see GameRules.RedTapeAllowedRemovals). Counted, not enforced. *@
+                    var allowed = GameRules.RedTapeAllowedRemovals(s.RedTapeCarrierGoods);
+                    var taken = Removed(s);
+                    var cards = Workspace(s);
+                    <div class="rt-pick-head">
+                        <span class="rt-pick-count @(taken >= allowed ? "full" : "")">
+                            <strong>@taken</strong> / @allowed
+                        </span>
+                        <span class="rt-pick-of">
+                            @Loc["redtape.pickCounted"]
+                            @if (s.RedTapeCarrierGoods > 0)
+                            {
+                                <span class="faint"> · @string.Format(Loc["redtape.pickGoods"], s.RedTapeCarrierGoods)</span>
+                            }
+                        </span>
+                    </div>
+                    @if (cards.Count == 0)
                     {
                         <p class="faint" style="margin:0;">@Loc["redtape.pickNone"]</p>
                     }
                     else
                     {
                         <p class="rt-ask-lead">@Loc["redtape.pickHint"]</p>
-                        <div class="rt-ask-list">
-                            @foreach (var o in removable)
+                        <div class="obj-tap-grid rt-pick-grid">
+                            @foreach (var o in cards)
                             {
                                 var target = o;
-                                <button class="rt-ask-item rt-ask-pick" @onclick="() => Unseal(target, false)">
-                                    <span class="rt-ask-name">@NameOf(o)</span>
-                                    @if (Store.Objective(o.ObjectiveId) is { } d2)
-                                    {
-                                        <span class="rt-ask-req">@Loc.Pick(d2.Requirement, d2.RequirementDe)</span>
-                                    }
-                                </button>
+                                @* Tappable when the tape may come off — and always once it is off, so it can
+                                   go back on. A tape one of the variant's timing rules holds shut stays put
+                                   and says which rule (that override lives in the Locked question). *@
+                                <ObjectiveDisplayCard So="o"
+                                                      Clickable="@(o.MarkerRemoved || Store.RedTapeBlockKey(o) is null)"
+                                                      Undo="@o.MarkerRemoved"
+                                                      UndoText="@Loc["redtape.tapeOff"]"
+                                                      UndoTitle="@Loc["redtape.tapeBackOn"]"
+                                                      OnClick="() => Toggle(target)" />
                             }
                         </div>
                     }
@@ -67,7 +88,11 @@
                     <button class="btn btn-danger" @onclick="() => Unseal(lo2, true)">@Loc["redtape.removeAnyway"]</button>
                 }
                 <div class="spacer" style="flex:1"></div>
-                <button class="btn" @onclick="Close">@Loc[Mode == SealMode.Locked ? "redtape.leaveSealed" : "common.close"]</button>
+                @* In Pick mode this is the ONLY way out: the dialog no longer closes on the first tape, because
+                   the allowance can be more than one and the table needs to see what it has taken off. *@
+                <button class="btn @(Mode == SealMode.Pick ? "btn-gold" : "")" @onclick="Close">
+                    @Loc[Mode == SealMode.Locked ? "redtape.leaveSealed" : "common.done"]
+                </button>
             </div>
         </div>
     </div>
@@ -86,15 +111,34 @@
 
     private Guid Sid => Store.Session!.Id;
 
-    private Task Close() => OnClose.InvokeAsync();
+    private async Task Close()
+    {
+        opened = null;
+        await OnClose.InvokeAsync();
+    }
 
     private string NameOf(SessionObjectiveDto o)
         => o.CustomName ?? (Store.Objective(o.ObjectiveId) is { } d ? Loc.Pick(d.Name, d.NameDe) : o.ObjectiveId);
 
-    /// <summary>Tapes that may legally come off right now — nothing the variant forbids, so a "choose one"
-    /// list never offers a choice the server would refuse.</summary>
-    private List<SessionObjectiveDto> Removable(SessionStateDto s)
-        => s.Objectives.Where(o => Store.RedTapeBlocks(o) && Store.RedTapeBlockKey(o) is null).ToList();
+    /// <summary>The objectives that were SEALED when this dialog was opened. That snapshot is what makes the
+    /// workspace honest: it is the set this resolution may touch, so re-taping can be offered for exactly what
+    /// was untaped here and never for a tape that came off earlier in the game (or for the two that start
+    /// untaped).</summary>
+    private HashSet<Guid>? opened;
+
+    private HashSet<Guid> Opened(SessionStateDto s)
+        => opened ??= s.Objectives.Where(o => !o.MarkerRemoved && !o.Purged).Select(o => o.Id).ToHashSet();
+
+    private List<SessionObjectiveDto> Workspace(SessionStateDto s)
+        => s.Objectives.Where(o => Opened(s).Contains(o.Id)).ToList();
+
+    /// <summary>How many tapes have come off since this was opened.</summary>
+    private int Removed(SessionStateDto s)
+        => s.Objectives.Count(o => Opened(s).Contains(o.Id) && o.MarkerRemoved);
+
+    /// <summary>Pull the tape, or put it back — the same card, toggled. Nothing closes; see the Done button.</summary>
+    private Task Toggle(SessionObjectiveDto o)
+        => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, o.Id, !o.MarkerRemoved));
 
     private async Task Unseal(SessionObjectiveDto o, bool over)
     {

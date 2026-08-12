@@ -6,7 +6,7 @@
      style="--c:@Card.ColorHex" @onclick="HandleClick">
     <div class="strat-head">
         <span class="num">@Card.Initiative</span>
-        <span class="sname">@Loc.Pick(Card.Name, Card.NameDe)</span>
+        <span class="sname">@CardDisplay.Name(Loc, Store.Session, Card)</span>
         @if (TradeGoods > 0)
         {
             <span class="tg" title="@TgTitle"><img src="symbols/trade-good-1.png" class="tg-icon" alt="" /> @TradeGoods</span>

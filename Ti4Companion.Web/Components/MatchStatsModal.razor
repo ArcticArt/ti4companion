@@ -154,7 +154,7 @@
 
     private string CardName(string? d)
     {
-        if (int.TryParse(d, out var n) && Store.Card(n) is { } c) return Loc.Pick(c.Name, c.NameDe);
+        if (int.TryParse(d, out var n) && Store.Card(n) is { } c) return CardDisplay.Name(Loc, Store.Session, c);
         return d ?? "";
     }
     private string ObjName(string? d) => string.IsNullOrEmpty(d) ? "" : (Store.Objective(d) is { } o ? Loc.Pick(o.Name, o.NameDe) : d);

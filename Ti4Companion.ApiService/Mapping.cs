@@ -98,7 +98,7 @@ public static class Mapping
                     .Select(c => new PlayerStrategyCardDto(c.StrategyCardId, c.IsExhausted))
                     .ToList(),
                 p.Technologies.Select(t => t.TechnologyId).ToList(),
-                p.Influence, p.StatusDone, p.SecondaryPending))
+                p.Influence, p.StatusDone, p.SecondaryPending, p.TechPromptPending))
             .ToList();
 
         var objectives = s.Objectives
@@ -158,6 +158,7 @@ public static class Mapping
             s.Phase == GamePhase.Status ? TurnService.CurrentScorer(s, factionOverrides) : null,
             s.ShowJoinQr, s.StatusStage, s.SecondaryCardId, s.SecondaryOwnerId, s.SpeakerPending,
             s.RedTapeRandomRound, s.RedTapeRandomPendingRound,
-            s.CombatAId, s.CombatBId, s.TechPickPlayerId, s.CustomVoteTitle, s.CustomVoteElect);
+            s.CombatAId, s.CombatBId, s.TechPickPlayerId, s.TechPromptOpen, s.TechPromptOwnerId,
+            s.RedTapeCarrierGoods, s.CustomVoteTitle, s.CustomVoteElect);
     }
 }

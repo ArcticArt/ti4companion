@@ -259,6 +259,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .game-option .go-inline { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; }
 .game-option .go-inline select { width: auto; flex: 1 1 8rem; min-width: 0; max-width: 22rem; }
 .game-option .go-num { width: 4.5rem; flex: 0 0 auto; text-align: right; }
+/* "What is this?" beside an option whose rules cannot fit in the hint line (the Red Tape variants). */
+.game-option .go-help { flex: 0 0 auto; padding: .3rem .4rem; color: var(--gold); }
+.game-option .go-help:hover { color: var(--text); }
 @media (max-width: 560px) {
     /* One column on a phone: a 9rem label column next to a select leaves the select unusably narrow. */
     .game-option { grid-template-columns: 1fr; }
@@ -292,6 +295,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Base game: on, and not up for discussion — shown so the set reads complete. */
 .opt-check.is-fixed { opacity: .75; cursor: default; }
 .opt-check.is-fixed:hover { border-color: var(--panel-border); }
+/* "coming soon" next to an option that is deliberately offered and off (Discordant Stars, Twilight's Fall):
+   the question is visibly asked, the answer is "not yet". */
+.opt-check .soon { margin-left: .35rem; font-size: .62rem; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--gold-dim); border: 1px solid var(--gold-dim); border-radius: 999px; padding: 0 .3rem; }
 
 /* (Red Tape styling lives with the objective cards further down — see `.rt-tape`. It used to be duplicated
    here, which is exactly the same-specificity collision this file has been bitten by before.) */
@@ -359,6 +366,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Setup: ready count instead of the leiste. */
 .phase-ready { font-size: .9rem; color: var(--text-dim); }
 .phase-ready strong { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: 1.05rem; }
+/* Same count, but in the setup navigation between Back and Next — it is what gates that button, so it belongs
+   beside it. Green once the table is complete, which is the only state that matters there. */
+.setup-ready { font-size: .82rem; color: var(--text-dim); white-space: nowrap; }
+.setup-ready strong { font-family: 'Orbitron', sans-serif; color: var(--gold); }
+.setup-ready.ok strong { color: #8fe0bd; }
 
 /* faction picker (symbol grid) */
 .faction-picker { display: flex; flex-direction: column; gap: .5rem; }
@@ -381,8 +393,17 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .join-player:disabled { opacity: .55; cursor: default; }
 .join-player .jp-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Same row, used for the start page's list of sessions to pick up again: session name, code, which player
-   this device was. The name takes the slack so the code and the "as <player>" chip stay put. */
+   this device was, and when it was last active. The name takes the slack so the code, the "as <player>" chip
+   and the timestamp stay put; the timestamp is right-aligned in every row, which is what makes it read as a
+   column in a list that is really a stack of buttons. */
 .join-player .rs-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.join-player .rs-when { flex: 0 0 auto; margin-left: auto; color: var(--text-dim); font-size: .74rem;
+    text-align: right; }
+@media (max-width: 480px) {
+    /* Two lines on a narrow phone rather than an ellipsised session name. */
+    .join-player { flex-wrap: wrap; }
+    .join-player .rs-when { width: 100%; text-align: left; margin-left: 0; }
+}
 
 /* seat-order up/down buttons (setup, host) */
 .seat-btns { display: inline-flex; flex-direction: column; gap: .1rem; }
@@ -436,10 +457,11 @@ button.rt-tape.locked:hover { filter: brightness(1.25); }
 /* A purged objective is out of the game: dimmed, and its points stay hidden. */
 .obj-card.purged { opacity: .55; filter: grayscale(.5); }
 .obj-card.purged .obj-name { text-decoration: line-through; }
-/* Scored by the player who is up (status scoring list): done, but still tappable to take it back. Dimmed
-   rather than hidden, so the undo is where the mis-tap happened. */
-.obj-card.scored-by-me { opacity: .72; border-color: color-mix(in srgb, var(--gold) 35%, var(--panel-border)); }
-.obj-card.scored-by-me .obj-undo { display: inline-flex; align-items: center; gap: .2rem; margin-left: auto;
+/* Done in the sense the surrounding list is about — scored by the player who is up, or its tape pulled in Red
+   Tape's "remove a marker" — and still tappable to take that back. Dimmed rather than hidden, so the undo is
+   where the mis-tap happened. */
+.obj-card.marked { opacity: .72; border-color: color-mix(in srgb, var(--gold) 35%, var(--panel-border)); }
+.obj-card.marked .obj-undo { display: inline-flex; align-items: center; gap: .2rem; margin-left: auto;
     font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--gold); }
 /* Armed = one more tap removes it (status phase, where the card itself is a scoring tap target). */
 button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 12px, #2c0a07 12px 24px);
@@ -775,6 +797,11 @@ button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 1
 .chip-passed { background: rgba(224,85,106,.18); color: #f1a3ae; border-color: #6b2a35; }
 .chip-done { background: rgba(70,192,138,.16); color: #8fe0bd; border-color: #2c5e49; }
 .chip-active { background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
+/* A chip that IS a button (the host picking whose technologies to enter). `.chip` sets no colour, and a button
+   does not inherit one — it would come out in the UA's black. Same trap as `.rt-ask-item`. */
+.tp-who { color: var(--text); background: var(--panel-2, rgba(255,255,255,.03)); font: inherit;
+    font-size: .68rem; appearance: none; cursor: pointer; }
+.tp-who:hover { border-color: var(--gold-dim); color: var(--gold); }
 
 /* ---- code chip ---- */
 .codechip { font-family: 'Orbitron', monospace; letter-spacing: .25em; font-size: 1.1rem; color: var(--gold); background: #0a1020; border: 1px dashed var(--gold-dim); padding: .2rem .6rem; border-radius: 8px; }
@@ -1206,12 +1233,31 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* "A new version is available" (UpdateNotice). Bottom centre, above the app bar's stacking but far below the
    pause overlay: it must be reachable without ever covering a dialog someone is working in. */
+/* Deliberately large: as a small pill this was overlooked, and a table can then play a whole evening on the
+   old build. Still not a modal — the game stays playable and "later" stays an answer. */
 .update-bar { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 300;
-    display: flex; align-items: center; gap: .6rem; max-width: min(94vw, 32rem);
-    padding: .5rem .7rem .5rem 1rem; border-radius: 999px;
-    background: rgba(7, 11, 22, .94); border: 1px solid var(--gold-dim);
-    box-shadow: 0 .4rem 1.4rem rgba(0, 0, 0, .55); }
-.update-bar .ub-text { color: var(--gold); font-size: .85rem; }
+    display: flex; align-items: center; gap: 1rem; width: min(94vw, 44rem);
+    padding: 1rem 1.1rem; border-radius: 16px;
+    background: rgba(7, 11, 22, .97); border: 2px solid var(--gold);
+    box-shadow: 0 0 0 1px rgba(217, 176, 74, .25), 0 1rem 2.6rem rgba(0, 0, 0, .65), 0 0 2.2rem rgba(217, 176, 74, .18);
+    animation: ub-pulse 2.4s ease-in-out infinite; }
+.update-bar .ub-icon { flex: 0 0 auto; font-size: 2.2rem; color: var(--gold); }
+.update-bar .ub-body { flex: 1 1 auto; min-width: 0; }
+.update-bar .ub-title { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.05rem;
+    color: var(--gold); line-height: 1.25; }
+.update-bar .ub-text { color: var(--text); font-size: .84rem; line-height: 1.4; margin-top: .15rem; }
+.update-bar .ub-go { flex: 0 0 auto; }
+.update-bar .ub-close { flex: 0 0 auto; align-self: flex-start; }
+@keyframes ub-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(217, 176, 74, .25), 0 1rem 2.6rem rgba(0, 0, 0, .65), 0 0 2.2rem rgba(217, 176, 74, .18); }
+    50%      { box-shadow: 0 0 0 1px rgba(217, 176, 74, .5),  0 1rem 2.6rem rgba(0, 0, 0, .65), 0 0 3.2rem rgba(217, 176, 74, .42); }
+}
+@media (prefers-reduced-motion: reduce) { .update-bar { animation: none; } }
+@media (max-width: 560px) {
+    /* On a phone the button goes under the text rather than squeezing both. */
+    .update-bar { flex-wrap: wrap; gap: .6rem .8rem; }
+    .update-bar .ub-go { flex: 1 1 100%; }
+}
 
 /* The boot watchdog's report (see index.html): only ever rendered when the loading screen is still up after
    eight seconds, so it may look as plain as it likes — it exists to name a cause, not to be pretty. */
@@ -1442,6 +1488,39 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .rt-ask-pick:focus-visible { outline: 2px solid var(--gold-dim); outline-offset: 2px; }
 .rt-ask-req { color: var(--text-dim); font-size: .78rem; line-height: 1.25; }
 .rt-ask-warn { margin: 0; color: #f1a3ae; font-size: .8rem; line-height: 1.35; }
+/* "What is Red Tape?" — the explanation behind the setup option. Two <details> sections rather than a scripted
+   accordion: they open with the keyboard and need no state. The chevron turns with `open`. */
+.modal.redtape-help { max-width: min(94vw, 44rem); }
+.rth-lead { margin: 0 0 .9rem; font-size: .86rem; line-height: 1.5; color: var(--text); }
+.rth-sec { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel);
+    margin-bottom: .5rem; overflow: hidden; }
+.rth-sec > summary { display: flex; align-items: center; gap: .5rem; padding: .6rem .7rem; cursor: pointer;
+    list-style: none; color: var(--text); }
+.rth-sec > summary::-webkit-details-marker { display: none; }
+.rth-sec > summary:hover { background: rgba(255,255,255,.03); }
+.rth-sec > summary:focus-visible { outline: 2px solid var(--gold-dim); outline-offset: -2px; }
+.rth-sec .rth-chev { flex: 0 0 auto; display: inline-flex; color: var(--gold); }
+/* Which chevron shows is a `display` toggle, not a rotation — see the comment in RedTapeHelpModal. */
+.rth-sec[open] .rth-more, .rth-sec:not([open]) .rth-less { display: none; }
+.rth-sec .rth-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .84rem; color: var(--gold); }
+.rth-sec .rth-by { font-size: .72rem; }
+.rth-body { padding: 0 .8rem .7rem; border-top: 1px solid var(--panel-border); }
+.rth-body h4 { margin: .7rem 0 .25rem; font-size: .74rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-dim); font-weight: 700; }
+.rth-body ul { margin: 0; padding-left: 1.1rem; }
+.rth-body li { font-size: .82rem; line-height: 1.45; margin-bottom: .2rem; }
+.rth-link { display: inline-flex; align-items: center; gap: .3rem; margin-top: .7rem; font-size: .8rem;
+    color: var(--accent); }
+
+/* "Remove a marker": the allowance the variant's SPECIAL grants, and how much of it is used. Big enough to be
+   the first thing read, because it is the number the table is working to. */
+.rt-pick-head { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .6rem; flex-wrap: wrap; }
+.rt-pick-count { font-family: 'Orbitron', sans-serif; font-size: 1.25rem; color: var(--text-dim); }
+.rt-pick-count strong { color: var(--gold); }
+.rt-pick-count.full strong { color: #8fe0bd; }
+.rt-pick-of { font-size: .8rem; color: var(--text-dim); }
+/* The cards are the workspace, so the grid may be narrower than the status one. */
+.rt-pick-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
 .sec-rows { display: flex; flex-direction: column; gap: .4rem; }
 .sec-row { display: flex; align-items: center; gap: .55rem; padding: .35rem .5rem; border-radius: 10px;
     background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
