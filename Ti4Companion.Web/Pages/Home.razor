@@ -44,7 +44,7 @@
         @* The sessions this DEVICE has played, newest first. Each row remembers which seat was ours there, so
            picking one up puts you back in your own player rather than joining as a stranger. *@
         <div class="panel home-form">
-            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
+            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing"><MaterialIcon Name="chevron_left" /> @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.recentTitle"]</h2>
             @if (recent.Count == 0)
             {
@@ -68,7 +68,7 @@
     else if (view == View.Create)
     {
         <div class="panel home-form">
-            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
+            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing"><MaterialIcon Name="chevron_left" /> @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.createSession"]</h2>
             <div class="field">
                 <label>@Loc["home.sessionName"]</label>
@@ -86,7 +86,7 @@
     else
     {
         <div class="panel home-form">
-            <button class="btn btn-ghost btn-sm" @onclick="BackToLanding">◂ @Loc["home.back"]</button>
+            <button class="btn btn-ghost btn-sm" @onclick="BackToLanding"><MaterialIcon Name="chevron_left" /> @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.joinSession"]</h2>
             <div class="field">
                 <label>@Loc["home.joinCode"]</label>

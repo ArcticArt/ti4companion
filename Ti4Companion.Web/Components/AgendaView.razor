@@ -113,7 +113,7 @@
                     }
                 </div>
                 <button class="btn btn-gold" style="margin-top:.5rem;" disabled="@(string.IsNullOrWhiteSpace(freeTitle))"
-                        @onclick="StartFreeVote">@Loc["agenda.freeVoteStart"] ▸</button>
+                        @onclick="StartFreeVote">@Loc["agenda.freeVoteStart"] <MaterialIcon Name="chevron_right" /></button>
             </div>
 
             <p class="faint" style="margin:.6rem 0 .3rem;">@Loc["agenda.pick"]</p>
@@ -186,7 +186,7 @@
                         }
                     }
                     @* Back to the picker. For a free vote it is the way OUT of the mode, so it says so. *@
-                    <button class="btn btn-sm" @onclick="() => Reveal(null)">↻ @Loc[current is null ? "agenda.freeVoteEnd" : "agenda.revealNew"]</button>
+                    <button class="btn btn-sm" @onclick="() => Reveal(null)"><MaterialIcon Name="refresh" /> @Loc[current is null ? "agenda.freeVoteEnd" : "agenda.revealNew"]</button>
                 </div>
                 @if (hidden && voting) { <p class="faint" style="font-size:.78rem;margin:.4rem 0 0;">@Loc["agenda.hostHint"]</p> }
             }

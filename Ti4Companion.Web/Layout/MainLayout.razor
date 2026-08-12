@@ -24,13 +24,13 @@
         @if (Store.IsHost)
         {
             <span class="codechip ab-code" @onclick="CopyCode" title='@Loc["common.copy"]'>@s.JoinCode</span>
-            <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(inviteCopied ? "✓" : "🔗")</button>
+            <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'><MaterialIcon Name="@(inviteCopied ? "check" : "link")" /></button>
             @* A real link, not window.open via interop: popup blockers (and Safari, once an awaited
                interop roundtrip has expired the gesture) would swallow a scripted open. *@
             <a class="btn btn-sm btn-ghost" href="@($"/display/{s.JoinCode}")" target="_blank" rel="noopener" title='@Loc["nav.openDisplay"]'><MaterialIcon Name="open_in_new" /></a>
             <button class="btn btn-sm btn-ghost" @onclick="() => showQr = true" title='@Loc["nav.joinQr"]'><MaterialIcon Name="qr_code" /></button>
             <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'><StatIcon /></button>
-            <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'>⏸</button>
+            <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'><MaterialIcon Name="pause" /></button>
         <button class="btn btn-sm btn-danger ab-endgame" @onclick="EndGame" title='@Loc["turn.endGame"]'>@Loc["turn.endGame"]</button>
             @if (codeCopied || inviteCopied) { <span class="chip chip-done">@Loc["common.copied"]</span> }
         }
@@ -44,7 +44,7 @@
         <PushToggle />
         <span class="dot @(Store.Connected ? "on" : "off")" title="@(Store.Connected ? "live" : Loc["common.connecting"])"></span>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
-        <button class="btn btn-sm btn-ghost" @onclick="Leave" title='@Loc["nav.leave"]'>✕</button>
+        <button class="btn btn-sm btn-ghost" @onclick="Leave" title='@Loc["nav.leave"]'><MaterialIcon Name="close" /></button>
     }
     else
     {
@@ -119,11 +119,11 @@
 {
     <div class="pause-overlay">
         <div class="pause-box">
-            <div class="pause-icon">⏸</div>
+            <div class="pause-icon"><MaterialIcon Name="pause" SizeCss="1em" /></div>
             <div class="pause-title">@Loc["pause.title"]</div>
             @if (Store.IsHost)
             {
-                <button class="btn btn-gold btn-lg" @onclick="Resume">▶ @Loc["pause.resume"]</button>
+                <button class="btn btn-gold btn-lg" @onclick="Resume"><MaterialIcon Name="play_arrow" /> @Loc["pause.resume"]</button>
             }
             else
             {

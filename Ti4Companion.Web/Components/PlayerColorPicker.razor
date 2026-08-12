@@ -10,7 +10,7 @@
         if (taken is not null && !mine) { continue; }
         <button class="swatch @(mine ? "sel" : "")" style="background:@c.Hex" title="@(mine ? DeselectTitle : SwatchTitle(c.Name, taken))"
                 disabled="@Disabled" @onclick="() => Pick(mine, c.Hex)">
-            @if (mine) { <span>✓</span> }
+            @if (mine) { <MaterialIcon Name="check" /> }
         </button>
     }
 </div>

@@ -112,10 +112,9 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     public void ShowTechTab() => OnShowTechTab?.Invoke();
 
-    /// <summary>Same idea for the objectives tab — the Imperial strategy action offers to score one.</summary>
-    public event Action? OnShowObjectivesTab;
-
-    public void ShowObjectivesTab() => OnShowObjectivesTab?.Invoke();
+    // There used to be the same pair for the objectives tab, for Imperial's "you may score a public
+    // objective". That is a popup now (ImperialScoreModal), listing exactly what that player may score, so
+    // nothing has to switch tabs for it any more.
 
     // The action phase's "take over" toggle used to live here (so switching tabs wouldn't drop it). It is gone:
     // the host can always act for whoever is up — which is what the server allowed all along — and jumping to

@@ -83,7 +83,7 @@
                         <TechIcon Color="t.Color" Size="16" />
                         @Loc.Pick(t.Name, t.NameDe)
                         @if (t.FactionId is not null) { <span class="faint" title="@Loc["tech.faction"]">★</span> }
-                        <span class="x" @onclick="() => RemoveTech(targetPlayer.Id, t.Id)">✕</span>
+                        <span class="x" @onclick="() => RemoveTech(targetPlayer.Id, t.Id)"><MaterialIcon Name="close" /></span>
                     </span>
                 }
             </div>

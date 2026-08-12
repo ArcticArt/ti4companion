@@ -103,7 +103,7 @@ else if (s.SpeakerPending)
         <div class="spacer" style="flex:1"></div>
         @if (mayEnd)
         {
-            <button class="btn btn-gold btn-sm" @onclick="EndCombat">@Loc["combat.end"] ▸</button>
+            <button class="btn btn-gold btn-sm" @onclick="EndCombat">@Loc["combat.end"] <MaterialIcon Name="chevron_right" /></button>
         }
     </div>
 }
@@ -158,22 +158,27 @@ else if (s.SpeakerPending)
         </button>
     </div>
 }
-@* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). *@
-@if (s.ActiveStrategyCardId == GameRules.ImperialStrategyCard && canControl)
+@* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). The
+   choice is a popup listing what this player may score, like the technology picker and the Red Tape one —
+   sending them to the objectives tab meant finding the card and the right marker two screens away. *@
+@if (s.ActiveStrategyCardId == GameRules.ImperialStrategyCard && canControl && active is not null)
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">@Loc["imperial.promptText"]</span>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn btn-gold btn-sm" @onclick="() => Store.ShowObjectivesTab()">@Loc["imperial.promptOpen"] ▸</button>
+        <button class="btn btn-gold btn-sm" @onclick="() => imperialFor = active.Id">
+            @Loc["imperial.promptOpen"] <MaterialIcon Name="chevron_right" />
+        </button>
     </div>
 }
+<ImperialScoreModal PlayerId="@imperialFor" OnClose="() => imperialFor = null" />
 
 @if (activeCard is not null && canControl)
 {
     <div class="panel" style="margin-top:.6rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
             <h3 style="margin:0;">@Loc.Pick(activeCard.Name, activeCard.NameDe)</h3>
-            <button class="btn btn-sm" @onclick="EndHighlight">✕ @Loc["turn.endHighlight"]</button>
+            <button class="btn btn-sm" @onclick="EndHighlight"><MaterialIcon Name="close" /> @Loc["turn.endHighlight"]</button>
         </div>
         <StrategyCardView Card="activeCard" ShowText="true" />
     </div>
@@ -194,7 +199,7 @@ else if (s.SpeakerPending)
             @if (secRunning > 0) { <span class="faint"> · @Loc["secondary.running"]: @secRunning</span> }
         </span>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn btn-sm" @onclick="() => Store.ShowSecondary = true">@Loc["secondary.open"] ▸</button>
+        <button class="btn btn-sm" @onclick="() => Store.ShowSecondary = true">@Loc["secondary.open"] <MaterialIcon Name="chevron_right" /></button>
     </div>
 }
 
@@ -233,7 +238,7 @@ else
                                 }
                                 else
                                 {
-                                    <button class="btn btn-sm btn-ghost btn-block" @onclick="() => Unplay(active.Id, card.Id)">↺ @Loc["turn.notDone"]</button>
+                                    <button class="btn btn-sm btn-ghost btn-block" @onclick="() => Unplay(active.Id, card.Id)"><MaterialIcon Name="undo" /> @Loc["turn.notDone"]</button>
                                 }
                             </div>
                         }
@@ -277,6 +282,9 @@ else
 
     /// <summary>Red Tape's "which tape comes off" popup (the carrier card's own ability).</summary>
     private RedTapeSealModal.SealMode? sealMode;
+
+    /// <summary>Who is scoring via Imperial's primary on THIS device (null = the popup is closed).</summary>
+    private Guid? imperialFor;
 
     /// <summary>Whose technology picker is open on THIS device (null = none). The server also knows, because
     /// it stops that player's clock; this is only which popup to render here.</summary>

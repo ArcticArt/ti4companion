@@ -49,11 +49,11 @@
                             {
                                 @if (running)
                                 {
-                                    <button class="btn btn-sm btn-gold" @onclick="() => Done(pid)">@Loc["status.done"] ▸</button>
+                                    <button class="btn btn-sm btn-gold" @onclick="() => Done(pid)">@Loc["status.done"] <MaterialIcon Name="check" /></button>
                                 }
                                 else if (canRun)
                                 {
-                                    <button class="btn btn-sm btn-ghost" @onclick="() => Start(pid)">▶ @Loc["secondary.start"]</button>
+                                    <button class="btn btn-sm btn-ghost" @onclick="() => Start(pid)"><MaterialIcon Name="play_arrow" /> @Loc["secondary.start"]</button>
                                 }
                                 else
                                 {
@@ -95,10 +95,13 @@
             if (Store.ShowSecondary) return true;                 // opened by hand from the action view
             var me = Store.MyPlayerId;
             var mineRunning = me is Guid m && s.Players.Any(p => p.Id == m && p.SecondaryPending);
-            // Deliberately NOT every host: a round opens at every turn end where an action was played, so
-            // the table device would be interrupted six to eight times a round. The host opens it from the
-            // action view when they want it.
-            return me == s.SecondaryOwnerId || mineRunning;
+            // The HOST sees it too (2026-08-11, on request). It used to be owner + anyone on the clock, on the
+            // grounds that a round opens at every turn end and the table device would be interrupted six to
+            // eight times a round — but from the table's side that read as "after Warfare no prompt came at
+            // all", because the question is asked on the phone of whoever played the card, and the person
+            // running the table is the one who answers it. Asked once per round per card is not noise; a
+            // question nobody sees is.
+            return Store.IsHost || me == s.SecondaryOwnerId || mineRunning;
         }
     }
 

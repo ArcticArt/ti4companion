@@ -230,9 +230,12 @@ public static class SessionEndpoints
             Log(db, session, http, SessionLogKind.SpeakerSet, target: req.SpeakerPlayerId);
         }
         if (req.AgendaVotesHidden is not null) session.AgendaVotesHidden = req.AgendaVotesHidden.Value;
-        // Turn timer: 0 = off, otherwise clamped to a sane 10 s … 2 h budget per player per round.
+        // Turn timer: 0 = off, otherwise clamped to a sane 10 s … 2 h budget per player per round. The setup
+        // field lets the host type minutes, so it offers exactly these bounds (see GameRules).
         if (req.TurnTimerSeconds is { } tt)
-            session.TurnTimerSeconds = tt <= 0 ? 0 : Math.Clamp(tt, 10, 7200);
+            session.TurnTimerSeconds = tt <= 0
+                ? 0
+                : Math.Clamp(tt, GameRules.TurnTimerMinSeconds, GameRules.TurnTimerMaxSeconds);
         // Strategy cards per player: only 0 (automatic), 1 or 2 are meaningful.
         if (req.StrategyCardsPerPlayer is { } cpp)
             session.StrategyCardsPerPlayer = cpp is 1 or 2 ? cpp : 0;
@@ -509,11 +512,16 @@ public static class SessionEndpoints
         // technology picker somebody left open.
         CloseCombat(db, session, GetCaller(session, http)?.Id);
         CloseTechPick(db, session, GetCaller(session, http)?.Id);
+        // A secondary ability happens BETWEEN two turns, so a round from the previous turn is over before
+        // this one's opens. It used to outlive the turn advance deliberately ("the next player gets on with
+        // it while the others resolve") — but that also meant the next player's clock ran while the table was
+        // still working out who took the secondary, and it left a round nobody closed blocking every later
+        // one from opening at all (OpenSecondaries returns early while one is running).
+        CloseSecondaries(db, session, GetCaller(session, http)?.Id);
         // The turn is over → this player's clock stops and the others' can start (see OpenSecondaries).
-        OpenSecondaries(session);
+        OpenSecondaries(db, session, GetCaller(session, http)?.Id);
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
-        // The secondary round is deliberately NOT closed here — see CloseSecondaries.
         if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
         NotifyTurn(session, push);
         return await SaveAndReturn(db, hub, session, ct, overrides);
@@ -657,10 +665,14 @@ public static class SessionEndpoints
             player.HasPassed = true;
             Log(db, session, http, SessionLogKind.Pass, target: playerId);
             var overrides = FactionInitiative.Overrides;
-            if (playerId == session.ActivePlayerId) OpenSecondaries(session);
+            if (playerId == session.ActivePlayerId)
+            {
+                // Same as in AdvanceTurn: the previous round is closed before this turn's opens.
+                CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+                OpenSecondaries(db, session, GetCaller(session, http)?.Id);
+            }
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
-            // The secondary round outlives the turn — see CloseSecondaries.
             if (session.ActivePlayerId is Guid nxt) Log(db, session, http, SessionLogKind.TurnChange, target: nxt);
                 NotifyTurn(session, push);
             return await SaveAndReturn(db, hub, session, ct, overrides);
@@ -1065,7 +1077,7 @@ public static class SessionEndpoints
     /// <summary>The turn is ending and this player played a strategy action: open the secondary round so the
     /// others can be put on the clock. Only with time tracking on — without it there is nothing to track and
     /// the popup would just be in the way.</summary>
-    private static void OpenSecondaries(GameSession session)
+    private static void OpenSecondaries(Ti4DbContext db, GameSession session, Guid? actor)
     {
         // Its own option now, because "the popup never came" is exactly how the old timer-only gate read from
         // the table's side. Still requires the timer: the round's whole purpose is separating decision time on
@@ -1075,6 +1087,10 @@ public static class SessionEndpoints
         if (session.SecondaryCardId is not null) return;        // one is still running
         session.SecondaryCardId = card;
         session.SecondaryOwnerId = session.ActivePlayerId;
+        // Round-level entry, not just the per-player ones: the stretch between the round opening and the first
+        // player being ticked off is exactly the time the table spends answering "who is taking it?", and that
+        // must not land on the next player's turn clock.
+        Log(db, session, SessionLogKind.SecondaryRoundOpen, actor, detail: card.ToString());
     }
 
     // "Done" for one player's secondary — stops their clock. Self or host: it is their own time.
@@ -1091,18 +1107,15 @@ public static class SessionEndpoints
         Log(db, session, SessionLogKind.SecondaryDone, caller?.Id, target: playerId,
             detail: session.SecondaryCardId?.ToString());
         // The last one out closes the round, so the popup disappears by itself instead of needing a tap.
-        if (session.Players.All(p => !p.SecondaryPending))
-        {
-            session.SecondaryCardId = null;
-            session.SecondaryOwnerId = null;
-        }
+        // Through the shared helper, or the round-close log entry would be missing on this path — and that
+        // entry is what starts the next player's clock again.
+        if (session.Players.All(p => !p.SecondaryPending)) CloseSecondaries(db, session, caller?.Id);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    /// <summary>Close the secondary round: everybody's clock stops. NOT called when the turn merely advances
-    /// — the others legitimately keep resolving their secondary after the active player is done. Called when
-    /// the next strategy action goes on the table and when the action phase / round ends, so a forgotten
-    /// "done" can never run for the rest of the game.</summary>
+    /// <summary>Close the secondary round: everybody's clock stops. Called at every turn advance (a secondary
+    /// happens between two turns — see AdvanceTurn), when the next strategy action goes on the table, and when
+    /// the action phase / round ends, so a forgotten "done" can never run for the rest of the game.</summary>
     private static void CloseSecondaries(Ti4DbContext db, GameSession session, Guid? actor)
     {
         if (session.SecondaryCardId is null && session.Players.All(p => !p.SecondaryPending)) return;
@@ -1111,6 +1124,9 @@ public static class SessionEndpoints
             p.SecondaryPending = false;
             Log(db, session, SessionLogKind.SecondaryDone, actor, target: p.Id);
         }
+        // The round itself is over: this is what un-freezes the active player's clock (see SecondaryRoundOpen).
+        if (session.SecondaryCardId is int closing)
+            Log(db, session, SessionLogKind.SecondaryRoundClose, actor, detail: closing.ToString());
         session.SecondaryCardId = null;
         session.SecondaryOwnerId = null;
     }

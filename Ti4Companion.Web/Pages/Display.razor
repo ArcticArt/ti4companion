@@ -169,7 +169,7 @@ else
                                 }
                                 else if (s.AgendaVotesHidden)
                                 {
-                                    <span class="vote-choice">@(locked ? "✓ " + Loc["agenda.voted"] : Loc["agenda.waiting"])</span>
+                                    <span class="vote-choice">@if (locked) { <MaterialIcon Name="check" /> }@(locked ? Loc["agenda.voted"] : Loc["agenda.waiting"])</span>
                                 }
                                 else if (!locked)
                                 {
@@ -246,8 +246,12 @@ else
             if ((statusStage == StatusStage.Scoring || revealWaiting) && mode != DisplayMode.JoinQr) mode = DisplayMode.Objectives;
             // All three modes share a left "player table" (Bereich 1); the right panel (Bereich 2) differs.
             // Objectives right panel: split by stage; collapse to one (half-width) column until a Stage II.
-            var objStage2 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageII).ToList() : new();
-            var objStage1 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage != ObjectiveStage.StageII).ToList() : new();
+            // A PURGED objective is out of the game (Red Tape Lite), so it leaves the wall altogether — the
+            // control views keep it, struck through, because that is where the table looks up what happened;
+            // the wall is what the game currently is.
+            var onTable = s.Objectives.Where(o => !o.Purged).ToList();
+            var objStage2 = mode == DisplayMode.Objectives ? onTable.Where(o => Store.Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageII).ToList() : new();
+            var objStage1 = mode == DisplayMode.Objectives ? onTable.Where(o => Store.Objective(o.ObjectiveId)?.Stage != ObjectiveStage.StageII).ToList() : new();
             var objSingle = mode == DisplayMode.Objectives && objStage2.Count == 0;
             var objRows = Math.Max(Math.Max(objStage1.Count, objStage2.Count), 1);
             // Tech right panel: every UNIQUE researched tech across all players (shown once), grouped by colour.
@@ -396,7 +400,7 @@ else
                             {
                                 var done = s.StatusStepsDone.HasFlag(step);
                                 <div class="big-step @(done ? "done" : "")">
-                                    <span class="step-box">@(done ? "✓" : "")</span>
+                                    <span class="step-box">@if (done) { <MaterialIcon Name="check" SizeCss="1em" /> }</span>
                                     <div class="big-step-text">
                                         <div class="big-step-name">@Loc[key]</div>
                                         <div class="big-step-detail">@Loc[detail]</div>
@@ -408,7 +412,7 @@ else
                     else if (mode == DisplayMode.Objectives)
                     {
                         <h3 style="color:var(--gold);">@Loc["obj.title"]</h3>
-                        @if (s.Objectives.Count == 0)
+                        @if (onTable.Count == 0)
                         {
                             <div class="panel-body"><p class="muted">@Loc["obj.none"]</p></div>
                         }

@@ -114,15 +114,31 @@
             <span class="faint go-hint">@Loc["cards.hint"]</span>
         </div>
 
+        @* The presets cover the usual answers; "custom" is for the table that has its own. The select and the
+           number field are one control — the field only appears in custom mode, and a stored value that
+           matches no preset puts it there by itself (otherwise the select would silently read "off"). *@
         <div class="game-option">
             <label for="turnTimer">@Loc["timer.perRound"]</label>
-            <select id="turnTimer" value="@s.TurnTimerSeconds" @onchange="SetTurnTimer">
-                <option value="0">@Loc["timer.off"]</option>
-                @foreach (var min in new[] { 5, 8, 10, 12, 15, 20, 30 })
+            <div class="go-inline">
+                <select id="turnTimer" value="@(TimerIsCustom ? "custom" : s.TurnTimerSeconds.ToString())"
+                        @onchange="SetTurnTimer">
+                    <option value="0">@Loc["timer.off"]</option>
+                    @foreach (var min in TimerPresets)
+                    {
+                        <option value="@(min * 60)">@min min</option>
+                    }
+                    <option value="custom">@Loc["timer.custom"]</option>
+                </select>
+                @if (TimerIsCustom)
                 {
-                    <option value="@(min * 60)">@min min</option>
+                    <input @key="timerFieldKey" id="turnTimerCustom" class="go-num" type="number"
+                           inputmode="numeric" step="1"
+                           min="@GameRules.TurnTimerMinMinutes" max="@GameRules.TurnTimerMaxMinutes"
+                           value="@CustomTimerMinutes" @onchange="SetCustomTurnTimer"
+                           aria-label='@Loc["timer.customLabel"]' />
+                    <span class="faint">@Loc["timer.minutes"]</span>
                 }
-            </select>
+            </div>
             <span class="faint go-hint">@Loc["timer.hint"]</span>
         </div>
 
@@ -225,8 +241,8 @@
                         {
                             <span class="seat-no">@(idx + 1)</span>
                             <span class="seat-btns">
-                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveUp"]" disabled="@(idx == 0)" @onclick="() => MoveSeat(idx, -1)">▲</button>
-                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveDown"]" disabled="@(idx == ordered.Count - 1)" @onclick="() => MoveSeat(idx, 1)">▼</button>
+                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveUp"]" disabled="@(idx == 0)" @onclick="() => MoveSeat(idx, -1)"><MaterialIcon Name="arrow_upward" /></button>
+                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveDown"]" disabled="@(idx == ordered.Count - 1)" @onclick="() => MoveSeat(idx, 1)"><MaterialIcon Name="arrow_downward" /></button>
                             </span>
                         }
                         <FactionBadge Faction="fac" Ring="@p.ColorHex" />
@@ -251,7 +267,7 @@
                         <span class="chip @(p.IsReady ? "chip-done" : "")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
                         @if (host && p.Id != Store.MyPlayerId)
                         {
-                            <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@Loc["players.remove"]">✕</button>
+                            <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@Loc["players.remove"]"><MaterialIcon Name="close" /></button>
                         }
                     </div>
                 </div>
@@ -391,11 +407,68 @@
             .Select(p => p.FactionId!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+    // ---- Turn timer: presets plus a number the host can type ----------------------------------------
+
+    private static readonly int[] TimerPresets = { 5, 8, 10, 12, 15, 20, 30 };
+
+    /// <summary>This device's select is on "custom". Display state only — the session stores just the
+    /// seconds, and which control the host reached them through is nobody else's business.</summary>
+    private bool timerCustom;
+
+    /// <summary>Show the number field: either the host asked for it, or the stored value matches no preset
+    /// (a value typed here earlier, or one set over the API). Without the second half the select would fall
+    /// back to its first option and read "off" while a timer was in fact running.</summary>
+    private bool TimerIsCustom
+    {
+        get
+        {
+            var sec = Store.Session!.TurnTimerSeconds;
+            return sec > 0 && (timerCustom || !TimerPresets.Any(m => m * 60 == sec));
+        }
+    }
+
+    private int CustomTimerMinutes => Math.Clamp(
+        (int)Math.Round(Store.Session!.TurnTimerSeconds / 60.0, MidpointRounding.AwayFromZero),
+        GameRules.TurnTimerMinMinutes, GameRules.TurnTimerMaxMinutes);
+
     private Task SetTurnTimer(ChangeEventArgs e)
     {
-        var seconds = int.TryParse(e.Value?.ToString(), out var s) ? s : 0;
+        var raw = e.Value?.ToString();
+        // "custom" carries no number, so it applies the value the field will show — the current budget, or a
+        // preset-sized default when the timer was off. Switching to it must leave a real state behind: the
+        // secondary-round option gates on the timer being on, and it would otherwise stay greyed out next to
+        // a select that says the host chose a time.
+        timerCustom = raw == "custom";
+        var seconds = timerCustom
+            ? (Store.Session!.TurnTimerSeconds > 0 ? Store.Session!.TurnTimerSeconds : 10 * 60)
+            : int.TryParse(raw, out var parsed) ? parsed : 0;
         return Store.Mutate(Store.Api.UpdateSessionAsync(
             Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, seconds)));
+    }
+
+    /// <summary>Bumped to force the number field to be re-created — the only way to get a corrected value
+    /// back into it. Blazor's diff compares its own last render against the new one, so a field the host
+    /// typed 500 into keeps showing 500 when the clamp brings the render back to the same 120 it had
+    /// before. Only bumped when the field would otherwise disagree with what was stored, so valid typing
+    /// doesn't lose focus (and doesn't close a phone keyboard) for nothing.</summary>
+    private int timerFieldKey;
+
+    /// <summary>Applies the typed minutes. Bound to <c>change</c>, not <c>input</c>, so it is one request
+    /// when the field is left rather than one per keystroke.</summary>
+    private Task SetCustomTurnTimer(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        if (!int.TryParse(raw, out var minutes))
+        {
+            timerFieldKey++;            // an empty or unparseable field: put the stored value back
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+        timerCustom = true;
+        var clamped = Math.Clamp(minutes, GameRules.TurnTimerMinMinutes, GameRules.TurnTimerMaxMinutes);
+        if (clamped != minutes || raw != clamped.ToString()) timerFieldKey++;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, clamped * 60)));
     }
 
     private Task SetCardsPerPlayer(ChangeEventArgs e)

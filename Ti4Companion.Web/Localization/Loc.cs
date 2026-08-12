@@ -250,6 +250,9 @@ public class Loc
         ["timer.title"] = ("Turn timer", "Zug-Timer"),
         ["timer.perRound"] = ("Minutes per player per round", "Minuten pro Spieler pro Runde"),
         ["timer.off"] = ("Off", "Aus"),
+        ["timer.custom"] = ("Own time…", "Eigene Zeit…"),
+        ["timer.customLabel"] = ("Minutes per player per round", "Minuten pro Spieler pro Runde"),
+        ["timer.minutes"] = ("min", "Min."),
         ["timer.hint"] = (
             "Counts down only during that player's own turns in the strategy and action phase, pauses with the game, and resets each strategy phase. Running out is only signalled — nothing is blocked.",
             "Läuft nur während der eigenen Züge in Strategie- und Aktionsphase, pausiert mit dem Spiel und wird jede Strategiephase zurückgesetzt. Ein Ablauf wird nur signalisiert — blockiert wird nichts."),
@@ -360,10 +363,18 @@ public class Loc
         ["status.stage.reveal"] = ("Reveal objective", "Auftrag aufdecken"),
         ["status.stage.checklist"] = ("Remaining steps", "Restliche Schritte"),
         ["status.next"] = ("Next", "Weiter"),
+        // Why there is no way out of the status phase yet (see PhaseView).
+        ["status.finishStages"] = ("Walk through the steps first", "Erst die Schritte durchgehen"),
         ["status.scoreFor"] = ("{0} may score", "{0} darf werten"),
         ["status.tapToScore"] = ("Tap an objective card to score it.", "Auftragskarte antippen, um sie zu werten."),
         ["status.nothingLeft"] = ("This player has already scored every revealed objective.",
                                  "Dieser Spieler hat schon alle aufgedeckten Aufträge gewertet."),
+        // The scoring list only holds what can be acted on, so it can legitimately be empty (everything on
+        // the table is sealed, for instance).
+        ["status.nothingScorable"] = ("Nothing here can be scored right now.",
+                                     "Hier ist gerade nichts wertbar."),
+        ["status.scoredTapToUndo"] = ("Scored", "Gewertet"),
+        ["status.tapToUnscore"] = ("Tap to take this score back", "Antippen, um die Wertung zurückzunehmen"),
         ["status.revealHint"] = ("The speaker reveals the next public objective; it is shown large on the display.",
                                 "Der Sprecher deckt den nächsten öffentlichen Auftrag auf; er wird groß auf der Anzeige gezeigt."),
         // Long form for the WALL display. English is transcribed verbatim from the TI4 wiki's Status Phase
@@ -617,7 +628,13 @@ public class Loc
             "Politik: zuerst den neuen Sprecher wählen — vorher lässt sich der Zug nicht beenden. Jeder außer dem bisherigen Sprecher, du selbst eingeschlossen."),
         ["politics.waitingFor"] = ("{0} is appointing the new speaker.", "{0} bestimmt den neuen Sprecher."),
         ["imperial.promptText"] = ("Imperial: you may score a public objective.", "Imperium: du darfst einen öffentlichen Auftrag werten."),
-        ["imperial.promptOpen"] = ("Open objectives", "Aufträge öffnen"),
+        ["imperial.promptOpen"] = ("Score an objective", "Auftrag werten"),
+        // The popup: the same shape as the technology picker and Red Tape's "which tape comes off".
+        ["imperial.pickTitle"] = ("Score a public objective", "Öffentlichen Auftrag werten"),
+        ["imperial.pickHint"] = ("Only what this player may score is listed — nothing sealed, nothing they have scored already.",
+                                "Aufgelistet ist nur, was dieser Spieler werten darf — nichts Versiegeltes und nichts, was er schon gewertet hat."),
+        ["imperial.pickNone"] = ("There is nothing this player can score right now.",
+                                "Dieser Spieler kann gerade nichts werten."),
         // The table option. Its own switch, but only usable with the turn timer on — the round exists to
         // separate time spent on a secondary from time on turn, and there is no clock to separate without it.
         ["secondary.optionTitle"] = ("Secondary abilities", "Sekundärfähigkeiten"),

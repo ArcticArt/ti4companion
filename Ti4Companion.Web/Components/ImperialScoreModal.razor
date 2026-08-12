@@ -1,0 +1,80 @@
+@inherits Ti4ComponentBase
+
+@*
+    Imperial's primary: "you may score a public objective". The choice, as a popup, right where the action was
+    played — it used to send the player to the objectives tab to find the card and the right marker, which is
+    two screens away from the thing they just did.
+
+    Offered are only the objectives this player may actually score: nothing a Red Tape marker is covering,
+    nothing purged, and nothing they have scored already. Tapping one scores it and closes.
+*@
+@if (PlayerId is Guid pid && Store.Session is { } s)
+{
+    var player = Store.PlayerById(pid);
+    var offer = Offer(s, pid);
+    <div class="modal-backdrop centered blurred" @onclick="Close">
+        <div class="modal redtape-modal" @onclick:stopPropagation>
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["imperial.pickTitle"]</h3>
+                @if (player is not null)
+                {
+                    <span class="faint">@player.Name</span>
+                }
+            </div>
+            <div class="modal-body">
+                @if (offer.Count == 0)
+                {
+                    <p class="faint" style="margin:0;">@Loc["imperial.pickNone"]</p>
+                }
+                else
+                {
+                    <p class="rt-ask-lead">@Loc["imperial.pickHint"]</p>
+                    <div class="rt-ask-list">
+                        @foreach (var o in offer)
+                        {
+                            var target = o;
+                            <button class="rt-ask-item rt-ask-pick" @onclick="() => Score(target)">
+                                <span class="rt-ask-name">@NameOf(o) · @(o.CustomPoints ?? Store.Objective(o.ObjectiveId)?.Points ?? 0) @Loc["obj.vp"]</span>
+                                @if (Store.Objective(o.ObjectiveId) is { } d)
+                                {
+                                    <span class="rt-ask-req">@Loc.Pick(d.Requirement, d.RequirementDe)</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <div class="spacer" style="flex:1"></div>
+                <button class="btn" @onclick="Close">@Loc["common.close"]</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Who is scoring (null = the popup is closed).</summary>
+    [Parameter] public Guid? PlayerId { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Guid Sid => Store.Session!.Id;
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private string NameOf(SessionObjectiveDto o)
+        => o.CustomName ?? (Store.Objective(o.ObjectiveId) is { } d ? Loc.Pick(d.Name, d.NameDe) : o.ObjectiveId);
+
+    /// <summary>The objectives this player may score right now — the same conditions the server enforces, so
+    /// the list can never offer something it would refuse.</summary>
+    private List<SessionObjectiveDto> Offer(SessionStateDto s, Guid pid)
+        => s.Objectives
+            .Where(o => !o.Purged && !Store.RedTapeBlocks(o) && !o.ScoredByPlayerIds.Contains(pid))
+            .ToList();
+
+    private async Task Score(SessionObjectiveDto o)
+    {
+        await Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, o.Id, PlayerId!.Value));
+        await Close();
+    }
+}

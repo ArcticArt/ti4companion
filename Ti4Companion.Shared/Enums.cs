@@ -372,5 +372,17 @@ public enum SessionLogKind
     /// <summary>A tape the variant's timing rules held shut was removed anyway, on the host's explicit
     /// confirmation (Detail = the objective). Logged because the app was overruled: the table is the authority
     /// on its own game, but the rest of it should be able to see that it happened.</summary>
-    RedTapeOverride = 34
+    RedTapeOverride = 34,
+
+    /// <summary>The secondary round of a strategy action opened (Detail = card number) and closed again.
+    /// <para>
+    /// The per-player <see cref="SecondaryStart"/>/<see cref="SecondaryDone"/> entries say who was on the
+    /// clock; these two bound the round itself, which is what the statistics need: a secondary ability
+    /// happens BETWEEN two turns, so the interval is subtracted from the next active player's
+    /// time-on-turn. Without a round-level entry the client cannot see the stretch where the round was
+    /// open but nobody had been ticked off yet — which is exactly the stretch the host spends asking.
+    /// Keep the numeric values stable.
+    /// </para></summary>
+    SecondaryRoundOpen = 35,
+    SecondaryRoundClose = 36
 }

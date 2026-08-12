@@ -144,9 +144,18 @@ exception.
   start/end interval that `MatchStats` subtracts from **time on turn only** (not from the round or the match).
   A battle with someone else is not their thinking time, and neither is hunting for a technology in a list —
   but both are still time the table spent playing. Because a popup can be walked away from, the server closes
-  either one at every turn and phase boundary.
-- **Status:** objectives are revealed (searchable picker) and scored; custom/secret-made-public
-  objectives can be added by hand.
+  either one at every turn and phase boundary. Imperial's primary opens a third popup, listing the objectives
+  that player may actually score.
+- **Secondary abilities** (an optional extra, and only meaningful with the turn timer on) are followed as a
+  *round*: it opens when the player who played the primary ends their turn, each participant is put on their
+  own clock, and it closes when the last one is done. A secondary happens **between two turns**, so while the
+  round is open the next player's turn clock does not run — the same subtraction as a combat, from a logged
+  open/close interval — and the round is closed at the next turn advance whether or not anybody said so.
+- **Status:** walked through in three stages — score, reveal the next objective, remaining steps. The
+  scoring list holds only what the player who is up can act on (a sealed or purged objective cannot be
+  scored, so it is not offered), and what they have already scored stays in it as an "undo" so a mis-tap can
+  be taken back where it happened. Both ways out of the phase ("agenda phase", "next round") appear only on
+  the last stage. Custom / secret-made-public objectives can be added by hand in the Objectives tab.
 - **Optional table variants** (all off by default — the app never forces a rule). The **Red Tape**
   community variants are the one deliberate exception to "the app tracks, it does not enforce": a table
   that chose one gets its rules applied server-side in `Services/RedTape.cs`, so a taped objective simply
@@ -218,7 +227,12 @@ Enums travel over the wire **as numbers** (no string conversion) — keep numeri
   unreachable by keyboard and shows up as nothing in the accessibility tree. Tab strips are `<button>`s in a
   `role="tablist"` with `aria-selected` and a `role="tabpanel"`; cards that act as buttons carry
   `role="button"`, `tabindex` and Enter/Space handling. Styling a `<button>` back to a flat look needs
-  `appearance: none; background: none; font-family: inherit`.
+  `appearance: none; background: none; font-family: inherit` — and an explicit `color`, because a button does
+  not inherit it and `appearance: none` does not reset the UA's black.
+- **No emoji in the UI.** Where a glyph is needed it is an inlined Google Material Symbol
+  (`Components/MaterialIcon.razor`, Apache 2.0, credited in the footer): an emoji is drawn by whatever font
+  the platform picks, never takes the button's colour, and carries no name for a screen reader. The paths are
+  copied from `google/material-design-icons` rather than redrawn.
 - Pages: `Home` (create/join, `/join/{code}` invite links), `Session` (`/s/{code}` control view with
   Phase/Players/Objectives/Tech tabs), `Display` (`/display/{code}` — the full-screen wall).
 - The wall display has three player-switchable modes (Objectives / Secondary abilities / Tech overview)

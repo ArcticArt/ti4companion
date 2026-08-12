@@ -46,17 +46,29 @@
                     break;
                 case GamePhase.Strategy:
                     @if (!allPicked) { <span class="faint">@Loc["strategy.needAllPicks"]</span> }
-                    <button class="btn btn-primary" disabled="@(!allPicked)" @onclick="ToAction">@Loc["turn.toAction"] ▸</button>
+                    <button class="btn btn-primary" disabled="@(!allPicked)" @onclick="ToAction">@Loc["turn.toAction"] <MaterialIcon Name="chevron_right" /></button>
                     break;
                 case GamePhase.Action:
                     <button class="btn btn-gold" disabled="@(!allPassed)" @onclick="EndAction">@Loc["turn.endAction"]</button>
                     break;
                 case GamePhase.Status:
-                    <button class="btn" @onclick="ToAgenda">@Loc["turn.toAgenda"]</button>
-                    <button class="btn btn-gold" @onclick="NextRound">⟳ @Loc["turn.nextRound"]</button>
+                    @* Both ways out of the status phase appear only on its LAST stage. Offered from the start,
+                       they invite leaving before the table has scored and revealed — and the stage strip right
+                       below says the phase has three steps, so a "next round" button next to step 1 is two
+                       controls contradicting each other. Nothing is enforced: the host can still step back and
+                       forth through the stages, and the buttons come back on the last one. *@
+                    @if (s.StatusStage == StatusStage.Checklist)
+                    {
+                        <button class="btn" @onclick="ToAgenda">@Loc["turn.toAgenda"]</button>
+                        <button class="btn btn-gold" @onclick="NextRound"><MaterialIcon Name="refresh" /> @Loc["turn.nextRound"]</button>
+                    }
+                    else
+                    {
+                        <span class="faint">@Loc["status.finishStages"]</span>
+                    }
                     break;
                 case GamePhase.Agenda:
-                    <button class="btn btn-gold" @onclick="NextRound">@Loc["agenda.end"] ▸</button>
+                    <button class="btn btn-gold" @onclick="NextRound">@Loc["agenda.end"] <MaterialIcon Name="chevron_right" /></button>
                     break;
             }
         }

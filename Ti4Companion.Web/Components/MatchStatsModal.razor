@@ -10,8 +10,8 @@
         <div class="modal-head">
             <h3 style="margin:0;color:var(--gold);">@Loc["stats.title"]</h3>
             <div class="spacer" style="flex:1"></div>
-            <button class="btn btn-sm btn-ghost" @onclick="Load" title='@Loc["stats.refresh"]'>↻</button>
-            <button class="btn btn-sm btn-ghost" @onclick="Close" title='@Loc["common.close"]'>✕</button>
+            <button class="btn btn-sm btn-ghost" @onclick="Load" title='@Loc["stats.refresh"]'><MaterialIcon Name="refresh" /></button>
+            <button class="btn btn-sm btn-ghost" @onclick="Close" title='@Loc["common.close"]'><MaterialIcon Name="close" /></button>
         </div>
 
         @* Buttons, not divs — see the note on the session tab strip. *@
@@ -197,10 +197,13 @@
         _ => Loc["log.generic"],
     };
 
-    // Agenda-phase noise we no longer surface in the log (only reveal + the summarised result remain).
+    // Agenda-phase noise we no longer surface in the log (only reveal + the summarised result remain), plus
+    // the two round-level secondary entries: they exist for the timeline maths (they stop the turn clock),
+    // and who actually took a secondary is already in the log per player.
     private static bool HideInLog(SessionLogKind k) => k is SessionLogKind.AgendaStartVote
         or SessionLogKind.AgendaCancel or SessionLogKind.AgendaReveal2 or SessionLogKind.AgendaRevealTotals
-        or SessionLogKind.VoteLock or SessionLogKind.InfluenceSet;
+        or SessionLogKind.VoteLock or SessionLogKind.InfluenceSet
+        or SessionLogKind.SecondaryRoundOpen or SessionLogKind.SecondaryRoundClose;
 
     // Render the packed agenda result ("agendaId|for|against|topChoiceKey|topVotes|runnerUpVotes").
     private string AgendaResultLine(string? detail)

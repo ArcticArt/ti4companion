@@ -253,6 +253,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .game-option .go-hint { grid-column: 2; font-size: .76rem; line-height: 1.4; }
 .game-option .go-fixed { color: var(--text); font-size: .9rem; }
 .game-option .go-checks { display: flex; flex-wrap: wrap; gap: .35rem .9rem; }
+/* A select with a follow-up field (the turn timer's own time): one control cell, so the select keeps the
+   shared left edge and the number sits beside it rather than under it. The select gives up its own
+   width:100% here, or the field would be pushed onto a second line at every width. */
+.game-option .go-inline { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; }
+.game-option .go-inline select { width: auto; flex: 1 1 8rem; min-width: 0; max-width: 22rem; }
+.game-option .go-num { width: 4.5rem; flex: 0 0 auto; text-align: right; }
 @media (max-width: 560px) {
     /* One column on a phone: a 9rem label column next to a select leaves the select unusably narrow. */
     .game-option { grid-template-columns: 1fr; }
@@ -430,6 +436,11 @@ button.rt-tape.locked:hover { filter: brightness(1.25); }
 /* A purged objective is out of the game: dimmed, and its points stay hidden. */
 .obj-card.purged { opacity: .55; filter: grayscale(.5); }
 .obj-card.purged .obj-name { text-decoration: line-through; }
+/* Scored by the player who is up (status scoring list): done, but still tappable to take it back. Dimmed
+   rather than hidden, so the undo is where the mis-tap happened. */
+.obj-card.scored-by-me { opacity: .72; border-color: color-mix(in srgb, var(--gold) 35%, var(--panel-border)); }
+.obj-card.scored-by-me .obj-undo { display: inline-flex; align-items: center; gap: .2rem; margin-left: auto;
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--gold); }
 /* Armed = one more tap removes it (status phase, where the card itself is a scoring tap target). */
 button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 12px, #2c0a07 12px 24px);
     box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
@@ -1417,8 +1428,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
    it gets the tape's own red. */
 .rt-ask-lead { margin: 0 0 .7rem; }
 .rt-ask-list { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .7rem; }
+/* `color` is set explicitly, not inherited: the same row renders as a <div> in the "locked" question and as a
+   <button> in the "pick one" list, and a button does NOT inherit colour — it starts at the UA's `buttontext`
+   (black), which `appearance: none` does not reset. So the pick list came out black on dark panel while the
+   identical-looking locked row was white. Same family as the `.tab` reset below. */
 .rt-ask-item { display: flex; flex-direction: column; gap: .1rem; padding: .4rem .55rem; border-radius: 10px;
-    background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid #c1261c; }
+    background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid #c1261c;
+    color: var(--text); }
 .rt-ask-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .82rem; }
 /* In the "remove a marker of your choice" list every row IS the choice, so it is a button. */
 .rt-ask-pick { width: 100%; text-align: left; cursor: pointer; appearance: none; font-family: inherit; }

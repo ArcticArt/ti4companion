@@ -40,8 +40,8 @@
             </button>
             @* Arrow fallback: always works, including where a drag is awkward. *@
             <span class="seat-arrows">
-                <button class="btn btn-sm btn-ghost" disabled="@(idx == 0)" @onclick="() => Nudge(idx, -1)" title='@Loc["setup.moveUp"]'>▲</button>
-                <button class="btn btn-sm btn-ghost" disabled="@(idx == seatOrdered.Count - 1)" @onclick="() => Nudge(idx, 1)" title='@Loc["setup.moveDown"]'>▼</button>
+                <button class="btn btn-sm btn-ghost" disabled="@(idx == 0)" @onclick="() => Nudge(idx, -1)" title='@Loc["setup.moveUp"]'><MaterialIcon Name="arrow_upward" /></button>
+                <button class="btn btn-sm btn-ghost" disabled="@(idx == seatOrdered.Count - 1)" @onclick="() => Nudge(idx, 1)" title='@Loc["setup.moveDown"]'><MaterialIcon Name="arrow_downward" /></button>
             </span>
         </div>
     }

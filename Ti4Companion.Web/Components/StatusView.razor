@@ -33,11 +33,11 @@
         <div class="stage-nav">
             @if (stage > StatusStage.Scoring)
             {
-                <button class="btn btn-sm" @onclick="() => GoStage(stage - 1)">◂ @Loc["common.back"]</button>
+                <button class="btn btn-sm" @onclick="() => GoStage(stage - 1)"><MaterialIcon Name="chevron_left" /> @Loc["common.back"]</button>
             }
             @if (stage < StatusStage.Checklist)
             {
-                <button class="btn btn-sm btn-gold" @onclick="() => GoStage(stage + 1)">@Loc["status.next"] ▸</button>
+                <button class="btn btn-sm btn-gold" @onclick="() => GoStage(stage + 1)">@Loc["status.next"] <MaterialIcon Name="chevron_right" /></button>
             }
         </div>
     }
@@ -71,26 +71,27 @@
                         <span class="so-name">@p.Name</span>
                         @if (p.StatusDone)
                         {
-                            <span class="chip chip-done">✓</span>
+                            <span class="chip chip-done"><MaterialIcon Name="check" /></span>
                             @if (host || p.Id == Store.MyPlayerId)
                             {
-                                <button class="btn btn-sm btn-ghost" @onclick="() => SetDone(p.Id, false)" title='@Loc["status.undoDone"]'>↺</button>
+                                <button class="btn btn-sm btn-ghost" @onclick="() => SetDone(p.Id, false)" title='@Loc["status.undoDone"]'><MaterialIcon Name="undo" /></button>
                             }
                         }
                         else if (isCurrent && (host || p.Id == Store.MyPlayerId))
                         {
-                            <button class="btn btn-sm btn-gold" @onclick="() => SetDone(p.Id, true)">@Loc["status.done"] ▸</button>
+                            <button class="btn btn-sm btn-gold" @onclick="() => SetDone(p.Id, true)">@Loc["status.done"] <MaterialIcon Name="check" /></button>
                         }
                     </div>
                 }
             </div>
         </div>
 
-        @* Score by tapping the card itself (not via the little markers, as in the action phase). ONE list:
-           every objective on the table, and the ones the player up can still score are the tap targets.
-           It used to be the tap grid plus a full ObjectivesTab underneath — which listed every objective
-           twice and put the reveal box (its own stage now) back on the scoring screen. Corrections and
-           hand-added objectives live in the Objectives tab, which is one tap away. *@
+        @* Score by tapping the card itself (not via the little markers, as in the action phase). The list is
+           what the player who is up can actually DO: a taped or purged objective is not scorable, so it is not
+           here (the Objectives tab still shows the whole table, one tap away, tape and all). The ones they have
+           already scored stay, marked, and tapping one takes it back — a mis-tap has to be undoable in the
+           same place it happened, which is the reason the list is not simply filtered down to "not yet
+           scored". *@
         <div class="panel" style="margin-top:.6rem;">
             @if (scorer is not null)
             {
@@ -101,20 +102,24 @@
             {
                 <h3 style="margin:0 0 .5rem;">@Loc["obj.title"]</h3>
             }
-            @if (s.Objectives.Count == 0)
+            @{
+                var scorable = Scorable(s, scorer);
+            }
+            @if (scorable.Count == 0)
             {
-                <p class="faint" style="margin:0;">@Loc["obj.none"]</p>
+                <p class="faint" style="margin:0;">@Loc[s.Objectives.Count == 0 ? "obj.none" : "status.nothingScorable"]</p>
             }
             else
             {
                 <div class="obj-tap-grid">
-                    @foreach (var so in s.Objectives)
+                    @foreach (var so in scorable)
                     {
                         var soId = so.Id;
                         var already = scorer is not null && so.ScoredByPlayerIds.Contains(scorer.Id);
                         <ObjectiveDisplayCard So="so"
-                                              Clickable="scorer is not null && !already && Store.CanScoreFor(scorer.Id) && !Store.RedTapeBlocks(so)"
-                                              OnClick="() => Score(soId, scorer!.Id)"
+                                              Clickable="scorer is not null && Store.CanScoreFor(scorer.Id)"
+                                              Undo="already"
+                                              OnClick="() => Toggle(soId, scorer!.Id, already)"
                                               TapeClickable="true"
                                               OnRemoveTape="() => RemoveTape(soId)"
                                               OnLockedTap="AskLocked" />
@@ -150,14 +155,14 @@
                     @if (host)
                     {
                         <button class="step @(done ? "done" : "")" @onclick="() => ToggleStep(step, !done)">
-                            <span class="step-box">@(done ? "✓" : "")</span>
+                            <span class="step-box">@if (done) { <MaterialIcon Name="check" SizeCss="1em" /> }</span>
                             <span>@Loc[key]</span>
                         </button>
                     }
                     else
                     {
                         <div class="step readonly @(done ? "done" : "")">
-                            <span class="step-mark">@(done ? "✓" : "")</span>
+                            <span class="step-mark">@if (done) { <MaterialIcon Name="check" SizeCss="1em" /> }</span>
                             <span>@Loc[key]</span>
                         </div>
                     }
@@ -216,8 +221,32 @@
     private Task ToggleStep(StatusStep step, bool done)
         => Store.Mutate(Store.Api.SetStatusStepAsync(Sid, step, done));
 
+    /// <summary>What the player who is up can act on: everything they may still score, plus what they have
+    /// already scored this phase so a mis-tap can be taken back. A taped or purged objective can't be scored
+    /// (the server refuses it too), so it would only be a card that does nothing when tapped.
+    /// <para>With nobody up — everyone has said "done" — the same filter leaves the objectives that are
+    /// simply on the table, which is what the heading then says.</para></summary>
+    private List<SessionObjectiveDto> Scorable(SessionStateDto s, PlayerDto? scorer)
+        => s.Objectives
+            .Where(o => !o.Purged
+                        && (!Store.RedTapeBlocks(o)
+                            || (scorer is not null && o.ScoredByPlayerIds.Contains(scorer.Id))))
+            // Still to score first, already scored after it: the top of the list is what there is to decide.
+            .OrderBy(o => scorer is not null && o.ScoredByPlayerIds.Contains(scorer.Id) ? 1 : 0)
+            .ToList();
+
+    private Task Toggle(Guid sessionObjectiveId, Guid playerId, bool scored)
+        => scored ? Unscore(sessionObjectiveId, playerId) : Score(sessionObjectiveId, playerId);
+
     private Task Score(Guid sessionObjectiveId, Guid playerId)
         => Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, sessionObjectiveId, playerId));
+
+    // Taking a score back has no state to merge (the DELETE returns nothing), so it refreshes.
+    private async Task Unscore(Guid sessionObjectiveId, Guid playerId)
+    {
+        await Store.Api.UnscoreObjectiveAsync(Sid, sessionObjectiveId, playerId);
+        await Store.RefreshAsync();
+    }
 
     // Red Tape: pull the tape off an objective so it can be scored (the card asks for a second tap first).
     private Task RemoveTape(Guid sessionObjectiveId)

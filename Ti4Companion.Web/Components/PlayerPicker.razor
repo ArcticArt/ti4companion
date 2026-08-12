@@ -19,7 +19,7 @@
                 disabled="@Disabled" @onclick="() => OnPick.InvokeAsync(pid)" title="@p.Name">
             <FactionBadge Faction="Store.Faction(p.FactionId)" Size="@BadgeSize" Ring="@p.ColorHex" />
             <span class="pp-name">@p.Name</span>
-            @if (on) { <span class="pp-check">✓</span> }
+            @if (on) { <span class="pp-check"><MaterialIcon Name="check" /></span> }
         </button>
     }
 </div>

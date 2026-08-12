@@ -9,15 +9,19 @@
 }
 
 <div style="display:flex;flex-direction:column;gap:1rem;">
-    @* Red Tape Lite: if NOBODY took the carrier card this round, the app itself pulls one tape at random at
+    @* Red Tape Lite: if NOBODY took the carrier card this round, the app asks the host about a random tape at
        the moment the variant names (round 1 right after the strategy phase, afterwards when the status phase
        ends) — see RedTape on the server. Announced here so the table knows it is coming and does not go
-       looking for a button. *@
-    @if (s.RedTapeVariant == RedTapeVariant.Lite && s.RedTapeRandomRound < s.CurrentRound
+       looking for a button.
+       NOT during setup: this tab is embedded in the setup's objectives step, where nobody holds a card yet, so
+       the condition is trivially true — and a sentence about what happens after the strategy phase is not what
+       the host is deciding while laying the objectives out. *@
+    @if (s.Phase != GamePhase.Setup && s.RedTapeVariant == RedTapeVariant.Lite
+         && s.RedTapeRandomRound < s.CurrentRound
          && NobodyTookCarrier(s) && s.Objectives.Any(o => !o.MarkerRemoved))
     {
         <div class="panel tech-prompt" style="order:0;">
-            <span class="tp-text">🎲 @Loc["redtape.randomHint"]</span>
+            <span class="tp-text"><MaterialIcon Name="casino" /> @Loc["redtape.randomHint"]</span>
         </div>
     }
 
@@ -89,7 +93,7 @@
                     </span>
                     @if (host)
                     {
-                        <button class="btn btn-sm btn-ghost" @onclick="() => Remove(so.Id)" title="@RemoveTitle">✕</button>
+                        <button class="btn btn-sm btn-ghost" @onclick="() => Remove(so.Id)" title="@RemoveTitle"><MaterialIcon Name="close" /></button>
                     }
                 </div>
                 @if (def is not null)

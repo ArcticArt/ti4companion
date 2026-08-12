@@ -38,6 +38,23 @@ public static class GameRules
             ? ImperialStrategyCard
             : RedTapeDiplomacyCard;
 
+    // ---- Turn timer ------------------------------------------------------------------------------------
+
+    /// <summary>The per-player round budget the server accepts, in seconds (<c>0</c> = off). These live here
+    /// because setup now lets the host TYPE a number: an input whose bounds disagree with the clamp would
+    /// quietly store something other than what was entered.</summary>
+    public const int TurnTimerMinSeconds = 10;
+
+    /// <inheritdoc cref="TurnTimerMinSeconds"/>
+    public const int TurnTimerMaxSeconds = 2 * 60 * 60;
+
+    /// <summary>The same bounds as whole minutes — the unit the setup field asks for. The minimum is a
+    /// minute rather than <see cref="TurnTimerMinSeconds"/>, so the field cannot undershoot the clamp.</summary>
+    public const int TurnTimerMinMinutes = 1;
+
+    /// <inheritdoc cref="TurnTimerMinMinutes"/>
+    public const int TurnTimerMaxMinutes = TurnTimerMaxSeconds / 60;
+
     // ---- Retention -------------------------------------------------------------------------------------
 
     /// <summary>Hours of inactivity before a session is wiped (90 days). The fallback for
