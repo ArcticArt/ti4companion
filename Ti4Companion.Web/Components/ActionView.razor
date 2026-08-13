@@ -14,24 +14,23 @@
     // clear whose taps count. So it is a mode, off by default, with a button to enter and leave it.
     var takeover = host && Store.HostTakeover;
     var canControl = active is not null && (mine || takeover);
-    // A card's OWN step (Politics' appointment, Imperial's scoring, Red Tape's marker) is offered to the
-    // player who is up AND to the host, whether or not the takeover mode is on. The server has always
-    // allowed "the active player or the host" here; the client did not, and that was a dead end reported
-    // from a real game: the step is only answerable on the acting player's own device, so a table whose
-    // active seat has no live device — one shared tablet, a player who joined a second seat, a phone that
-    // lost its seat to a take-over — had nobody who could answer at all. For Politics that stops the game,
-    // because the turn cannot be ended until the token has moved (400 for everyone, host included).
-    // The pass / play / turn buttons stay behind the takeover mode: that is what the mode is for.
-    var canResolveCard = active is not null && (mine || host);
-    // Politics: this device shows the DIALOG when it is the one playing the turn (unless it closed it), or
-    // when it opened the dialog itself from the band. Everything else that may answer gets the band.
+    // A card's own step (Politics' appointment, Imperial's scoring, Red Tape's marker) belongs to the device
+    // that is playing the turn. The host gets it only in take-over mode, i.e. once it has said it is acting
+    // for that player (2026-08-13, on request — otherwise the table's device carries somebody else's prompts
+    // all evening). This was briefly widened to "the player or the host, always", because Politics used to
+    // REFUSE the turn end and a seat with no device of its own could then wedge the game; the refusal is gone
+    // now, so the wider gate is no longer needed to keep a table moving. The consequence is deliberate: with
+    // nobody on that seat and take-over off, the appointment is simply not offered, and the host sets the
+    // speaker in the Players tab as before.
+    // Politics: this device shows the DIALOG when it may act (unless it closed it), or when it opened the
+    // dialog itself again from the band.
     // ⚠️ Keyed on WHICH appointment (= who is up) rather than on a bool that something has to reset: a live
     // update from another device re-renders this component through Ti4ComponentBase, i.e. with a bare
     // StateHasChanged and WITHOUT OnParametersSet. A "start collapsed" decision made there is simply skipped,
-    // which is how the host's device ended up with an uninvited dialog the moment somebody else played
-    // Politics (reported). Comparing ids needs no reset and cannot go stale.
-    var speakerDialog = s.SpeakerPending && canResolveCard
-                        && (speakerOpenedFor == active?.Id || (canControl && speakerClosedFor != active?.Id));
+    // which is how the host's device once ended up with an uninvited dialog. Comparing ids needs no reset and
+    // cannot go stale.
+    var speakerDialog = s.SpeakerPending && canControl
+                        && (speakerOpenedFor == active?.Id || speakerClosedFor != active?.Id);
 }
 
 @if (allPassed)
@@ -111,11 +110,10 @@
         </div>
     </div>
 }
-else if (s.SpeakerPending && canResolveCard)
+else if (s.SpeakerPending && canControl)
 {
-    @* Closed, but still owed: the way back in, where the turn buttons are. This is also where the HOST's
-       device sits from the start when somebody else is up — a band with a button rather than a modal, so the
-       table's device is not interrupted by a dialog that usually belongs to another player's phone. *@
+    @* Closed, but still owed: the way back in, where the turn buttons are. Same audience as the dialog — the
+       device playing this turn, and the host only while it is taking over. *@
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text"><strong>@Loc["politics.speaker"]</strong> — @Loc["politics.stillOwed"]</span>
         <div class="spacer" style="flex:1"></div>
@@ -186,7 +184,7 @@ else if (s.SpeakerPending)
 @* Red Tape variant: the carrier card's own step, which the variant puts BEFORE everything else on the card.
    An offer like the others — the app tapes the objectives and refuses to score a taped one, but which tape
    comes off is the table's decision (and the rest of the variant's rules stay with them). *@
-@if (Store.RedTapeOn && PlayedNow(s, active, s.RedTapeCardNumber) && canResolveCard)
+@if (Store.RedTapeOn && PlayedNow(s, active, s.RedTapeCardNumber) && canControl)
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">
@@ -204,7 +202,7 @@ else if (s.SpeakerPending)
 @* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). The
    choice is a popup listing what this player may score, like the technology picker and the Red Tape one —
    sending them to the objectives tab meant finding the card and the right marker two screens away. *@
-@if (PlayedNow(s, active, GameRules.ImperialStrategyCard) && canResolveCard && active is not null)
+@if (PlayedNow(s, active, GameRules.ImperialStrategyCard) && canControl && active is not null)
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">@Loc["imperial.promptText"]</span>
@@ -355,17 +353,17 @@ else
     /// <summary>Who is scoring via Imperial's primary on THIS device (null = the popup is closed).</summary>
     private Guid? imperialFor;
 
-    /// <summary>This card's action is the one being resolved right now: either it is on the table (the wall
-    /// highlight) or the player who is up has already performed it this round.
+    /// <summary>This card's action is on the table right now, i.e. it is being resolved in THIS turn.
     /// <para>
-    /// The second half is why "end highlight" no longer takes the card's own step with it. That button is
-    /// about the WALL — it stops the big card taking over the screen — but it also cleared
-    /// <c>ActiveStrategyCardId</c>, and with it the Red Tape and Imperial buttons, leaving the player in the
-    /// middle of resolving a card with nothing left to press.
+    /// It used to fall back to "the player who is up has this card exhausted", so the offer survived
+    /// <c>ActiveStrategyCardId</c> being cleared — which is what the "end highlight" button does. That kept
+    /// the step alive after ending the highlight, but it also carried the offer into every later turn of that
+    /// player in the round (reported: "Score an objective is kept across the turns"). The card being ON THE
+    /// TABLE is the only state that means "this turn", since the server clears it at every turn change, so
+    /// that is what the two offers key on. Consequence: ending the highlight also ends the card's step.
     /// </para></summary>
     private static bool PlayedNow(SessionStateDto s, PlayerDto? active, int card)
-        => s.ActiveStrategyCardId == card
-           || (active?.StrategyCards.Any(c => c.StrategyCardId == card && c.IsExhausted) ?? false);
+        => s.ActiveStrategyCardId == card;
 
     private Task EndHighlight() => Store.Mutate(Store.Api.SetActiveStrategyAsync(Sid, null));
     private Task Next() => Store.Mutate(Store.Api.AdvanceTurnAsync(Sid));
