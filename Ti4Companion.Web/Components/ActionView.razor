@@ -23,6 +23,15 @@
     // because the turn cannot be ended until the token has moved (400 for everyone, host included).
     // The pass / play / turn buttons stay behind the takeover mode: that is what the mode is for.
     var canResolveCard = active is not null && (mine || host);
+    // Politics: this device shows the DIALOG when it is the one playing the turn (unless it closed it), or
+    // when it opened the dialog itself from the band. Everything else that may answer gets the band.
+    // ⚠️ Keyed on WHICH appointment (= who is up) rather than on a bool that something has to reset: a live
+    // update from another device re-renders this component through Ti4ComponentBase, i.e. with a bare
+    // StateHasChanged and WITHOUT OnParametersSet. A "start collapsed" decision made there is simply skipped,
+    // which is how the host's device ended up with an uninvited dialog the moment somebody else played
+    // Politics (reported). Comparing ids needs no reset and cannot go stale.
+    var speakerDialog = s.SpeakerPending && canResolveCard
+                        && (speakerOpenedFor == active?.Id || (canControl && speakerClosedFor != active?.Id));
 }
 
 @if (allPassed)
@@ -71,14 +80,14 @@
 @* Card-specific actions. Only three of the eight have one worth offering; the other five are resolved on
    the table and the app would only be in the way. Technology and Imperial are offers; Politics is the one
    exception — see the modal below. *@
-@if (s.SpeakerPending && canResolveCard && !speakerDismissed)
+@if (speakerDialog)
 {
     @* Politics: the appointment IS the card, and it comes first. A modal rather than a panel further down
-       the page, because the turn cannot be ended until it is done (server-side too) and a blocked button
-       with the reason off-screen is how a table gets stuck.
-       It CAN be dismissed, though (on request): a player may want to look something up first, and a dialog
-       with no way out is its own kind of stuck. The block itself stays — the band below then carries the way
-       back, and the server still refuses to end the turn. *@
+       the page: forgetting the appointment silently changes who picks first next round, and a reminder at
+       the bottom of the page is a reminder nobody reads.
+       It CAN be closed (on request): a player may want to look something up first, and a dialog with no way
+       out is its own kind of stuck. The band below then carries the way back in. Nothing is refused either
+       way — the turn can be ended with the appointment still owed. *@
     <div class="modal-backdrop centered blurred">
         <div class="modal politics-modal">
             <div class="modal-head">
@@ -95,7 +104,7 @@
                 }
             </div>
             <div class="modal-actions">
-                <button class="btn" @onclick="() => speakerDismissed = true">@Loc["common.cancel"]</button>
+                <button class="btn" @onclick="() => CloseSpeakerDialog(active?.Id)">@Loc["common.cancel"]</button>
                 <div class="spacer" style="flex:1"></div>
                 <span class="faint" style="font-size:.75rem;">@Loc["politics.cancelHint"]</span>
             </div>
@@ -105,12 +114,12 @@
 else if (s.SpeakerPending && canResolveCard)
 {
     @* Closed, but still owed: the way back in, where the turn buttons are. This is also where the HOST's
-       device starts when somebody else is up (see SpeakerStarts below) — a band with a button rather than a
-       modal, so the table's device is not interrupted by a dialog it usually does not have to answer. *@
+       device sits from the start when somebody else is up — a band with a button rather than a modal, so the
+       table's device is not interrupted by a dialog that usually belongs to another player's phone. *@
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text"><strong>@Loc["politics.speaker"]</strong> — @Loc["politics.stillOwed"]</span>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn btn-gold btn-sm" @onclick="() => speakerDismissed = false">
+        <button class="btn btn-gold btn-sm" @onclick="() => OpenSpeakerDialog(active?.Id)">
             @Loc["politics.reopen"] <MaterialIcon Name="chevron_right" />
         </button>
     </div>
@@ -320,10 +329,25 @@ else
     /// <summary>Choosing a combat opponent, as a popup rather than a permanent row of buttons.</summary>
     private bool showCombatPick;
 
-    /// <summary>The Politics dialog was closed without appointing anybody. Per device and per appointment —
-    /// <see cref="AppointSpeaker"/> resets it, and so does a fresh <c>SpeakerPending</c> (see below), so the
-    /// next Politics action opens the dialog again rather than starting hidden behind a band.</summary>
-    private bool speakerDismissed;
+    /// <summary>Which appointment this device has CLOSED the Politics dialog for, and which one it has
+    /// explicitly OPENED it for (from the band). Both hold the id of the player who was up, not a bool:
+    /// a new appointment is a different id, so the state falls back to the default by itself and there is
+    /// nothing to reset — which matters because a live update from another device re-renders this component
+    /// without running any lifecycle method that could do the resetting.</summary>
+    private Guid? speakerClosedFor;
+    private Guid? speakerOpenedFor;
+
+    private void CloseSpeakerDialog(Guid? appointment)
+    {
+        speakerClosedFor = appointment;
+        speakerOpenedFor = null;
+    }
+
+    private void OpenSpeakerDialog(Guid? appointment)
+    {
+        speakerOpenedFor = appointment;
+        speakerClosedFor = null;
+    }
 
     /// <summary>Red Tape's "which tape comes off" popup (the carrier card's own ability).</summary>
     private RedTapeSealModal.SealMode? sealMode;
@@ -370,33 +394,9 @@ else
 
     private async Task AppointSpeaker(Guid playerId)
     {
-        speakerDismissed = false;   // the next Politics action opens the dialog, not the band
+        speakerClosedFor = null;
+        speakerOpenedFor = null;
         await Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
-    }
-
-    /// <summary>Which appointment <see cref="speakerDismissed"/> belongs to, so "starts open or starts
-    /// collapsed" is decided once per appointment and not on every render.</summary>
-    private Guid? speakerArmedFor;
-
-    // A dismissal belongs to ONE pending appointment. The flag is cleared as soon as none is pending, so
-    // playing Politics again (or the next round's) puts the dialog back up rather than the band.
-    protected override void OnParametersSet()
-    {
-        var s = Store.Session;
-        if (s is null) return;
-        if (!s.SpeakerPending)
-        {
-            speakerDismissed = false;
-            speakerArmedFor = null;
-            return;
-        }
-        if (speakerArmedFor == s.ActivePlayerId) return;
-        speakerArmedFor = s.ActivePlayerId;
-        // The dialog opens BY ITSELF on the device that is playing this turn. The host's device starts on the
-        // band instead when somebody else is up: it can always answer (that is the fix for the stuck table),
-        // but it should not be interrupted by a modal for a step that usually belongs to another phone.
-        var acting = Store.MyPlayerId == s.ActivePlayerId || (Store.IsHost && Store.HostTakeover);
-        speakerDismissed = !acting;
     }
 
     private async Task StartCombat(Guid opponentId)
