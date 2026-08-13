@@ -1,0 +1,104 @@
+@inherits Ti4ComponentBase
+
+@*
+    Red Tape Lite's two questions, as popups.
+
+    Both used to happen by themselves: when the fifth Stage I tape came off, the app purged the rest, and in a
+    round where nobody took the carrier card it pulled a tape at random. Both are irreversible, both change who
+    can still win, and neither is something the app should decide on the table's behalf — so it asks now.
+
+    Shown to the HOST only. Everyone else would get a popup they cannot answer, and the answer belongs with
+    whoever steers the game anyway; the pending question is announced in the objectives tab for the rest.
+
+    Only one at a time, purge first: confirming a random removal can itself be the fifth clear Stage I, and then
+    the purge question follows it rather than competing with it.
+*@
+@if (Store.IsHost && Store.Session is { } s)
+{
+    var proposal = Store.RedTapePurgeProposal;
+    if (proposal.Count > 0)
+    {
+        <div class="modal-backdrop centered blurred">
+            <div class="modal redtape-modal">
+                <div class="modal-head">
+                    <h3 style="margin:0;">@Loc["redtape.purgeAsk"]</h3>
+                </div>
+                <div class="modal-body">
+                    <p class="rt-ask-lead">@string.Format(Loc["redtape.purgeAskBody"], GameRules.RedTapeScorableStageI)</p>
+                    <div class="rt-ask-list">
+                        @foreach (var so in proposal)
+                        {
+                            var def = Store.Objective(so.ObjectiveId);
+                            <div class="rt-ask-item">
+                                <span class="rt-ask-name">@(so.CustomName ?? (def is null ? so.ObjectiveId : Loc.Pick(def.Name, def.NameDe)))</span>
+                                @if (def is not null)
+                                {
+                                    <span class="rt-ask-req">@Loc.Pick(def.Requirement, def.RequirementDe)</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <p class="rt-ask-warn">@Loc["redtape.purgeAskWarn"]</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-danger" @onclick="() => AnswerPurge(true)">@Loc["redtape.purgeYes"]</button>
+                    <button class="btn" @onclick="() => AnswerPurge(false)">@Loc["redtape.purgeNo"]</button>
+                </div>
+            </div>
+        </div>
+    }
+    else if (s.RedTapeRandomRevealedId is Guid shown
+             && s.Objectives.FirstOrDefault(o => o.Id == shown) is { } revealed)
+    {
+        @* The RESULT: which objective the draw cleared. The app performing a removal is the one game action it
+           takes on its own, so the table has to see what it did — as the card itself, not as a line of text.
+           The wall puts the same card up large until this is closed. *@
+        <div class="modal-backdrop centered blurred">
+            <div class="modal redtape-modal">
+                <div class="modal-head">
+                    <h3 style="margin:0;">@Loc["redtape.randomResult"]</h3>
+                </div>
+                <div class="modal-body">
+                    <p class="rt-ask-lead">@Loc["redtape.randomResultBody"]</p>
+                    <div class="rt-result-card">
+                        <ObjectiveDisplayCard So="revealed" Glow="true" />
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <div class="spacer" style="flex:1"></div>
+                    <button class="btn btn-gold" @onclick="AckRandom">@Loc["common.continue"] <MaterialIcon Name="chevron_right" /></button>
+                </div>
+            </div>
+        </div>
+    }
+    else if (Store.RedTapeRandomAsking)
+    {
+        var carrier = Store.Card(s.RedTapeCardNumber);
+        var carrierName = carrier is null ? $"#{s.RedTapeCardNumber}" : Loc.Pick(carrier.Name, carrier.NameDe);
+        <div class="modal-backdrop centered blurred">
+            <div class="modal redtape-modal">
+                <div class="modal-head">
+                    <h3 style="margin:0;">@Loc["redtape.randomAsk"]</h3>
+                </div>
+                <div class="modal-body">
+                    <p class="rt-ask-lead">@string.Format(Loc["redtape.randomAskBody"], carrierName)</p>
+                    <p class="rt-ask-warn">@Loc["redtape.randomAskWarn"]</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-gold" @onclick="() => AnswerRandom(true)">@Loc["redtape.randomYes"]</button>
+                    <button class="btn" @onclick="() => AnswerRandom(false)">@Loc["redtape.randomNo"]</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private Task AnswerPurge(bool confirm)
+        => Store.Mutate(Store.Api.AnswerRedTapePurgeAsync(Store.Session!.Id, confirm));
+
+    private Task AnswerRandom(bool confirm)
+        => Store.Mutate(Store.Api.AnswerRedTapeRandomAsync(Store.Session!.Id, confirm));
+
+    private Task AckRandom() => Store.Mutate(Store.Api.AckRedTapeRandomAsync(Store.Session!.Id));
+}

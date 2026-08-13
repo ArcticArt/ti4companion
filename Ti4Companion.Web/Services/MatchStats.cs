@@ -20,7 +20,16 @@ public class MatchStats
     public IReadOnlyDictionary<GamePhase, TimeSpan> PhaseTotals { get; init; } = new Dictionary<GamePhase, TimeSpan>();
     public IReadOnlyDictionary<Guid, TimeSpan> PerPlayer { get; init; } = new Dictionary<Guid, TimeSpan>();
 
-    public static MatchStats Compute(IReadOnlyList<SessionLogEntryDto> log, DateTimeOffset now)
+    /// <summary>Time on turn per player **within the current round only** — what the turn timer counts down.</summary>
+    public IReadOnlyDictionary<Guid, TimeSpan> PerPlayerRound { get; init; } = new Dictionary<Guid, TimeSpan>();
+
+    /// <summary>The round the current-round figures belong to (1 when no round change has been logged yet).</summary>
+    public int CurrentRound { get; init; } = 1;
+
+    /// <param name="currentPicker">Whose turn it is to pick a strategy card, if the strategy phase is running.
+    /// The log only credits strategy time when a pick happens, so without this the player currently thinking
+    /// would show a frozen timer.</param>
+    public static MatchStats Compute(IReadOnlyList<SessionLogEntryDto> log, DateTimeOffset now, Guid? currentPicker = null)
     {
         var ordered = log.OrderBy(l => l.TimestampUtc).ToList();
         var phaseChanges = ordered.Where(l => l.Kind == SessionLogKind.PhaseChange && l.Phase is not null).ToList();
@@ -38,17 +47,71 @@ public class MatchStats
         }
         if (pauseStart is { } open) pauses.Add((open, now));
 
-        // Active (non-paused) duration of [from, to].
-        TimeSpan Active(DateTimeOffset from, DateTimeOffset to)
+        // Combat intervals (CombatStart → CombatEnd, or → now while one is running). Subtracted from
+        // TIME-ON-TURN only, not from the round/phase/match durations: resolving a battle with someone else
+        // is not the active player's thinking time, but it is still time the table spent playing. That is
+        // also exactly what "the clock pauses during combat" means for the turn timer.
+        var combats = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        DateTimeOffset? combatStart = null;
+        foreach (var e in ordered)
+        {
+            if (e.Kind == SessionLogKind.CombatStart) combatStart ??= e.TimestampUtc;
+            else if (e.Kind == SessionLogKind.CombatEnd && combatStart is { } cs) { combats.Add((cs, e.TimestampUtc)); combatStart = null; }
+        }
+        if (combatStart is { } openCombat) combats.Add((openCombat, now));
+
+        // Recording technologies, excluded exactly like a combat and for the same reason: entering what the
+        // table researched is the app's overhead, not anybody's thinking time. Two kinds of entry, one list:
+        // the old per-player picker (TechPickStart/End, no longer emitted but present in older logs) and the
+        // table-wide prompt after a Technology action (TechPromptOpen/Close). Both are closed by every
+        // turn/phase boundary server-side, so an open one cannot run away with the clock.
+        var techPicks = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        DateTimeOffset? techStart = null;
+        foreach (var e in ordered)
+        {
+            if (e.Kind is SessionLogKind.TechPickStart or SessionLogKind.TechPromptOpen) techStart ??= e.TimestampUtc;
+            else if ((e.Kind is SessionLogKind.TechPickEnd or SessionLogKind.TechPromptClose) && techStart is { } ts)
+            { techPicks.Add((ts, e.TimestampUtc)); techStart = null; }
+        }
+        if (techStart is { } openTech) techPicks.Add((openTech, now));
+
+        // Secondary rounds (SecondaryRoundOpen → SecondaryRoundClose, or → now while one is open). A secondary
+        // ability happens BETWEEN two turns: the next player's clock may only start once the table is done with
+        // it, so this interval comes off TIME-ON-TURN — but NOT off the clocks of the players taking the
+        // secondary, who are exactly the ones spending that time. Hence its own list.
+        var secondaryRounds = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        DateTimeOffset? secStart = null;
+        foreach (var e in ordered)
+        {
+            if (e.Kind == SessionLogKind.SecondaryRoundOpen) secStart ??= e.TimestampUtc;
+            else if (e.Kind == SessionLogKind.SecondaryRoundClose && secStart is { } sr) { secondaryRounds.Add((sr, e.TimestampUtc)); secStart = null; }
+        }
+        if (secStart is { } openSec) secondaryRounds.Add((openSec, now));
+
+        // Pauses, and everything that stops a clock, each MERGED into non-overlapping intervals — a pause
+        // declared during a combat overlaps, and subtracting both would take that time off twice.
+        var pauseOnly = Merge(pauses);
+        var secondaryExcluded = Merge(pauses.Concat(combats).Concat(techPicks));
+        var turnExcluded = Merge(pauses.Concat(combats).Concat(techPicks).Concat(secondaryRounds));
+
+        // Active duration of [from, to] with the excluded intervals taken out.
+        static TimeSpan Span(DateTimeOffset from, DateTimeOffset to, List<(DateTimeOffset From, DateTimeOffset To)> exclude)
         {
             var d = to - from;
-            foreach (var (pf, pt) in pauses)
+            foreach (var (xf, xt) in exclude)
             {
-                var ov = (pt < to ? pt : to) - (pf > from ? pf : from);
+                var ov = (xt < to ? xt : to) - (xf > from ? xf : from);
                 if (ov > TimeSpan.Zero) d -= ov;
             }
             return d < TimeSpan.Zero ? TimeSpan.Zero : d;
         }
+
+        TimeSpan Active(DateTimeOffset from, DateTimeOffset to) => Span(from, to, pauseOnly);
+        /// <summary>Time on turn: pauses, combats, technology pickers AND open secondary rounds removed.</summary>
+        TimeSpan OnTurn(DateTimeOffset from, DateTimeOffset to) => Span(from, to, turnExcluded);
+        /// <summary>Time on a secondary ability: the same, minus the secondary round itself — that IS this
+        /// player's time.</summary>
+        TimeSpan OnSecondary(DateTimeOffset from, DateTimeOffset to) => Span(from, to, secondaryExcluded);
 
         // Time per phase type: each phase segment runs until the next phase change (or now), minus pauses.
         var phaseTotals = new Dictionary<GamePhase, TimeSpan>();
@@ -62,27 +125,71 @@ public class MatchStats
 
         // Round durations: each round runs until the next round starts (or now), minus pauses.
         var roundChanges = ordered.Where(l => l.Kind == SessionLogKind.RoundChange && l.Round is not null).ToList();
-        var rounds = new List<RoundDuration>();
+        var roundSpans = new List<RoundDuration>();
         for (var i = 0; i < roundChanges.Count; i++)
         {
             var from = roundChanges[i].TimestampUtc;
             var to = i + 1 < roundChanges.Count ? roundChanges[i + 1].TimestampUtc : now;
-            rounds.Add(new RoundDuration(roundChanges[i].Round!.Value, Active(from, to)));
+            roundSpans.Add(new RoundDuration(roundChanges[i].Round!.Value, Active(from, to)));
         }
+        // One row per round NUMBER, not per entry. A host correcting the round by hand (settings) writes a
+        // second RoundChange for a round already played, and two bars labelled "Round 3" read as a bug rather
+        // than as the table having gone back. Summing keeps the total honest and the chart legible; for the
+        // ordinary game this is a no-op, one entry per round.
+        var rounds = roundSpans
+            .GroupBy(r => r.Round)
+            .Select(g => new RoundDuration(g.Key, g.Aggregate(TimeSpan.Zero, (acc, r) => acc + r.Duration)))
+            .OrderBy(r => r.Round)
+            .ToList();
+
+        // The round currently being played — the turn timer resets with it.
+        var currentRoundStart = roundChanges.Count > 0 ? roundChanges[^1].TimestampUtc : start;
+        var currentRound = roundChanges.Count > 0 ? roundChanges[^1].Round!.Value : 1;
+
+        // Same intervals, but only the part that falls inside the current round.
+        TimeSpan ThisRound(DateTimeOffset from, DateTimeOffset to, Func<DateTimeOffset, DateTimeOffset, TimeSpan> of)
+            => to <= currentRoundStart ? TimeSpan.Zero : of(from > currentRoundStart ? from : currentRoundStart, to);
 
         // Per-player time: action-phase intervals → the active player; strategy-phase intervals leading up
-        // to each pick → that picker (so the strategy phase is counted per player too). Pauses excluded.
+        // to each pick → that picker (so the strategy phase is counted per player too). Pauses AND combats
+        // excluded — see `combats`.
         var perPlayer = new Dictionary<Guid, TimeSpan>();
+        var perPlayerRound = new Dictionary<Guid, TimeSpan>();
         GamePhase? phase = null;
         Guid? active = null;
+        // Players whose clock is running for a secondary ability (see SecondaryStart/Done). Several clocks
+        // legitimately run at once, so this is a UNION with the active player's clock rather than a
+        // replacement — but the round itself is subtracted from the TURN clock (see `secondaryRounds`),
+        // because a secondary happens between two turns. The active player is never in this set (the server
+        // keeps them out; their clock IS the turn clock).
+        var secondaries = new HashSet<Guid>();
+
+        void Credit(Guid pid, DateTimeOffset from, DateTimeOffset to)
+        {
+            perPlayer[pid] = Get(perPlayer, pid) + OnTurn(from, to);
+            perPlayerRound[pid] = Get(perPlayerRound, pid) + ThisRound(from, to, OnTurn);
+        }
+
+        // A player resolving a secondary: the same exclusions, except the secondary round itself.
+        void CreditSecondary(Guid pid, DateTimeOffset from, DateTimeOffset to)
+        {
+            perPlayer[pid] = Get(perPlayer, pid) + OnSecondary(from, to);
+            perPlayerRound[pid] = Get(perPlayerRound, pid) + ThisRound(from, to, OnSecondary);
+        }
+
         var lastTs = start;
         foreach (var e in ordered)
         {
             if (e.TimestampUtc < start) continue; // pre-game (setup joins)
-            if (phase == GamePhase.Action && active is Guid a)
-                perPlayer[a] = Get(perPlayer, a) + Active(lastTs, e.TimestampUtc);
-            else if (phase == GamePhase.Strategy && e.Kind == SessionLogKind.StrategyPick && e.TargetPlayerId is Guid pk)
-                perPlayer[pk] = Get(perPlayer, pk) + Active(lastTs, e.TimestampUtc);
+            if (phase == GamePhase.Action && active is Guid a) Credit(a, lastTs, e.TimestampUtc);
+            foreach (var pid in secondaries)
+            {
+                if (pid != active) CreditSecondary(pid, lastTs, e.TimestampUtc);
+            }
+            if (phase == GamePhase.Strategy && e.Kind == SessionLogKind.StrategyPick && e.TargetPlayerId is Guid pk)
+            {
+                Credit(pk, lastTs, e.TimestampUtc);
+            }
             switch (e.Kind)
             {
                 case SessionLogKind.PhaseChange:
@@ -91,12 +198,34 @@ public class MatchStats
                     break;
                 case SessionLogKind.TurnChange:
                     active = e.TargetPlayerId;
+                    // Secondaries are NOT cleared here: they run on past the turn change by design. The
+                    // server closes them when the next action is played or the phase ends, and each of
+                    // those emits a SecondaryDone, which is what empties this set.
+                    break;
+                case SessionLogKind.SecondaryStart:
+                    if (e.TargetPlayerId is Guid ss) secondaries.Add(ss);
+                    break;
+                case SessionLogKind.SecondaryDone:
+                    if (e.TargetPlayerId is Guid sd) secondaries.Remove(sd);
                     break;
             }
             lastTs = e.TimestampUtc;
         }
-        if (phase == GamePhase.Action && active is Guid last)
-            perPlayer[last] = Get(perPlayer, last) + Active(lastTs, now);
+
+        // The still-open segment: in the action phase it belongs to the active player, in the strategy
+        // phase to whoever is on the clock to pick (nothing has been logged for them yet).
+        var openOwner = phase switch
+        {
+            GamePhase.Action => active,
+            GamePhase.Strategy => currentPicker,
+            _ => null
+        };
+        if (openOwner is Guid owner) Credit(owner, lastTs, now);
+        // Plus everyone still resolving a secondary — the same union as inside the loop.
+        foreach (var pid in secondaries)
+        {
+            if (pid != openOwner) CreditSecondary(pid, lastTs, now);
+        }
 
         return new MatchStats
         {
@@ -105,11 +234,28 @@ public class MatchStats
             Rounds = rounds,
             PhaseTotals = phaseTotals,
             PerPlayer = perPlayer,
+            PerPlayerRound = perPlayerRound,
+            CurrentRound = currentRound,
         };
     }
 
     private static TimeSpan Get<TKey>(Dictionary<TKey, TimeSpan> d, TKey k) where TKey : notnull
         => d.TryGetValue(k, out var v) ? v : TimeSpan.Zero;
+
+    /// <summary>Merge intervals so overlapping ones (a pause declared during a combat) are subtracted once.</summary>
+    private static List<(DateTimeOffset From, DateTimeOffset To)> Merge(IEnumerable<(DateTimeOffset From, DateTimeOffset To)> spans)
+    {
+        var merged = new List<(DateTimeOffset From, DateTimeOffset To)>();
+        foreach (var s in spans.Where(s => s.To > s.From).OrderBy(s => s.From))
+        {
+            if (merged.Count > 0 && s.From <= merged[^1].To)
+            {
+                if (s.To > merged[^1].To) merged[^1] = (merged[^1].From, s.To);
+            }
+            else merged.Add(s);
+        }
+        return merged;
+    }
 
     /// <summary>Compact duration formatting, e.g. "1h 04m", "12m 30s", "45s".</summary>
     public static string Format(TimeSpan t)

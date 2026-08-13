@@ -1,4 +1,5 @@
 using Ti4Companion.ApiService.Data;
+using Ti4Companion.Shared;
 
 namespace Ti4Companion.ApiService.Services;
 
@@ -59,6 +60,14 @@ public static class TurnService
         return null;
     }
 
+    /// <summary>
+    /// Status phase: whose turn it is to score, in initiative order — the first player who hasn't marked
+    /// themselves done. Null once everyone is through. Scoring used to be simultaneous, which made it
+    /// impossible to see who still owed a decision.
+    /// </summary>
+    public static Guid? CurrentScorer(GameSession s, IReadOnlyDictionary<string, int?> overrides)
+        => InitiativeOrder(s.Players, overrides).FirstOrDefault(p => !p.StatusDone)?.Id;
+
     /// <summary>Players in pick/agenda order: starting with the speaker, then clockwise by seat.</summary>
     public static List<Player> SeatOrderFromSpeaker(GameSession s)
     {
@@ -70,15 +79,28 @@ public static class TurnService
     }
 
     /// <summary>
-    /// Whose turn it is to pick a strategy card: speaker first, then clockwise, one card per round
+    /// Whose turn it is to pick a strategy card: speaker first, then clockwise, one card per pass
     /// (so with 2 cards everyone takes their first before the speaker takes a second). Null once full.
-    /// </summary>
+    /// <para>
+    /// Derived from WHO HOLDS WHAT, not from how many cards have been taken in total. The count-based version
+    /// (<c>order[taken % count]</c>) was right until a card came back: with everybody served, a player
+    /// returning their card handed the pick to whoever happened to sit at that index — usually the player who
+    /// picked last — instead of back to them. Looking for the first player short of a card in this pass has no
+    /// such hole, and behaves identically while the picking runs forward.
+    /// </para></summary>
     public static Guid? CurrentPicker(GameSession s, int maxCards)
     {
         var order = SeatOrderFromSpeaker(s);
         if (order.Count == 0) return null;
-        var taken = order.Sum(p => p.StrategyCards.Count);
-        return taken >= order.Count * maxCards ? null : order[taken % order.Count].Id;
+        // Nothing left to take — a five-player table playing "two each" runs out at eight, and pointing at a
+        // player who cannot pick is how the strategy phase looked stuck.
+        if (order.Sum(p => p.StrategyCards.Count) >= GameRules.StrategyCardCount) return null;
+        for (var pass = 0; pass < maxCards; pass++)
+        {
+            var next = order.FirstOrDefault(p => p.StrategyCards.Count <= pass);
+            if (next is not null) return next.Id;
+        }
+        return null;
     }
 
     private static Guid? Step(GameSession s, IReadOnlyDictionary<string, int?> overrides, int dir)

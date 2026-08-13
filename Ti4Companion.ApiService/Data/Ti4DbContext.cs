@@ -14,6 +14,11 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
     public DbSet<PlayerTechnology> PlayerTechnologies => Set<PlayerTechnology>();
     public DbSet<AgendaVote> AgendaVotes => Set<AgendaVote>();
     public DbSet<SessionLogEntry> SessionLog => Set<SessionLogEntry>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+
+    // Outlives the sessions themselves (no FK, no cascade) — see SessionSummary.
+    public DbSet<SessionSummary> SessionSummaries => Set<SessionSummary>();
+    public DbSet<SessionSummaryPlayer> SessionSummaryPlayers => Set<SessionSummaryPlayer>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -26,12 +31,24 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
                      typeof(GameSession), typeof(Player), typeof(PlayerStrategyCard),
                      typeof(StrategyCardState), typeof(SessionObjective), typeof(ObjectiveScore),
                      typeof(PlayerTechnology), typeof(AgendaVote), typeof(SessionLogEntry),
+                     typeof(SessionSummary), typeof(SessionSummaryPlayer), typeof(PushSubscription),
                  })
         {
             b.Entity(entity).Property<Guid>("Id").ValueGeneratedNever();
         }
 
         b.Entity<GameSession>().HasIndex(x => x.JoinCode).IsUnique();
+
+        // Push subscriptions: the endpoint URL is the browser's identity, so it is unique — resubscribing
+        // the same browser has to update the row, not add another. Indexed by session for the send path.
+        b.Entity<PushSubscription>().HasIndex(x => x.Endpoint).IsUnique();
+        b.Entity<PushSubscription>().HasIndex(x => x.SessionId);
+        // A real FK with cascade delete but NO navigation on either side: the rows stay out of the session
+        // graph (they must never ride along into a DTO) while the database still removes them with their
+        // session. Cheaper and harder to forget than cleaning up by hand in the worker and the delete route.
+        b.Entity<PushSubscription>()
+            .HasOne<GameSession>().WithMany()
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<GameSession>()
             .HasMany(x => x.Players).WithOne(p => p.Session)
@@ -74,5 +91,12 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
         b.Entity<StrategyCardState>().HasIndex(x => new { x.SessionId, x.StrategyCardId }).IsUnique();
         b.Entity<AgendaVote>().HasIndex(x => new { x.SessionId, x.PlayerId }).IsUnique();
         b.Entity<SessionLogEntry>().HasIndex(x => new { x.SessionId, x.TimestampUtc });
+
+        // ---- Session summaries (survive the session's auto-wipe: no relationship to Sessions) ----
+        b.Entity<SessionSummary>().HasIndex(x => x.SessionId).IsUnique();  // re-recording updates in place
+        b.Entity<SessionSummary>().HasIndex(x => x.CreatedAtUtc);
+        b.Entity<SessionSummary>()
+            .HasMany(x => x.Players).WithOne(p => p.Summary)
+            .HasForeignKey(p => p.SessionSummaryId).OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -194,6 +194,20 @@ Migrations apply on start. The databases in the data directory are untouched by 
 **updated game content**, copy the new committed `ti4master.db` into the data directory while the service
 is stopped, and delete any stale `-wal`/`-shm` beside it.
 
+> ### ⚠️ A deploy does NOT reach open browsers by itself
+> The client is a PWA: its service worker answers every navigation out of its own cache and deliberately
+> does **not** call `skipWaiting()`, because activating a new worker clears the cache the running version is
+> still reading from — that would break a game open on somebody's phone mid-deploy. So after a deploy a
+> plain reload keeps serving the **old** app until every tab of the origin is closed. Do not go looking for
+> a broken deploy when you see that; check what the SERVER sends (`curl -s https://…/index.html | grep …`
+> for something only the new build has) before suspecting the deploy.
+> The app makes this visible: when a new worker is waiting it shows a bar, **"A new version is available ·
+> Reload"** (`Components/UpdateNotice.razor`), and that reload hands over properly — it posts `SKIP_WAITING`
+> to the waiting worker, waits for `controllerchange`, then reloads. **The hand-over is answered by the
+> WAITING worker, i.e. the newly deployed script**, so the first update after this feature shipped cannot
+> answer it: there the bar switches to "close every tab of this page" instead of offering a dead button.
+> Every deploy after that one works with a single tap.
+
 > ### ⚠️ Keep the unit file in sync with step 3
 > When you deploy code that introduces a new connection string or setting, add the matching
 > `Environment=` line **before** starting the service. A version of this app that gained a second

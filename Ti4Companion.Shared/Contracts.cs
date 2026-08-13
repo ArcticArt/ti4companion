@@ -178,13 +178,29 @@ public record PlayerDto(
     bool HasPassed, bool IsReady, bool IsHost, int? Initiative,
     IReadOnlyList<PlayerStrategyCardDto> StrategyCards,
     IReadOnlyList<string> TechnologyIds,
-    int Influence);
+    int Influence,
+    /// <summary>Status phase: done scoring, so the turn has moved on.</summary>
+    bool StatusDone = false,
+    /// <summary>Strategy action: this player is taking the secondary and hasn't finished — their clock runs.</summary>
+    bool SecondaryPending = false,
+    /// <summary>Technology action: this player still owes an entry, so the table's clock stands still.</summary>
+    bool TechPromptPending = false);
 
 /// <summary><paramref name="CustomName"/>/<paramref name="CustomPoints"/> are set for an objective added
 /// by hand (e.g. a secret made public via "Classified Document Leaks") rather than from the content set.</summary>
 public record SessionObjectiveDto(
     Guid Id, string ObjectiveId, IReadOnlyList<Guid> ScoredByPlayerIds,
-    string? CustomName, int? CustomPoints);
+    string? CustomName, int? CustomPoints,
+    /// <summary>Red Tape variant: the marker on this objective has been taken off.</summary>
+    bool MarkerRemoved = false,
+    /// <summary>Red Tape Lite: purged — it can never be scored and its tape never comes off.</summary>
+    bool Purged = false,
+    /// <summary>Red Tape Lite: proposed for purging, waiting for the table to confirm. Only what was already
+    /// on the table when the fifth Stage I came clear is ever flagged, so a later reveal is never swept up.</summary>
+    bool PurgePending = false,
+    /// <summary>Who scored this in the CURRENT round — the wall glows those. Computed server-side so the
+    /// client doesn't reimplement "this round".</summary>
+    IReadOnlyList<Guid>? ScoredThisRoundPlayerIds = null);
 
 public record StrategyCardStateDto(int StrategyCardId, int TradeGoods);
 
@@ -193,6 +209,16 @@ public record StrategyCardStateDto(int StrategyCardId, int TradeGoods);
 /// <paramref name="Locked"/> = secret vote committed (can't be reopened until reset).</summary>
 public record AgendaVoteDto(Guid PlayerId, VoteOutcome Outcome, int Votes, string? Choice, bool Locked);
 
+/// <summary>Votes per elected candidate (player id / planet id / card number / law id / free text).</summary>
+public record AgendaChoiceTallyDto(string Choice, int Votes);
+
+/// <summary>
+/// Aggregate result of the current vote, WITHOUT attribution — the intermediate step of a face-down vote
+/// (Galactic Event / hidden agenda), where the table sees the totals before it sees who voted how. The
+/// server computes it precisely because the per-player rows stay redacted at that point.
+/// </summary>
+public record AgendaTotalsDto(int For, int Against, int Abstained, IReadOnlyList<AgendaChoiceTallyDto> Choices);
+
 public record SessionStateDto(
     Guid Id, string JoinCode, string Name,
     Language DefaultLanguage, Expansion ActiveExpansions,
@@ -200,11 +226,74 @@ public record SessionStateDto(
     Guid? SpeakerPlayerId, Guid? ActivePlayerId, int? ActiveStrategyCardId,
     string? CurrentAgendaId, bool AllowEditAllPlayers,
     bool ShowTechOverview, DisplayMode DisplayMode, bool AgendaVotesHidden, bool VotingStarted, bool Paused, int RetentionHours,
+    int TurnTimerSeconds, int StrategyCardsPerPlayer, RedTapeVariant RedTapeVariant, int RedTapeCardNumber, bool PromptTechOnAction,
+    bool TrackSecondaryAbilities,
     DateTimeOffset CreatedAtUtc, DateTimeOffset LastActivityUtc,
     IReadOnlyList<PlayerDto> Players,
     IReadOnlyList<SessionObjectiveDto> Objectives,
     IReadOnlyList<StrategyCardStateDto> StrategyCardStates,
-    IReadOnlyList<AgendaVoteDto> AgendaVotes);
+    IReadOnlyList<AgendaVoteDto> AgendaVotes,
+    /// <summary>Face-down vote: totals are public, attribution is not (see <see cref="AgendaTotals"/>).</summary>
+    bool AgendaTotalsRevealed = false,
+    /// <summary>Set once the totals are public — while the votes themselves are still redacted.</summary>
+    AgendaTotalsDto? AgendaTotals = null,
+    /// <summary>Status phase: post-scoring steps the table has ticked off.</summary>
+    StatusStep StatusStepsDone = StatusStep.None,
+    /// <summary>Status phase: whose turn it is to score (initiative order), null when everyone is done.
+    /// Derived server-side so the client can't drift from the rule the server enforces.</summary>
+    Guid? StatusScorerId = null,
+    /// <summary>Wall display: show the join QR code. On during setup, off once the game starts.</summary>
+    bool ShowJoinQr = true,
+    /// <summary>Status phase: which of the three stages the table is on (score → reveal → checklist).</summary>
+    StatusStage StatusStage = StatusStage.Scoring,
+    /// <summary>The strategy card whose secondary round is open (null = none). Outlives the turn advance:
+    /// the others keep resolving after the active player is done.</summary>
+    int? SecondaryCardId = null,
+    /// <summary>Who played that primary — they and the host run the secondary round.</summary>
+    Guid? SecondaryOwnerId = null,
+    /// <summary>Politics is on the table and the new speaker has not been appointed yet.</summary>
+    bool SpeakerPending = false,
+    /// <summary>Red Tape Lite: the round its random removal was already answered in (0 = never). The client
+    /// uses it to announce that one is still coming this round.</summary>
+    int RedTapeRandomRound = 0,
+    /// <summary>Red Tape Lite: the round a random removal is currently being asked about (0 = nothing
+    /// pending). Non-zero means the host has an open question — nothing has been removed yet.</summary>
+    int RedTapeRandomPendingRound = 0,
+    /// <summary>Red Tape Lite: the objective a random removal just cleared, until the host closes the result
+    /// (null = nothing to show). The wall puts it up large, like any other freshly revealed objective.</summary>
+    Guid? RedTapeRandomRevealedId = null,
+    /// <summary>A combat is running between these two players (null = none). The wall shows them facing each
+    /// other and the turn clock stops.</summary>
+    Guid? CombatAId = null,
+    Guid? CombatBId = null,
+    /// <summary>Who has the technology picker open (null = nobody). Their time on turn is stopped while it is.</summary>
+    Guid? TechPickPlayerId = null,
+    /// <summary>The table is being asked to record the technologies from the Technology action (the option
+    /// <c>PromptTechOnAction</c>, raised when that card's secondary round closed). Every device shows the
+    /// popup for its own seat; the host can also fill in for the others. <b>The clock stands still while it
+    /// is open.</b></summary>
+    bool TechPromptOpen = false,
+    /// <summary>Who played that Technology card — they and the host may move the table on early.</summary>
+    Guid? TechPromptOwnerId = null,
+    /// <summary>Trade goods that were on the Red Tape carrier card when it was taken this round: the variant's
+    /// SPECIAL allows one further marker per good, so the allowance is <c>1 + this</c>.</summary>
+    int RedTapeCarrierGoods = 0,
+    /// <summary>Free vote with no agenda card: the headline the host typed (null = none running).</summary>
+    string? CustomVoteTitle = null,
+    /// <summary>What the free vote elects (null unless one is running).</summary>
+    ElectType? CustomVoteElect = null,
+    /// <summary>
+    /// Which seat the CALLING device holds in this session, resolved from its <c>X-Device-Token</c> — the
+    /// answer to "am I still this player?". Null means the device holds no seat here.
+    /// <para>
+    /// <b>Only <c>GET /api/sessions/{code}</c> fills this in</b>; every other response leaves it null, because
+    /// they are produced by a shared save-and-return path that has no request in scope. So it is read in
+    /// exactly one place — the client's read path (<c>SessionStore.ConnectAsync</c>/<c>RefreshAsync</c>) —
+    /// where it answers the one question nothing else can: somebody has taken this device's seat over. Before
+    /// this existed, the displaced device kept a session that looked completely alive and silently did
+    /// nothing, because the server no longer recognised it as that player.
+    /// </para></summary>
+    Guid? CallerPlayerId = null);
 
 /// <summary>A single match-log event. Structured (not pre-rendered) so the client localizes it and
 /// the statistics view diffs the timeline kinds for durations. See <see cref="SessionLogKind"/>.</summary>
@@ -228,11 +317,79 @@ public record CreateSessionRequest(
 public record JoinSessionRequest(string Name, string? FactionId, string? ColorHex, string? DeviceToken,
     Guid? ClaimPlayerId = null);
 
+/// <summary>Declare a combat. <paramref name="PlayerId"/> defaults to whoever is up.</summary>
+public record StartCombatRequest(Guid OpponentId, Guid? PlayerId = null);
+
+/// <summary>Archive a finished match: keep the summary, drop the rest. <paramref name="Reset"/> keeps the
+/// session as a fresh setup with the same table; otherwise it is deleted.</summary>
+public record ArchiveSessionRequest(bool Reset);
+
 public record UpdateSessionRequest(
     string? Name, Language? Language, Expansion? ActiveExpansions,
     bool? ShowTechOverview, bool? AllowEditAllPlayers,
     GamePhase? Phase, int? CurrentRound, Guid? SpeakerPlayerId,
-    bool? AgendaVotesHidden = null);
+    bool? AgendaVotesHidden = null,
+    /// <summary>Per-player time budget per round in seconds; 0 turns the turn timer off.</summary>
+    int? TurnTimerSeconds = null,
+    /// <summary>Strategy cards per player: 0 = automatic, 1 or 2 to pin it.</summary>
+    int? StrategyCardsPerPlayer = null,
+    /// <summary>Which Red Tape variant to play (None turns it off).</summary>
+    RedTapeVariant? RedTapeVariant = null,
+    /// <summary>Which strategy card carries the Red Tape ability: 2 (Diplomacy) or 8 (Imperial).</summary>
+    int? RedTapeCardNumber = null,
+    /// <summary>Offer a technology entry after the Technology strategy action.</summary>
+    bool? PromptTechOnAction = null,
+    /// <summary>Follow who is taking a strategy card's secondary ability. Only has an effect while the turn
+    /// timer is on, which is also the only time the option is offered.</summary>
+    bool? TrackSecondaryAbilities = null,
+    /// <summary>Show the join QR code on the wall display (shared state — the wall is shared).</summary>
+    bool? ShowJoinQr = null);
+
+/// <summary>Red Tape variant: take the marker off an objective (or put it back).
+/// <para>
+/// <paramref name="Override"/> removes it despite one of the variant's TIMING rules (host only, and the UI
+/// only sends it once a dialog was confirmed). A purged objective is never overridable — that is not a lock.
+/// </para></summary>
+public record SetObjectiveMarkerRequest(bool Removed, bool Override = false);
+
+/// <summary>Answer one of Red Tape Lite's two questions (purge / random removal): yes or no. Both actions are
+/// irreversible and change who can still win, so the app proposes and the table decides.</summary>
+public record RedTapeAnswerRequest(bool Confirm);
+
+// The per-player technology picker (and its request record) is gone: recording is a table-wide prompt after
+// the action now, so the two routes for it carry no body at all.
+
+/// <summary>Seat order as one list, in table order. Assigning it in a single call keeps the order
+/// consistent — reordering player by player would leave duplicate seats visible in between.</summary>
+public record SetSeatOrderRequest(IReadOnlyList<Guid> PlayerIds);
+
+/// <summary>Status phase: this player is done scoring (or wants their turn back).</summary>
+public record SetStatusDoneRequest(bool Done);
+
+/// <summary>Status phase: tick one of the shared post-scoring steps off (or back on).</summary>
+public record SetStatusStepRequest(StatusStep Step, bool Done);
+
+/// <summary>Move the status phase to a stage. Absolute, not "next": a double tap must not skip a stage.</summary>
+public record SetStatusStageRequest(StatusStage Stage);
+
+/// <summary>Which instance is answering. A non-empty <paramref name="Label"/> is shown as a permanent
+/// badge on every screen — set on the staging instance so a test game is never mistaken for a real one.
+/// Comes from configuration (<c>Ti4:InstanceLabel</c>), not from the hostname: the label has to survive a
+/// LAN address, a renamed subdomain and a second staging box.</summary>
+public record InstanceDto(string Label);
+
+/// <summary>How busy the instance is, for the start page. Counts only — never anything that could identify a
+/// session or a player. <paramref name="Active"/> is "last activity within the hour"; the page shows the
+/// number, not the rule.</summary>
+public record ActivityDto(int Last24h, int Active);
+
+/// <summary>A browser's Web Push subscription, exactly as `PushManager.subscribe()` hands it over.
+/// <paramref name="Endpoint"/> is the push service URL and identifies the browser.</summary>
+public record PushSubscribeRequest(string Endpoint, string P256dh, string Auth);
+
+/// <summary>The VAPID public key a browser needs to subscribe. Empty when push is not configured, which is
+/// the client's signal to hide the feature entirely.</summary>
+public record PushKeyDto(string PublicKey);
 
 public record SetDisplayModeRequest(DisplayMode Mode);
 
@@ -250,6 +407,9 @@ public record SetActiveStrategyCardRequest(int? StrategyCardId);
 
 public record SetActivePlayerRequest(Guid? PlayerId);
 
+/// <summary>Politics: appoint this player as the new speaker.</summary>
+public record SetSpeakerRequest(Guid PlayerId);
+
 public record SetPassedRequest(bool Passed);
 
 public record RevealObjectiveRequest(string ObjectiveId);
@@ -258,7 +418,9 @@ public record ScoreObjectiveRequest(Guid PlayerId);
 
 public record AddTechnologyRequest(string TechnologyId);
 
-public record SetAgendaRequest(string? AgendaId);
+/// <summary>Reveal an agenda, start a FREE vote, or clear both. Exactly one of <paramref name="AgendaId"/>
+/// and <paramref name="CustomTitle"/> is meaningful; both null means "next agenda" (spends locked votes).</summary>
+public record SetAgendaRequest(string? AgendaId, string? CustomTitle = null, ElectType? CustomElect = null);
 
 /// <summary>A player's available influence for the agenda phase (entered before voting starts). Not a
 /// cap on votes — action cards/abilities can exceed it; it's tracked only for display and the
@@ -272,3 +434,7 @@ public record StartVotingRequest(bool Hidden);
 /// transmitted on lock, so in a face-down vote nobody — not even the host — sees it beforehand.
 /// Used for both open and hidden voting (a vote counts only once locked).</summary>
 public record LockVoteRequest(Guid PlayerId, VoteOutcome Outcome, int Votes, string? Choice);
+
+/// <summary>Who takes the secondary of the strategy action that is running. The request carries the WHOLE
+/// set, not a single toggle, so there is never an intermediate state the table could misread.</summary>
+public record SetSecondaryPlayersRequest(IReadOnlyList<Guid>? PlayerIds);

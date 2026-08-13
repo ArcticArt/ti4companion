@@ -11,15 +11,19 @@
 
 <div class="panel" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
     <h3 style="margin:0;flex:1 1 140px;">@Loc["tech.title"]</h3>
-    @if (host)
-    {
-        <span class="faint">@Loc["tech.addFor"]:</span>
-        <select @bind="addFor">
-            @foreach (var p in s.Players.OrderBy(p => p.SeatOrder)) { <option value="@p.Id">@p.Name</option> }
-        </select>
-    }
     <input type="text" @bind="search" @bind:event="oninput" placeholder="@Loc["tech.search"]" style="flex:1 1 180px;max-width:300px;" />
 </div>
+
+@* Who the tech is being recorded for. Buttons rather than a dropdown: the symbol and the colour are how
+   the table recognises a player, and there are never more than eight. *@
+@if (host)
+{
+    <div class="panel" style="margin-top:.6rem;">
+        <span class="faint" style="display:block;margin-bottom:.35rem;">@Loc["tech.addFor"]:</span>
+        <PlayerPicker Players="s.Players.OrderBy(p => p.SeatOrder)" SelectedIds="new[] { addFor }"
+                      OnPick="id => addFor = id" />
+    </div>
+}
 
 @* Card-based picker: pick a colour (or Unit), then the tech. *@
 <div class="panel" style="margin-top:1rem;">
@@ -79,7 +83,7 @@
                         <TechIcon Color="t.Color" Size="16" />
                         @Loc.Pick(t.Name, t.NameDe)
                         @if (t.FactionId is not null) { <span class="faint" title="@Loc["tech.faction"]">★</span> }
-                        <span class="x" @onclick="() => RemoveTech(targetPlayer.Id, t.Id)">✕</span>
+                        <span class="x" @onclick="() => RemoveTech(targetPlayer.Id, t.Id)"><MaterialIcon Name="close" /></span>
                     </span>
                 }
             </div>

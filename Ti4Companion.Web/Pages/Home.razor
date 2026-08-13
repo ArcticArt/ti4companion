@@ -2,32 +2,94 @@
 @page "/join/{Code}"
 @inherits Ti4ComponentBase
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@using System.Globalization
 
 <PageTitle>Twilight Imperium Companion</PageTitle>
 
+@* The senate chamber behind everything (see SenateBackdrop). On EVERY view of the start page — restricting it
+   to the landing view meant the background simply vanished when you opened "create session" — and off
+   entirely when this device has said so (Store.SenateEnabled, remembered). *@
+@if (Store.SenateEnabled)
+{
+    <SenateBackdrop />
+}
+
 <div class="container home-view">
+    @* The application's own name, above the form — it used to be a small link in the app bar, which is not
+       where a landing page introduces itself. *@
+    <h1 class="app-title">@Loc["app.title"]</h1>
+
     @if (view == View.Landing)
     {
-        <div class="panel" style="text-align:center;">
-            <h2>@Loc["home.welcome"]</h2>
-            <div class="row-wrap" style="justify-content:center;margin-top:1rem;">
-                <button class="btn btn-primary" style="min-width:200px;" @onclick="() => view = View.Create">@Loc["home.createSession"]</button>
-                <button class="btn btn-gold" style="min-width:200px;" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
-            </div>
-            @if (lastCode is not null)
-            {
-                <div style="margin-top:1.2rem;">
-                    <button class="btn btn-ghost" @onclick="ResumeLast">
-                        @Loc["home.resume"] · <span class="codechip" style="font-size:.9rem;">@lastCode</span>
-                    </button>
+        <div class="panel home-panel" style="text-align:center;">
+            @* Heading and choices are one stack of equally sized rows — the heading is the label of the menu,
+               not a title above it. See `.home-choice`. *@
+            <div class="home-choice">
+                <h2>@Loc["home.welcome"]</h2>
+                <button class="btn btn-primary" @onclick="() => view = View.Create">@Loc["home.createSession"]</button>
+                @* Join, with the camera beside it where there is one to use. The pair keeps the row exactly as
+                   wide as the others — the stack reading as one menu is the point of `.home-choice`. *@
+                <div class="home-join-row">
+                    <button class="btn btn-gold" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
+                    @if (canScan)
+                    {
+                        <button class="btn btn-gold home-scan" title='@Loc["scan.title"]' aria-label='@Loc["scan.title"]'
+                                @onclick="() => scanning = true">
+                            <MaterialIcon Name="photo_camera" SizeCss="1.5em" />
+                        </button>
+                    }
                 </div>
+                @* A fixed third entry, shown even with nothing to resume: the menu should not change shape
+                   between devices, and the list says for itself when it is empty. *@
+                <button class="btn" @onclick="() => view = View.Recent">@Loc["home.recent"]</button>
+            </div>
+            @* The backdrop switch. Deliberately BELOW the stack and small: it is a setting about the page, not
+               one of the ways into a game, and the four rows above should stay the choice. *@
+            <button class="btn btn-ghost btn-sm home-senate-toggle"
+                    @onclick="() => Store.SetSenateAsync(!Store.SenateEnabled)">
+                @Loc[Store.SenateEnabled ? "home.senateOff" : "home.senateOn"]
+            </button>
+        </div>
+    }
+    else if (view == View.Recent)
+    {
+        @* The sessions this DEVICE has played, newest first. Each row remembers which seat was ours there, so
+           picking one up puts you back in your own player rather than joining as a stranger. *@
+        <div class="panel home-form">
+            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing"><MaterialIcon Name="chevron_left" /> @Loc["home.back"]</button>
+            <h2 style="margin-top:.5rem;">@Loc["home.recentTitle"]</h2>
+            @if (recent.Count == 0)
+            {
+                <p class="faint">@Loc["home.recentNone"]</p>
             }
+            <div class="join-players">
+                @foreach (var r in recent)
+                {
+                    var seated = r.PlayerId != Guid.Empty;
+                    <button class="join-player" disabled="@busy" @onclick="() => Resume(r)">
+                        <span class="rs-name">@(string.IsNullOrWhiteSpace(r.Name) ? Loc["home.recentUnnamed"] : r.Name)</span>
+                        <span class="codechip">@r.Code</span>
+                        @if (seated && !string.IsNullOrWhiteSpace(r.PlayerName))
+                        {
+                            <span class="chip">@Loc["home.recentAs"] @r.PlayerName</span>
+                        }
+                        else if (!seated)
+                        {
+                            @* No seat here any more — gave it up, or somebody took it over. Say so, because
+                               the row then leads to the "who are you" step instead of straight into the game. *@
+                            <span class="chip">@Loc["home.recentPick"]</span>
+                        }
+                        <span class="rs-when" title='@Loc["home.recentWhenHint"]'>@When(r.Created == default ? r.LastSeen : r.Created)</span>
+                    </button>
+                }
+            </div>
         </div>
     }
     else if (view == View.Create)
     {
-        <div class="panel" style="max-width:480px;margin:0 auto;">
-            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing">◂ @Loc["home.back"]</button>
+        <div class="panel home-form">
+            <button class="btn btn-ghost btn-sm" @onclick="() => view = View.Landing"><MaterialIcon Name="chevron_left" /> @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.createSession"]</h2>
             <div class="field">
                 <label>@Loc["home.sessionName"]</label>
@@ -37,31 +99,31 @@
                 <label>@Loc["home.yourName"]</label>
                 <input type="text" @bind="hostName" placeholder="@NamePlaceholder" />
             </div>
-            <div class="field">
-                <label>@Loc["home.expansions"]</label>
-                <div class="row-wrap">
-                    <label class="badge"><input type="checkbox" checked disabled /> &nbsp;@Loc["exp.Base"]</label>
-                    <label class="badge"><input type="checkbox" @bind="pok" /> &nbsp;@Loc["exp.ProphecyOfKings"]</label>
-                    <label class="badge"><input type="checkbox" @bind="codex" /> &nbsp;@Loc["exp.Codex"]</label>
-                    <label class="badge"><input type="checkbox" @bind="te" /> &nbsp;@Loc["exp.ThundersEdge"]</label>
-                </div>
-            </div>
+            @* No expansion picker here: it is the first thing the setup asks, and asking twice meant the
+               start page could disagree with the session it just created. *@
             <button class="btn btn-primary btn-block" @onclick="Create" disabled="@busy">@Loc["home.create.button"]</button>
         </div>
     }
     else
     {
-        <div class="panel" style="max-width:480px;margin:0 auto;">
-            <button class="btn btn-ghost btn-sm" @onclick="BackToLanding">◂ @Loc["home.back"]</button>
+        <div class="panel home-form">
+            <button class="btn btn-ghost btn-sm" @onclick="BackToLanding"><MaterialIcon Name="chevron_left" /> @Loc["home.back"]</button>
             <h2 style="margin-top:.5rem;">@Loc["home.joinSession"]</h2>
             <div class="field">
                 <label>@Loc["home.joinCode"]</label>
                 <input type="text" @bind="joinCode" @bind:event="oninput" placeholder="ABCDE" style="text-transform:uppercase;letter-spacing:.2em;" />
             </div>
-            @* Join as a player, or open this code on a wall/beamer as the shared display. *@
-            <div class="row-wrap" style="gap:.4rem;margin:.2rem 0 .8rem;">
-                <button class="btn btn-sm @(joinAs == JoinMode.Player ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Player)">@Loc["home.asPlayer"]</button>
-                <button class="btn btn-sm @(joinAs == JoinMode.Display ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Display)">@Loc["home.asDisplay"]</button>
+            @* Join as a player, or open this code on a wall/beamer as the shared display. Two big targets with
+               an icon each: this is the one choice on the page that decides what the device becomes. *@
+            <div class="join-mode">
+                <button class="btn @(joinAs == JoinMode.Player ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Player)">
+                    <MaterialIcon Name="person" SizeCss="1.9em" />
+                    <span>@Loc["home.asPlayer"]</span>
+                </button>
+                <button class="btn @(joinAs == JoinMode.Display ? "btn-gold" : "")" @onclick="() => SetJoinAs(JoinMode.Display)">
+                    <MaterialIcon Name="tv" SizeCss="1.9em" />
+                    <span>@Loc["home.asDisplay"]</span>
+                </button>
             </div>
             @if (joinAs == JoinMode.Player)
             {
@@ -77,11 +139,14 @@
                     <div class="join-players">
                         @foreach (var jp in peek.Players.OrderBy(x => x.SeatOrder))
                         {
-                            <button class="join-player" disabled="@(jp.IsHost || busy)" @onclick="() => Claim(jp.Id)">
+                            @* The host's seat is claimable too — a host whose browser lost its storage, or who
+                               wants to carry on from another device, would otherwise leave the table with
+                               nobody able to steer the phases. *@
+                            <button class="join-player" disabled="@busy" @onclick="() => Claim(jp.Id)">
                                 <FactionBadge Faction="Store.Faction(jp.FactionId)" Ring="@jp.ColorHex" />
                                 <span class="jp-name">@jp.Name</span>
                                 @if (jp.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
-                                else { <span class="chip">@Loc["join.takeOver"]</span> }
+                                <span class="chip">@Loc[jp.IsHost ? "join.takeOverHost" : "join.takeOver"]</span>
                             </button>
                         }
                     </div>
@@ -111,13 +176,26 @@
             {
                 <p style="color:var(--danger);margin-top:.6rem;">@error</p>
             }
-            @if (lastCode is not null)
-            {
-                <hr style="border-color:var(--panel-border);margin:1rem 0;" />
-                <button class="btn btn-ghost btn-block" @onclick="ResumeLast">
-                    @Loc["home.resume"] · <span class="codechip" style="font-size:.9rem;">@lastCode</span>
-                </button>
-            }
+        </div>
+    }
+
+    @* Scanning a wall QR from INSIDE the app — the only way that keeps an installed iPhone app from being
+       thrown out into Safari. Rendered at the page level so the camera fills the screen, not the panel. *@
+    <QrScanModal Open="scanning" OnCode="Scanned" OnClose="() => scanning = false" />
+
+    @* How busy it is tonight: a notice about the instance between the form and the footer, never a field
+       inside the form. Counts only, see ActivityDto; absent when the server didn't answer. *@
+    @if (activity is { } act)
+    {
+        <div class="activity">
+            <div class="activity-item">
+                <span class="activity-num">@act.Active</span>
+                <span class="activity-lbl">@Loc["home.activeNow"]</span>
+            </div>
+            <div class="activity-item">
+                <span class="activity-num">@act.Last24h</span>
+                <span class="activity-lbl">@Loc["home.active24h"]</span>
+            </div>
         </div>
     }
 </div>
@@ -125,7 +203,7 @@
 @code {
     [Parameter] public string? Code { get; set; }
 
-    private enum View { Landing, Create, Join }
+    private enum View { Landing, Create, Join, Recent }
     private View view = View.Landing;
     private enum JoinMode { Player, Display }
     private JoinMode joinAs = JoinMode.Player;
@@ -134,38 +212,88 @@
     private string hostName = "";
     private string joinCode = "";
     private string joinName = "";
-    private bool pok = true, codex = true, te = true;
     private bool busy;
     private string? error;
-    private string? lastCode;
     private SessionStateDto? peek;   // the loaded session whose players you choose an identity from
+    private ActivityDto? activity;   // counts for the landing view; null = the server didn't say
+    private List<RecentSession> recent = new();   // sessions this device can pick up again
+    private bool canScan;            // this device has a camera we may use (see ti4.qr.available)
+    private bool scanning;
 
     private string NamePlaceholder => Loc["players.you"];
+
+    /// <summary>When the session was STARTED, in this device's local time — the date a group recognises a
+    /// game night by. (It used to show this device's last visit, which says more about the phone than about
+    /// the game.) Formatted with an explicit pattern per language and
+    /// <see cref="CultureInfo.InvariantCulture"/> — the browser's culture decides what `d` means, and a WASM
+    /// app can be running under any of them (the same reason numbers going into CSS are formatted invariant).</summary>
+    private string When(DateTimeOffset ts)
+    {
+        var local = ts.ToLocalTime();
+        var pattern = Loc.Lang == Language.De ? "dd.MM.yyyy, HH:mm" : "yyyy-MM-dd, HH:mm";
+        return local.ToString(pattern, CultureInfo.InvariantCulture);
+    }
 
     protected override async Task OnInitializedAsync()
     {
         await Store.InitAsync();
-        lastCode = await Store.GetLastCodeAsync();
-        // Arrived via an invite link (/join/{code}) → jump straight to the pre-filled join form.
-        if (!string.IsNullOrWhiteSpace(Code))
-        {
-            joinCode = Code.Trim().ToUpperInvariant();
-            view = View.Join;
-        }
+        recent = await Store.RecentAsync();
+        activity = await Store.Api.GetActivityAsync();
     }
 
-    private Expansion SelectedExpansions =>
-        Expansion.Base
-        | (pok ? Expansion.ProphecyOfKings : 0)
-        | (codex ? Expansion.Codex : 0)
-        | (te ? Expansion.ThundersEdge : 0);
+    /// <summary>
+    /// Is there a camera worth offering? Asked once, and asked HERE: JS interop belongs after the first
+    /// render.
+    /// <para>
+    /// ⚠️ It used to be asked in <c>OnInitializedAsync</c>, and the value never reached the screen — the
+    /// field was set (proven by logging it) while the menu kept rendering without the button until something
+    /// else forced a redraw. Hence the explicit <c>StateHasChanged</c> as well: a value fetched outside the
+    /// render loop has to say so.
+    /// </para></summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        bool ok;
+        try { ok = await JS.InvokeAsync<bool>("ti4.qr.available"); } catch { ok = false; }
+        if (ok == canScan) return;
+        canScan = ok;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Arrived with a code: an invite link, the redirect after this device's seat was taken over, or the
+    /// scanner. The code is known either way, so go straight to the list of players rather than asking for a
+    /// "continue" first.
+    /// <para>
+    /// ⚠️ This belongs in <c>OnParametersSet</c>, not in <c>OnInitialized</c>. Scanning navigates <c>/</c> →
+    /// <c>/join/CODE</c>, which is the SAME component: Blazor reuses the instance and never initialises it
+    /// again, so the URL changed and the view did not — the camera closed and nothing else happened. (My own
+    /// check asserted on <c>location.href</c> and therefore passed. It proved the navigation, not the join.)
+    /// </para></summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        var code = (Code ?? "").Trim().ToUpperInvariant();
+        if (code.Length == 0 || code == handledCode) return;
+        handledCode = code;
+        joinCode = code;
+        joinAs = JoinMode.Player;
+        view = View.Join;
+        peek = null;
+        await LoadIdentities();
+    }
+
+    /// <summary>The code this component has already opened the player list for, so a re-render doesn't
+    /// re-fetch it.</summary>
+    private string? handledCode;
 
     private async Task Create()
     {
         busy = true; error = null;
         try
         {
-            var req = new CreateSessionRequest(sessionName, Loc.Lang, SelectedExpansions,
+            // Null = "all of them", which the server turns into every expansion | Base. The table narrows it
+            // down in the first setup step; a fresh session showing everything is the friendlier default.
+            var req = new CreateSessionRequest(sessionName, Loc.Lang, null,
                 string.IsNullOrWhiteSpace(hostName) ? "Host" : hostName, null, null, null);
             var s = await Store.CreateAsync(req);
             if (s is not null) Nav.NavigateTo($"/s/{s.JoinCode}");
@@ -218,8 +346,42 @@
         finally { busy = false; }
     }
 
+    /// <summary>
+    /// A code was read off the wall: go to the join step for it, which is where the invite link lands too, so
+    /// the only question left is "who are you".
+    /// <para>
+    /// ⚠️ The work is done HERE rather than left to the router. Going through <c>NavigateTo</c> alone has a
+    /// trap: after a scan the address already IS <c>/join/CODE</c>, and pressing "back" only changes the
+    /// view, not the URL — so scanning the same code again navigated to where the browser already was,
+    /// which changes nothing at all. Reported as "the second scan doesn't join". The navigation is still
+    /// issued, but only to keep the address honest for a reload or a share.
+    /// </para></summary>
+    private async Task Scanned(string code)
+    {
+        scanning = false;
+        handledCode = code;          // the navigation below must not redo this
+        joinCode = code;
+        joinAs = JoinMode.Player;
+        view = View.Join;
+        peek = null;
+        error = null;
+        Nav.NavigateTo($"/join/{code}");
+        await LoadIdentities();
+    }
+
     private void SetJoinAs(JoinMode m) { joinAs = m; peek = null; error = null; }
-    private void BackToLanding() { view = View.Landing; peek = null; error = null; }
+
+    // Back to the menu — and the ADDRESS follows the view. Leaving it at /join/CODE meant a reload landed
+    // somewhere the user had just left, and it left `handledCode` standing so the same code could not be
+    // scanned a second time.
+    private void BackToLanding()
+    {
+        view = View.Landing;
+        peek = null;
+        error = null;
+        handledCode = null;
+        if (!string.IsNullOrWhiteSpace(Code)) Nav.NavigateTo("/");
+    }
 
     // Open the entered code on this device as the shared wall display (no player join).
     private void OpenDisplay()
@@ -229,8 +391,11 @@
         Nav.NavigateTo($"/display/{code}");
     }
 
-    private void ResumeLast()
-    {
-        if (lastCode is not null) Nav.NavigateTo($"/s/{lastCode}");
-    }
+    // Pick a remembered session back up. Nothing to send: the session page connects by code and the SERVER
+    // says which seat this device holds (see SessionStore.AdoptSeatAsync). A code that no longer exists drops
+    // itself from the list on the way in.
+    // An entry whose seat is gone — given up, or taken over by somebody else — goes to the join step instead,
+    // where a player can be chosen. Opening the session itself would land on a table we are not sitting at.
+    private void Resume(RecentSession r)
+        => Nav.NavigateTo(r.PlayerId == Guid.Empty ? $"/join/{r.Code}" : $"/s/{r.Code}");
 }

@@ -1,0 +1,333 @@
+@inherits Ti4ComponentBase
+
+@*
+    "Record what you researched" — the whole table at once, after a Technology action.
+
+    It replaced a band in the action view with a button on it. That band appeared while the action was still
+    being played, which was too early for everyone except the player holding the card: the players taking the
+    secondary research as well, and they are not done until the secondary round is. So the prompt is raised
+    when THAT round closes (server-side, see RaiseTechPrompt) and every device shows it.
+
+    THE CLOCK STANDS STILL while it is open — the prompt is a logged interval like a combat, subtracted from
+    time on turn. Which is also why a player leaves it by telling the server so, rather than by dismissing it
+    locally: a device that just hid the popup would leave the table's clock stopped.
+
+    TWO SHAPES, one for each side of the table (2026-08-12, on request):
+      * the HOST sees the whole table as a LIST — the same shape as entering influence in the agenda phase —
+        with a "record" button per seat, and one button under it that moves the game on.
+      * everybody else sees the description and two buttons for their own seat: record, or skip.
+    Both open the SAME picker (the layer below), which stages its changes and applies them on "confirm" —
+    so "cancel" really is cancel. The row then says how many technologies that player has gained since the
+    prompt opened, which is a per-device baseline (`baseline`): it needs no server field, and it counts
+    whatever device actually entered them.
+*@
+@{
+    var sess = Store.Session;
+    if (sess is null || !sess.TechPromptOpen) { baseline = null; }
+    else baseline ??= sess.Players.ToDictionary(p => p.Id, p => p.TechnologyIds.Count);
+}
+@if (Visible && Store.Session is { } s)
+{
+    var host = Store.IsHost;
+    var owner = Store.PlayerById(s.TechPromptOwnerId);
+    var mine = Store.MyPlayerId;
+
+    <div class="modal-backdrop centered blurred">
+        <div class="modal techprompt-modal">
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["tech.promptTitle"]</h3>
+                @if (owner is not null)
+                {
+                    <span class="faint">@string.Format(Loc["secondary.playedBy"], owner.Name)</span>
+                }
+                @* Say it, or a stopped clock looks like the timer is broken. *@
+                @if (Store.TurnTimerEnabled)
+                {
+                    <span class="chip chip-done">@Loc["tech.promptClockStopped"]</span>
+                }
+            </div>
+            <div class="modal-body">
+                <p class="faint" style="margin:0 0 .6rem;">@Loc[host ? "tech.promptHintHost" : "tech.promptHint"]</p>
+
+                @if (host)
+                {
+                    @* The whole table, one row each — the host fills in for anyone who is not holding their
+                       own phone, and sees at a glance who has answered. *@
+                    <div class="tp-rows">
+                        @foreach (var p in s.Players.OrderBy(p => p.SeatOrder))
+                        {
+                            var pid = p.Id;
+                            var got = Recorded(p);
+                            <div class="player-card tp-row" style="--player-color:@p.ColorHex">
+                                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+                                <span class="tp-row-name">@p.Name</span>
+                                @if (got > 0)
+                                {
+                                    <span class="chip chip-done tp-count">@string.Format(Loc["tech.promptRecorded"], got)</span>
+                                }
+                                else if (!p.TechPromptPending)
+                                {
+                                    <span class="chip">@Loc["tech.promptSkipped"]</span>
+                                }
+                                <div class="spacer" style="flex:1"></div>
+                                <button class="btn @(got > 0 ? "" : "btn-gold")" @onclick="() => OpenPicker(pid)">
+                                    @Loc[got > 0 ? "tech.promptChange" : "tech.promptRecord"]
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                @if (host)
+                {
+                    @* The only other button, deliberately: the prompt sits between two turns, so the thing
+                       that follows it is the next player's turn. It ends the prompt for the whole table (and
+                       restarts the clock) — it does NOT advance the turn, which already happened when the
+                       secondary round opened. *@
+                    <div class="spacer" style="flex:1"></div>
+                    <button class="btn btn-gold" @onclick="CloseForAll">@Loc["tech.promptNextTurn"] <MaterialIcon Name="chevron_right" /></button>
+                }
+                else if (mine is Guid me)
+                {
+                    var self = Store.PlayerById(me);
+                    var gotMine = self is null ? 0 : Recorded(self);
+                    <button class="btn btn-gold" @onclick="() => OpenPicker(me)">
+                        @Loc[gotMine > 0 ? "tech.promptChange" : "tech.promptRecord"]
+                        @if (gotMine > 0) { <span class="chip chip-done">@gotMine</span> }
+                    </button>
+                    <div class="spacer" style="flex:1"></div>
+                    <button class="btn" @onclick="() => Skip(me)">@Loc["tech.promptSkip"]</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* --- the picker, on top of the list --------------------------------------------------------------- *@
+    @if (pickFor is Guid target && Store.PlayerById(target) is { } tp)
+    {
+        var owned = Owned(tp);
+        <div class="modal-backdrop centered blurred tp-picker-layer">
+            <div class="modal techpick-modal">
+                <div class="modal-head">
+                    <FactionBadge Faction="Store.Faction(tp.FactionId)" Size="1.8" Ring="@tp.ColorHex" />
+                    <h3 style="margin:0;">@string.Format(Loc["tech.promptRecordFor"], tp.Name)</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="row-wrap" style="gap:.5rem;align-items:center;">
+                        <input type="text" @bind="search" @bind:event="oninput" placeholder="@Loc["tech.search"]" style="flex:1 1 180px;" />
+                        <label class="opt-check">
+                            <input type="checkbox" @bind="allFactions" />
+                            <span class="oc-box"></span>
+                            <span>@Loc["tech.allFactions"]</span>
+                        </label>
+                    </div>
+                    <div class="color-picker" style="margin-top:.5rem;">
+                        @foreach (var c in Colors)
+                        {
+                            var col = c;
+                            <button class="color-btn @(selColor == c ? "sel" : "")" style="--cc:@TechHex(c)" @onclick="() => Toggle(col)">
+                                <TechIcon Color="c" Size="22" /> @Loc[$"color.{c}"]
+                            </button>
+                        }
+                    </div>
+
+                    @if (selColor is null && string.IsNullOrWhiteSpace(search))
+                    {
+                        <p class="faint" style="margin:.7rem 0 0;">@Loc["tech.pickHint"]</p>
+                    }
+                    else
+                    {
+                        var list = Catalog(tp);
+                        @if (list.Count == 0)
+                        {
+                            <p class="faint" style="margin:.7rem 0 0;">@Loc["tech.noneFound"]</p>
+                        }
+                        else
+                        {
+                            <div class="tech-cat" style="margin-top:.6rem;">
+                                @foreach (var t in list)
+                                {
+                                    var tech = t;
+                                    <TechCard Tech="t" OnClick="() => Stage(tech.Id)" />
+                                }
+                            </div>
+                        }
+                    }
+
+                    @* Everything this player holds, collected at the foot — the same list as the Technologies
+                       tab, so what was just picked lands somewhere visible. Staged changes only: nothing has
+                       been sent yet, which is what makes "cancel" mean cancel. *@
+                    <div class="tp-owned">
+                        <span class="faint" style="font-size:.78rem;">@string.Format(Loc["tech.pickOwned"], owned.Count)</span>
+                        @if (owned.Count == 0)
+                        {
+                            <p class="faint" style="font-size:.82rem;margin:.3rem 0 0;">@Loc["tech.none"]</p>
+                        }
+                        else
+                        {
+                            <div class="my-techs" style="margin-top:.35rem;">
+                                @foreach (var t in owned.OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length))
+                                {
+                                    var tech = t;
+                                    <span class="my-tech @(staged.Contains(t.Id) ? "is-new" : "")" style="border-color:@TechHex(t.Color)">
+                                        <TechIcon Color="t.Color" Size="16" />
+                                        @Loc.Pick(t.Name, t.NameDe)
+                                        @if (t.FactionId is not null) { <span class="faint" title="@Loc["tech.faction"]">★</span> }
+                                        <span class="x" @onclick="() => Drop(tech.Id)"><MaterialIcon Name="close" /></span>
+                                    </span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" @onclick="ClosePicker">@Loc["common.cancel"]</button>
+                    <div class="spacer" style="flex:1"></div>
+                    <button class="btn btn-gold" disabled="@busy" @onclick="() => Confirm(target)">
+                        @Loc["common.confirm"] <MaterialIcon Name="check" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private static readonly TechColor[] Colors =
+        { TechColor.Biotic, TechColor.Cybernetic, TechColor.Propulsion, TechColor.Warfare, TechColor.Unit };
+
+    private Guid Sid => Store.Session!.Id;
+    private string search = "";
+    private TechColor? selColor;
+    private bool allFactions;
+    private bool busy;
+
+    /// <summary>Whose technologies the picker is open for (null = closed).</summary>
+    private Guid? pickFor;
+
+    /// <summary>Picked in the open picker but not sent yet, and existing ones marked for removal. Staging is
+    /// the whole point of the picker's "cancel": the old version wrote every tap straight to the server, so a
+    /// mis-tapped card had no way back except hunting it down in the Technologies tab.</summary>
+    private readonly List<string> staged = new();
+    private readonly List<string> dropped = new();
+
+    /// <summary>How many technologies each player held when this prompt opened. Per device, like the wall's
+    /// reveal baseline and the status phase's scoring baseline: it decides nothing but what this screen says,
+    /// and it needs no server field — the count moves whichever device enters the technology.</summary>
+    private Dictionary<Guid, int>? baseline;
+
+    /// <summary>Shown while the prompt stands: to the host, who runs the list and ends it, and to any player
+    /// who still owes an answer. Once they have answered it goes away — including for the player who played
+    /// the card, who has nothing left to press. The wall holds no seat, so it never shows it: a projector
+    /// cannot answer a question.</summary>
+    private bool Visible
+    {
+        get
+        {
+            if (Store.Session is not { TechPromptOpen: true } s) return false;
+            if (Store.MyPlayerId is not Guid me) return false;
+            return Store.IsHost || s.Players.Any(p => p.Id == me && p.TechPromptPending);
+        }
+    }
+
+    /// <summary>Technologies this player has gained since the prompt opened. Never negative — a correction
+    /// that removes more than it adds simply reads as "nothing recorded".</summary>
+    private int Recorded(PlayerDto p)
+        => baseline is not null && baseline.TryGetValue(p.Id, out var was)
+            ? Math.Max(0, p.TechnologyIds.Count - was)
+            : 0;
+
+    private void OpenPicker(Guid playerId)
+    {
+        pickFor = playerId;
+        staged.Clear();
+        dropped.Clear();
+        search = "";
+        selColor = null;
+    }
+
+    private void ClosePicker()
+    {
+        pickFor = null;
+        staged.Clear();
+        dropped.Clear();
+    }
+
+    private void Toggle(TechColor c) => selColor = selColor == c ? null : c;
+
+    private void Stage(string techId)
+    {
+        dropped.Remove(techId);
+        if (!staged.Contains(techId)) staged.Add(techId);
+    }
+
+    /// <summary>Take one back out of the foot list: a staged pick just disappears, an existing one is marked
+    /// for removal and goes on "confirm" — corrections belong here too, or the popup would be the one place
+    /// in the app where a wrong entry cannot be fixed.</summary>
+    private void Drop(string techId)
+    {
+        if (staged.Remove(techId)) return;
+        if (!dropped.Contains(techId)) dropped.Add(techId);
+    }
+
+    /// <summary>What the foot list shows: what the player holds, minus what is marked for removal, plus what
+    /// is staged.</summary>
+    private List<TechnologyDto> Owned(PlayerDto p)
+        => p.TechnologyIds.Where(id => !dropped.Contains(id)).Concat(staged)
+            .Distinct()
+            .Select(id => Store.Tech(id)).Where(t => t is not null).Select(t => t!)
+            .ToList();
+
+    /// <summary>Send the staged changes and go back to the list. The player stays "pending" on purpose: they
+    /// can open the picker again and change it for as long as the prompt is up.</summary>
+    private async Task Confirm(Guid playerId)
+    {
+        busy = true;
+        try
+        {
+            foreach (var id in staged) await Store.Api.AddTechnologyAsync(Sid, playerId, id);
+            foreach (var id in dropped) await Store.Api.RemoveTechnologyAsync(Sid, playerId, id);
+            await Store.RefreshAsync();
+        }
+        finally { busy = false; }
+        ClosePicker();
+    }
+
+    /// <summary>"Nothing to enter" (or "that's all") — tells the server this seat is done, which is what takes
+    /// this device's popup away and lets the table's clock start again once everybody has answered.</summary>
+    private Task Skip(Guid playerId) => Store.Mutate(Store.Api.SetTechPromptDoneAsync(Sid, playerId));
+
+    private async Task CloseForAll()
+    {
+        ClosePicker();
+        await Store.Mutate(Store.Api.CloseTechPromptAsync(Sid));
+    }
+
+    /// <summary>Same filter as the Technology tab: this player's own faction techs unless "all faction techs"
+    /// is on (Nekro), never one they already have or have just picked, and only once a colour or a search
+    /// narrows it down — ninety-six cards at once is not a choice.</summary>
+    private List<TechnologyDto> Catalog(PlayerDto target)
+    {
+        var q = search.Trim();
+        var searching = q.Length > 0;
+        return Store.ActiveTechnologies()
+            .Where(t => t.FactionId is null || allFactions || t.FactionId == target.FactionId)
+            .Where(t => !staged.Contains(t.Id) && (!target.TechnologyIds.Contains(t.Id) || dropped.Contains(t.Id)))
+            .Where(t => searching
+                ? (Loc.Pick(t.Name, t.NameDe).Contains(q, StringComparison.OrdinalIgnoreCase)
+                   || Loc.Pick(t.Text, t.TextDe).Contains(q, StringComparison.OrdinalIgnoreCase))
+                : (selColor is not null && t.Color == selColor))
+            .OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ThenBy(t => Loc.Pick(t.Name, t.NameDe))
+            .Take(60).ToList();
+    }
+
+    private static string TechHex(TechColor c) => c switch
+    {
+        TechColor.Biotic => "#4caf50",
+        TechColor.Propulsion => "#4a78d6",
+        TechColor.Cybernetic => "#e0c341",
+        TechColor.Warfare => "#d6534a",
+        _ => "#9aa7c0",
+    };
+}

@@ -3,11 +3,11 @@
 @{
     var s = Store.Session!;
     var current = Store.Agenda(s.CurrentAgendaId);
-    var kind = current is null ? ElectType.ForAgainst : AgendaDisplay.ElectKind(current);
+    var kind = Store.AgendaElectKind;
     var host = Store.IsHost;
     var stage = Store.CurrentAgendaStage;
     var hidden = s.AgendaVotesHidden;
-    var voting = stage is AgendaStage.VotingOpen or AgendaStage.VotingHidden;
+    var voting = stage is AgendaStage.VotingOpen or AgendaStage.VotingHidden or AgendaStage.VotingHiddenTotals;
     // The host may only reveal a face-down vote once every player's vote is locked (so nobody peeks early).
     var allLocked = s.Players.Count > 0 && s.Players.All(p => s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
     // For the host, exactly one row is "open" for entry at a time (their own by default; switched via "Vote").
@@ -41,7 +41,7 @@
             }
             else
             {
-                var cands = AgendaDisplay.Candidates(Store, Loc, current);
+                var cands = AgendaDisplay.Candidates(Store, Loc, kind);
                 <div class="row-wrap" style="gap:.3rem;align-items:center;">
                     @if (cands.Count > 0)
                     {
@@ -97,10 +97,25 @@
     }
 
     @* ===== Agenda selection / card ===== *@
-    @if (current is null)
+    @if (current is null && !Store.CustomVoteActive)
     {
         @if (host)
         {
+            @* Free vote: a headline plus the kind of choice. Deliberately above the agenda search — it is
+               what a table reaches for when it wants to vote on something the game has no card for. *@
+            <div class="panel" style="margin:.6rem 0;">
+                <p class="faint" style="margin:0 0 .35rem;">@Loc["agenda.freeVoteHint"]</p>
+                <input type="text" @bind="freeTitle" @bind:event="oninput" placeholder="@FreeVotePlaceholder" />
+                <div class="row-wrap" style="gap:.3rem;margin-top:.45rem;">
+                    @foreach (var e in FreeVoteKinds)
+                    {
+                        <button class="btn btn-sm @(freeElect == e ? "btn-gold" : "btn-ghost")" @onclick="() => freeElect = e">@Loc[$"elect.{e}"]</button>
+                    }
+                </div>
+                <button class="btn btn-gold" style="margin-top:.5rem;" disabled="@(string.IsNullOrWhiteSpace(freeTitle))"
+                        @onclick="StartFreeVote">@Loc["agenda.freeVoteStart"] <MaterialIcon Name="chevron_right" /></button>
+            </div>
+
             <p class="faint" style="margin:.6rem 0 .3rem;">@Loc["agenda.pick"]</p>
             <input type="text" @bind="search" @bind:event="oninput" placeholder="@SearchPlaceholder" />
             <div class="grid" style="gap:.3rem;margin-top:.6rem;max-height:48vh;overflow:auto;">
@@ -122,13 +137,28 @@
     }
     else
     {
+        @* One card for both: a revealed agenda, or a free vote whose headline the host typed. Everything
+           past the header — influence, open/face-down, locking, totals, the wall — is the same machinery,
+           so the host controls below must NOT be nested in the agenda-only branch. They were, which left a
+           free vote with no way to start, cancel or leave it (reported: stuck in custom mode for good). *@
         <div class="agenda-card">
-            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-                <span class="chip @(current.Type == AgendaType.Law ? "chip-active" : "")">@Loc[current.Type == AgendaType.Law ? "agenda.law" : "agenda.directive"]</span>
-                <h3 style="margin:0;color:var(--gold);">@Loc.Pick(current.Name, current.NameDe)</h3>
-            </div>
-            @if (!string.IsNullOrEmpty(current.Elect)) { <div class="faint" style="margin:.2rem 0;">@Loc["agenda.elect"]: @current.Elect</div> }
-            <p style="margin:.4rem 0;">@Loc.Pick(current.Text, current.TextDe)</p>
+            @if (current is null)
+            {
+                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                    <span class="chip">@Loc["agenda.freeVote"]</span>
+                    <h3 style="margin:0;color:var(--gold);">@s.CustomVoteTitle</h3>
+                </div>
+                <div class="faint" style="margin:.2rem 0;">@Loc[$"elect.{kind}"]</div>
+            }
+            else
+            {
+                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                    <span class="chip @(current.Type == AgendaType.Law ? "chip-active" : "")">@Loc[current.Type == AgendaType.Law ? "agenda.law" : "agenda.directive"]</span>
+                    <h3 style="margin:0;color:var(--gold);">@Loc.Pick(current.Name, current.NameDe)</h3>
+                </div>
+                @if (!string.IsNullOrEmpty(current.Elect)) { <div class="faint" style="margin:.2rem 0;">@Loc["agenda.elect"]: @current.Elect</div> }
+                <p style="margin:.4rem 0;">@Loc.Pick(current.Text, current.TextDe)</p>
+            }
 
             @if (host)
             {
@@ -144,11 +174,19 @@
                         <button class="btn btn-sm btn-danger" @onclick="CancelVote">@Loc[allLocked ? "agenda.repeatVote" : "agenda.cancelVote"]</button>
                         @if (hidden)
                         {
+                            @* Two-step reveal: totals first (no attribution), then the full flip. The
+                               totals button disappears once it has been used. *@
+                            @if (stage == AgendaStage.VotingHidden)
+                            {
+                                <button class="btn btn-sm" disabled="@(!allLocked)" @onclick="RevealTotals">@Loc["agenda.revealTotals"]</button>
+                            }
                             <button class="btn btn-sm btn-gold" disabled="@(!allLocked)" @onclick="RevealVotes">@Loc["agenda.reveal"]</button>
                             @if (!allLocked) { <span class="faint">@Loc["agenda.lockAllFirst"]</span> }
+                            else if (stage == AgendaStage.VotingHiddenTotals) { <span class="faint">@Loc["agenda.totalsShown"]</span> }
                         }
                     }
-                    <button class="btn btn-sm" @onclick="() => Reveal(null)">↻ @Loc["agenda.revealNew"]</button>
+                    @* Back to the picker. For a free vote it is the way OUT of the mode, so it says so. *@
+                    <button class="btn btn-sm" @onclick="() => Reveal(null)"><MaterialIcon Name="refresh" /> @Loc[current is null ? "agenda.freeVoteEnd" : "agenda.revealNew"]</button>
                 </div>
                 @if (hidden && voting) { <p class="faint" style="font-size:.78rem;margin:.4rem 0 0;">@Loc["agenda.hostHint"]</p> }
             }
@@ -234,9 +272,30 @@
     }
 
     private Task Reveal(string? agendaId) { openFor = Guid.Empty; ResetDraft(); return Store.Mutate(Store.Api.SetAgendaAsync(Sid, agendaId)); }
+    // ---- Free vote (no agenda card) ----
+    private string freeTitle = "";
+    private ElectType freeElect = ElectType.ForAgainst;
+    private string FreeVotePlaceholder => Loc["agenda.freeVoteTitle"];
+
+    /// <summary>The kinds worth offering by hand. The planet variants are one entry ("planet") — a table
+    /// voting freely picks a planet, it does not need the trait-restricted flavours an agenda card prints.</summary>
+    private static readonly ElectType[] FreeVoteKinds =
+    {
+        ElectType.ForAgainst, ElectType.Player, ElectType.Planet, ElectType.StrategyCard, ElectType.Law,
+    };
+
+    private async Task StartFreeVote()
+    {
+        openFor = Guid.Empty;
+        ResetDraft();
+        await Store.Mutate(Store.Api.StartFreeVoteAsync(Sid, freeTitle.Trim(), freeElect));
+        freeTitle = "";
+    }
+
     private Task SetInfluence(Guid playerId, int value) => Store.Mutate(Store.Api.SetInfluenceAsync(Sid, playerId, Math.Max(0, value)));
     private async Task StartVote(bool hidden) { openFor = Guid.Empty; ResetDraft(); await Store.Mutate(Store.Api.StartVotingAsync(Sid, hidden)); }
     private async Task CancelVote() { openFor = Guid.Empty; ResetDraft(); await Store.Mutate(Store.Api.CancelVotingAsync(Sid)); }
+    private Task RevealTotals() => Store.Mutate(Store.Api.RevealVoteTotalsAsync(Sid));
     private Task RevealVotes() => Store.Mutate(Store.Api.RevealVotesAsync(Sid));
 
     // ---- Vote draft, committed only on lock ("Festlegen") ----

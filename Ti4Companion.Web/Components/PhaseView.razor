@@ -1,31 +1,30 @@
 @inherits Ti4ComponentBase
+@inject IJSRuntime JS
 
 @{
     var s = Store.Session!;
     var allReady = s.Players.Count > 0 && s.Players.All(p => p.IsReady);
     var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
     var speakerSet = s.SpeakerPlayerId is not null;
-    // Action phase can't begin until everyone has their full strategy-card allotment.
-    var allPicked = s.Players.Count > 0 && s.Players.All(p => p.StrategyCards.Count >= Store.MaxStrategyCards);
+    // Action phase can't begin until everyone has their full strategy-card allotment — or the eight cards
+    // have run out, which is the only way a five-player table playing "two each" ever gets there.
+    var allPicked = Store.StrategyPickDone;
     var host = Store.IsHost;
 }
 
+@* The whole bar is gone during setup (2026-08-12, on request): it had nothing left to say there. The phases
+   have not started, the "start" button lives on the last setup step, and the ready count sits in the setup
+   navigation for the host and above the player list for everyone else (see SetupView). *@
+@if (s.Phase != GamePhase.Setup)
+{
 <div class="panel phase-bar">
-    @* In-game phases as a connected leiste (Setup is intentionally not a segment). During setup the
-       leiste is hidden and the ready count is shown instead. *@
-    @if (s.Phase == GamePhase.Setup)
-    {
-        <div class="phase-ready">@Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong></div>
-    }
-    else
-    {
-        <div class="phase-leiste">
-            @foreach (var ph in new[] { GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda })
-            {
-                <div class="pseg @(s.Phase == ph ? "on" : (int)s.Phase > (int)ph ? "done" : "")">@Loc[$"phase.{ph}"]</div>
-            }
-        </div>
-    }
+    @* In-game phases as a connected leiste (Setup is intentionally not a segment). *@
+    <div class="phase-leiste">
+        @foreach (var ph in new[] { GamePhase.Strategy, GamePhase.Action, GamePhase.Status, GamePhase.Agenda })
+        {
+            <div class="pseg @(s.Phase == ph ? "on" : (int)s.Phase > (int)ph ? "done" : "")">@Loc[$"phase.{ph}"]</div>
+        }
+    </div>
     <div class="spacer" style="flex:1"></div>
     <div class="row-wrap" style="gap:.4rem;align-items:center;">
         @* Phase transitions are reserved for the host. *@
@@ -37,61 +36,36 @@
         {
             switch (s.Phase)
             {
-                case GamePhase.Setup:
-                    @if (!speakerSet) { <span class="faint">@Loc["setup.needSpeaker"]</span> }
-                    <button class="btn btn-gold" disabled="@(!allReady || !speakerSet)" @onclick="() => showSeatConfirm = true">@Loc["turn.startGame"] ▸</button>
-                    break;
                 case GamePhase.Strategy:
                     @if (!allPicked) { <span class="faint">@Loc["strategy.needAllPicks"]</span> }
-                    <button class="btn btn-primary" disabled="@(!allPicked)" @onclick="ToAction">@Loc["turn.toAction"] ▸</button>
+                    <button class="btn btn-primary" disabled="@(!allPicked)" @onclick="ToAction">@Loc["turn.toAction"] <MaterialIcon Name="chevron_right" /></button>
                     break;
                 case GamePhase.Action:
                     <button class="btn btn-gold" disabled="@(!allPassed)" @onclick="EndAction">@Loc["turn.endAction"]</button>
                     break;
                 case GamePhase.Status:
-                    <button class="btn" @onclick="ToAgenda">@Loc["turn.toAgenda"]</button>
-                    <button class="btn btn-gold" @onclick="NextRound">⟳ @Loc["turn.nextRound"]</button>
+                    @* Both ways out of the status phase appear only on its LAST stage. Offered from the start,
+                       they invite leaving before the table has scored and revealed — and the stage strip right
+                       below says the phase has three steps, so a "next round" button next to step 1 is two
+                       controls contradicting each other. Nothing is enforced: the host can still step back and
+                       forth through the stages, and the buttons come back on the last one. *@
+                    @if (s.StatusStage == StatusStage.Checklist)
+                    {
+                        <button class="btn" @onclick="ToAgenda">@Loc["turn.toAgenda"]</button>
+                        <button class="btn btn-gold" @onclick="NextRound"><MaterialIcon Name="refresh" /> @Loc["turn.nextRound"]</button>
+                    }
+                    else
+                    {
+                        <span class="faint">@Loc["status.finishStages"]</span>
+                    }
                     break;
                 case GamePhase.Agenda:
-                    <button class="btn btn-gold" @onclick="NextRound">@Loc["agenda.end"] ▸</button>
+                    <button class="btn btn-gold" @onclick="NextRound">@Loc["agenda.end"] <MaterialIcon Name="chevron_right" /></button>
                     break;
             }
         }
     </div>
 </div>
-
-@* Seat-order confirmation before the game actually starts: shows the order around the table so the
-   host double-checks it. "Change it" just closes the dialog (nothing is started); the order is
-   edited with the ▲▼ arrows in the setup player list. *@
-@if (showSeatConfirm && s.Phase == GamePhase.Setup)
-{
-    <div class="modal-backdrop" @onclick="() => showSeatConfirm = false">
-        <div class="modal seat-confirm" @onclick:stopPropagation>
-            <div class="modal-head">
-                <h3 style="margin:0;">@Loc["setup.confirmSeatTitle"]</h3>
-            </div>
-            <div class="modal-body">
-                <div class="grid" style="gap:.35rem;margin:.6rem 0;">
-                    @{ var seatOrdered = s.Players.OrderBy(p => p.SeatOrder).ToList(); }
-                    @for (var i = 0; i < seatOrdered.Count; i++)
-                    {
-                        var p = seatOrdered[i];
-                        <div class="player-card seat-confirm-row" style="--player-color:@p.ColorHex;">
-                            <span class="seat-no">@(i + 1)</span>
-                            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
-                            <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">@p.Name</strong>
-                            @if (s.SpeakerPlayerId == p.Id) { <SpeakerIcon SizeCss="1.3em" /> }
-                        </div>
-                    }
-                </div>
-                <p class="faint" style="font-size:.78rem;margin:.2rem 0 .8rem;">@Loc["setup.confirmSeatHint"]</p>
-                <div class="row-wrap" style="gap:.5rem;justify-content:flex-end;">
-                    <button class="btn" @onclick="() => showSeatConfirm = false">◂ @Loc["setup.confirmSeatChange"]</button>
-                    <button class="btn btn-gold" @onclick="ConfirmStart">@Loc["setup.confirmSeatOk"] ▸</button>
-                </div>
-            </div>
-        </div>
-    </div>
 }
 
 @switch (s.Phase)
@@ -115,9 +89,9 @@
 
 @code {
     private Guid Sid => Store.Session!.Id;
-    private bool showSeatConfirm;
-    private async Task ConfirmStart() { showSeatConfirm = false; await StartGame(); }
-    private Task StartGame() => Store.Mutate(Store.Api.StartGameAsync(Sid));
+
+    // Starting the game moved to the last setup step (SetupView) together with the seat list, so neither the
+    // button nor the confirmation dialog lives here any more.
     private Task ToAction() => Store.Mutate(Store.Api.StartActionPhaseAsync(Sid));
     private Task EndAction() => Store.Mutate(Store.Api.EndActionPhaseAsync(Sid));
     private Task ToAgenda() => Store.Mutate(Store.Api.StartAgendaPhaseAsync(Sid));

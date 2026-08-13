@@ -1,13 +1,287 @@
 @inherits Ti4ComponentBase
 
+@*
+    Setup, walked through in order: name → variant and options → players → seating and speaker → objectives.
+    It used to be every panel at once, which said nothing about what to do first.
+
+    Only the HOST is stepped. Everyone else always sees the player list, because a joiner has to be able to
+    pick their faction and colour and ready up whenever they arrive — waiting for the host to be on the right
+    step would be absurd. The strip is clickable for the host, so nothing is ever more than one tap away
+    (and a reload, which forgets the step, costs nothing).
+*@
 @{
     var s = Store.Session!;
     var ordered = s.Players.OrderBy(p => p.SeatOrder).ToList();
     var host = Store.IsHost;
+    // Non-hosts only ever see the player step.
+    var step = host ? current : SetupStep.Players;
 }
 
+@if (host)
+{
+    <div class="panel status-stagebar setup-steps">
+        <div class="stage-strip">
+            @foreach (var (st, key) in Steps)
+            {
+                <button class="stage-seg @(step == st ? "on" : step > st ? "done" : "")" @onclick="() => current = st">@Loc[key]</button>
+            }
+        </div>
+        <div class="spacer" style="flex:1"></div>
+        <div class="stage-nav">
+            @if (step > SetupStep.Session)
+            {
+                <button class="btn btn-sm" @onclick="() => current = step - 1"><MaterialIcon Name="chevron_left" /> @Loc["common.back"]</button>
+            }
+            @* Rolling for the speaker belongs to the seating step, but it is an action ON that step, not a
+               row in the list — so it sits with the navigation where the eye already is. *@
+            @if (step == SetupStep.Seating)
+            {
+                <button class="btn btn-sm" @onclick="RollSpeaker" disabled="@(rolling || s.Players.Count == 0)">
+                    <MaterialIcon Name="casino" /> @Loc["setup.randomSpeaker"]
+                </button>
+            }
+            @* The ready count sits between Back and Next, next to the button it gates — on the players step
+               it IS the reason Next is off, and reading it off the phase bar above meant looking somewhere
+               else for the answer. *@
+            @if (step == SetupStep.Players)
+            {
+                <span class="setup-ready @(AllReady ? "ok" : "")">
+                    @Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong>
+                </span>
+            }
+            @if (step < SetupStep.Objectives)
+            {
+                @* Every step that blocks says WHY, as the button's tooltip and (below) as visible text: a
+                   disabled button with no reason is the worst control in an app. *@
+                var reason = NextBlockedReason(step, s);
+                <button class="btn btn-sm btn-gold" disabled="@(reason is not null || rolling)"
+                        title="@(reason is null ? null : Loc[reason])"
+                        @onclick="() => current = step + 1">@Loc["status.next"] <MaterialIcon Name="chevron_right" /></button>
+            }
+            else
+            {
+                @* The one and only "start": you cannot get here without having passed seating and objectives,
+                   which is what the old seat-order confirmation dialog was standing in for. *@
+                <button class="btn btn-sm btn-gold" disabled="@(!AllReady)" title="@(AllReady ? null : Loc["setup.needReady"])"
+                        @onclick="StartGame">@Loc["turn.startGame"] <MaterialIcon Name="chevron_right" /></button>
+            }
+        </div>
+    </div>
+    @* The same reason as visible text, not only as a tooltip — a tooltip does not exist on a touch device,
+       which is what the table is holding. *@
+    @if (NextBlockedReason(step, s) is { } blockedReason)
+    {
+        <p class="faint" style="margin:.4rem 0 0;font-size:.8rem;">@Loc[blockedReason]</p>
+    }
+}
+
+@* ---- Step 1: what is this game called, what is in it, and how does the table play it ----
+     Name, expansions and options were three steps' worth of one decision ("what game is this"), so they
+     share a page. The options themselves are a two-column grid so every control lines up under the next
+     (see `.game-option`) instead of each starting wherever its own label happened to end. *@
+@if (step == SetupStep.Session)
+{
+    <div class="panel" style="margin-top:.6rem;">
+        <h3 style="margin:0 0 .2rem;">@Loc["setup.step.session"]</h3>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.sessionStepHint"]</p>
+
+        <div class="game-option">
+            <label for="sessionName">@Loc["home.sessionName"]</label>
+            <input id="sessionName" type="text" value="@s.Name" @onchange="SetName" placeholder="@NamePlaceholder" />
+            <span class="faint go-hint">@Loc["setup.nameHint"]</span>
+        </div>
+
+        @* Which game this is. Only one answer works today; Twilight's Fall is a different game mode (its own
+           factions, leaders and cards, all deliberately excluded from the content DB) and is shown so the
+           question is visibly asked rather than silently assumed. *@
+        <div class="game-option">
+            <label>@Loc["setup.gameVariant"]</label>
+            <div class="go-checks">
+                <label class="opt-check">
+                    <input type="radio" name="gameVariant" checked disabled />
+                    <span class="oc-box oc-radio"></span>
+                    <span>@Loc["setup.variantTi4"]</span>
+                </label>
+                @* Not dimmed (`is-soon`, not `is-disabled`): the point is that the option is legible and
+                   labelled, so "can we play that?" has a visible answer. Only the input is disabled. *@
+                <label class="opt-check is-soon" title='@Loc["common.comingSoon"]'>
+                    <input type="radio" name="gameVariant" disabled />
+                    <span class="oc-box oc-radio"></span>
+                    <span>@Loc["setup.variantTwilightsFall"] <span class="soon">@Loc["common.comingSoon"]</span></span>
+                </label>
+            </div>
+            <span class="faint go-hint">@Loc["setup.gameVariantHint"]</span>
+        </div>
+
+        <div class="game-option">
+            <label>@Loc["home.expansions"]</label>
+            <div class="go-checks">
+                @* No "base game" box: it is always in (the server ORs it back), so a permanently ticked and
+                   permanently disabled checkbox was a control that could never do anything. *@
+                @foreach (var x in new[] { Expansion.ProphecyOfKings, Expansion.Codex, Expansion.ThundersEdge })
+                {
+                    var on = s.ActiveExpansions.HasFlag(x);
+                    var exp = x;
+                    <label class="opt-check">
+                        <input type="checkbox" checked="@on" @onchange="() => ToggleExpansion(exp)" />
+                        <span class="oc-box"></span>
+                        <span>@Loc[$"exp.{x}"]</span>
+                    </label>
+                }
+                @* Discordant Stars is a fan expansion (34 more factions) and none of it is in the content DB
+                   yet, so the box is there and off — the question gets asked, the answer is "not yet". *@
+                <label class="opt-check is-soon" title='@Loc["common.comingSoon"]'>
+                    <input type="checkbox" disabled />
+                    <span class="oc-box"></span>
+                    <span>@Loc["exp.DiscordantStars"] <span class="soon">@Loc["common.comingSoon"]</span></span>
+                </label>
+            </div>
+            <span class="faint go-hint">@Loc["setup.expansionsHint"]</span>
+        </div>
+
+        <h3 style="margin:1.2rem 0 .6rem;">@Loc["options.title"]</h3>
+
+        <div class="game-option">
+            <label for="cardsPerPlayer">@Loc["cards.perPlayer"]</label>
+            <select id="cardsPerPlayer" value="@s.StrategyCardsPerPlayer" @onchange="SetCardsPerPlayer">
+                <option value="0">@Loc["cards.auto"]</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+            </select>
+            <span class="faint go-hint">@Loc["cards.hint"]</span>
+        </div>
+
+        @* The presets cover the usual answers; "custom" is for the table that has its own. The select and the
+           number field are one control — the field only appears in custom mode, and a stored value that
+           matches no preset puts it there by itself (otherwise the select would silently read "off"). *@
+        <div class="game-option">
+            <label for="turnTimer">@Loc["timer.perRound"]</label>
+            <div class="go-inline">
+                <select id="turnTimer" value="@(TimerIsCustom ? "custom" : s.TurnTimerSeconds.ToString())"
+                        @onchange="SetTurnTimer">
+                    <option value="0">@Loc["timer.off"]</option>
+                    @foreach (var min in TimerPresets)
+                    {
+                        <option value="@(min * 60)">@min min</option>
+                    }
+                    <option value="custom">@Loc["timer.custom"]</option>
+                </select>
+                @if (TimerIsCustom)
+                {
+                    <input @key="timerFieldKey" id="turnTimerCustom" class="go-num" type="number"
+                           inputmode="numeric" step="1"
+                           min="@GameRules.TurnTimerMinMinutes" max="@GameRules.TurnTimerMaxMinutes"
+                           value="@CustomTimerMinutes" @onchange="SetCustomTurnTimer"
+                           aria-label='@Loc["timer.customLabel"]' />
+                    <span class="faint">@Loc["timer.minutes"]</span>
+                }
+            </div>
+            <span class="faint go-hint">@Loc["timer.hint"]</span>
+        </div>
+
+        @* Secondary tracking has its own option, but it can only do anything while the timer runs: its whole
+           point is separating time spent on a secondary from time on turn. Shown greyed out rather than
+           hidden, so "why is that missing" has an answer on screen. *@
+        <div class="game-option">
+            <label>@Loc["secondary.optionTitle"]</label>
+            <div class="go-checks">
+                <label class="opt-check @(s.TurnTimerSeconds > 0 ? "" : "is-disabled")">
+                    <input type="checkbox" checked="@s.TrackSecondaryAbilities" disabled="@(s.TurnTimerSeconds <= 0)"
+                           @onchange="SetTrackSecondary" />
+                    <span class="oc-box"></span>
+                    <span>@Loc["secondary.optionLabel"]</span>
+                </label>
+            </div>
+            <span class="faint go-hint">@Loc[s.TurnTimerSeconds > 0 ? "secondary.optionHint" : "secondary.optionNeedsTimer"]</span>
+        </div>
+
+        @* Red Tape: two published community variants (see RedTapeVariant). Both put tape on the public
+           objectives; only Bureaucracy REPLACES a strategy card, so only it asks which one. *@
+        <div class="game-option">
+            <label for="redTape">@Loc["redtape.title"]</label>
+            <div class="go-inline">
+                <select id="redTape" value="@((int)s.RedTapeVariant)" @onchange="SetRedTapeVariant">
+                    <option value="0">@Loc["redtape.off"]</option>
+                    <option value="1">@Loc["redtape.bureaucracy"]</option>
+                    <option value="2">@Loc["redtape.lite"]</option>
+                </select>
+                @* The variants are a table decision, and the hint line cannot carry the rules. This opens the
+                   explanation (and links the posts) so nobody has to leave the app to look them up. *@
+                <button class="btn btn-sm btn-ghost go-help" @onclick="() => showRedTapeHelp = true"
+                        title='@Loc["redtape.helpTitle"]' aria-label='@Loc["redtape.helpTitle"]'>
+                    <MaterialIcon Name="help" />
+                </button>
+            </div>
+            <span class="faint go-hint">@Loc[s.RedTapeVariant switch
+                {
+                    RedTapeVariant.Bureaucracy => "redtape.bureaucracyHint",
+                    RedTapeVariant.Lite => "redtape.liteHint",
+                    _ => "redtape.hint",
+                }]</span>
+        </div>
+
+        @if (s.RedTapeVariant == RedTapeVariant.Bureaucracy)
+        {
+            <div class="game-option">
+                <label>@Loc["redtape.card"]</label>
+                <div class="go-checks">
+                    @foreach (var n in new[] { GameRules.RedTapeDiplomacyCard, GameRules.ImperialStrategyCard })
+                    {
+                        var num = n;
+                        var card = Store.Card(n);
+                        <label class="opt-check">
+                            <input type="radio" name="redTapeCard" checked="@(s.RedTapeCardNumber == n)"
+                                   @onchange="() => SetRedTapeCard(num)" />
+                            <span class="oc-box oc-radio"></span>
+                            <span>@n — @(card is null ? "" : CardDisplay.Name(Loc, Store.Session, card))</span>
+                        </label>
+                    }
+                </div>
+                <span class="faint go-hint">@Loc["redtape.cardHint"]</span>
+            </div>
+        }
+        else if (s.RedTapeVariant == RedTapeVariant.Lite)
+        {
+            @* Lite replaces no card — it is published for Diplomacy, so there is nothing to choose. *@
+            <div class="game-option">
+                <label>@Loc["redtape.card"]</label>
+                <div class="go-fixed">@GameRules.RedTapeDiplomacyCard — @(Store.Card(GameRules.RedTapeDiplomacyCard) is { } dc ? Loc.Pick(dc.Name, dc.NameDe) : "")</div>
+                <span class="faint go-hint">@Loc["redtape.cardLiteHint"]</span>
+            </div>
+        }
+
+        <div class="game-option">
+            <label>@Loc["tech.optionTitle"]</label>
+            <div class="go-checks">
+                <label class="opt-check">
+                    <input type="checkbox" checked="@s.PromptTechOnAction" @onchange="SetPromptTech" />
+                    <span class="oc-box"></span>
+                    <span>@Loc["tech.promptOption"]</span>
+                </label>
+            </div>
+            <span class="faint go-hint">@Loc["tech.promptHint2"]</span>
+        </div>
+    </div>
+}
+
+@* The Red Tape explanation, opened from the question mark on that option. *@
+<RedTapeHelpModal Show="showRedTapeHelp" OnClose="() => showRedTapeHelp = false" />
+
+@* ---- Step 3: the players (and the only thing a non-host sees) ---- *@
+@if (step == SetupStep.Players)
+{
 <div class="panel">
-    <h3>@Loc["setup.title"]</h3>
+    <div class="setup-title-row">
+        <h3 style="margin:0;">@Loc["setup.title"]</h3>
+        @* The phase bar is gone during setup, so a non-host reads the ready count here — the host has it in
+           the navigation next to the "Next" it gates. *@
+        @if (!host)
+        {
+            <span class="setup-ready @(AllReady ? "ok" : "")">
+                @Loc["setup.readyCount"]: <strong>@s.Players.Count(p => p.IsReady)/@s.Players.Count</strong>
+            </span>
+        }
+    </div>
     <p class="faint">@(host ? Loc["setup.startHint"] : Loc["setup.waiting"])</p>
 
     <div class="grid" style="gap:.7rem;">
@@ -25,8 +299,8 @@
                         {
                             <span class="seat-no">@(idx + 1)</span>
                             <span class="seat-btns">
-                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveUp"]" disabled="@(idx == 0)" @onclick="() => MoveSeat(idx, -1)">▲</button>
-                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveDown"]" disabled="@(idx == ordered.Count - 1)" @onclick="() => MoveSeat(idx, 1)">▼</button>
+                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveUp"]" disabled="@(idx == 0)" @onclick="() => MoveSeat(idx, -1)"><MaterialIcon Name="arrow_upward" /></button>
+                                <button class="btn btn-sm btn-ghost" title="@Loc["setup.moveDown"]" disabled="@(idx == ordered.Count - 1)" @onclick="() => MoveSeat(idx, 1)"><MaterialIcon Name="arrow_downward" /></button>
                             </span>
                         }
                         <FactionBadge Faction="fac" Ring="@p.ColorHex" />
@@ -44,13 +318,14 @@
                     <div class="setup-pcard-ctrls">
                         @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
                         @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
-                        <button class="btn btn-sm @(isSpeaker ? "btn-gold" : "")" disabled="@(!host)" @onclick="() => SetSpeaker(p.Id)" title='@Loc["setup.makeSpeaker"]'>
-                            @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> } else { @Loc["setup.makeSpeaker"] }
-                        </button>
+                        @* No speaker control here: this step is about who is playing and as whom. The speaker
+                           decides who picks first, so it belongs with the seating order — offering it in both
+                           places invited the table to settle it before the seats were even in order. *@
+                        @if (isSpeaker) { <span class="chip chip-active"><SpeakerIcon SizeCss="1.1em" /></span> }
                         <span class="chip @(p.IsReady ? "chip-done" : "")">@(p.IsReady ? Loc["setup.ready"] : Loc["setup.notReady"])</span>
                         @if (host && p.Id != Store.MyPlayerId)
                         {
-                            <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@Loc["players.remove"]">✕</button>
+                            <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@Loc["players.remove"]"><MaterialIcon Name="close" /></button>
                         }
                     </div>
                 </div>
@@ -98,12 +373,24 @@
         <p class="faint" style="margin-top:1rem;">@Loc["setup.maxPlayers"]</p>
     }
 </div>
+}
 
-@if (host)
+@* ---- Step 4: seating order and the speaker ---- *@
+@if (step == SetupStep.Seating)
 {
-    <div class="panel">
+    <div class="panel" style="margin-top:.6rem;">
+        <h3 style="margin:0 0 .2rem;">@Loc["setup.step.seating"]</h3>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.seatingHint"]</p>
+        <SeatOrderList @ref="seatOrder" />
+    </div>
+}
+
+@* ---- Last step: record the objectives the table drew, and start ---- *@
+@if (step == SetupStep.Objectives)
+{
+    <div class="panel" style="margin-top:.6rem;">
         <h3 style="margin:0 0 .2rem;">@Loc["setup.objectives"]</h3>
-        <p class="faint" style="margin:0 0 .6rem;">@Loc["setup.objectivesHint"]</p>
+        <p class="faint" style="margin:0 0 .6rem;">@Loc[Store.RedTapeOn ? "setup.objectivesHintRedTape" : "setup.objectivesHint"]</p>
         <ObjectivesTab RevealOnTop="true" Scoreable="false" AllowCustom="false" />
     </div>
 }
@@ -112,6 +399,78 @@
     private Guid Sid => Store.Session!.Id;
     private string newName = "";
     private string AddPlaceholder => Loc["players.add"];
+    private string NamePlaceholder => Loc["home.sessionName"];
+
+    /// <summary>The order the table settles things in. Host-local: it steers this device's view and nothing
+    /// else, so it needs no session state and a reload just lands on the first step.
+    /// <para>
+    /// Name and options used to be two steps. They are one question — "what game is this" — and splitting
+    /// them meant the very first thing the host saw was a single text field.
+    /// </para></summary>
+    private enum SetupStep { Session, Players, Seating, Objectives }
+
+    private SetupStep current = SetupStep.Session;
+
+    private static readonly (SetupStep Step, string Key)[] Steps =
+    {
+        (SetupStep.Session, "setup.step.session"),
+        (SetupStep.Players, "setup.step.players"),
+        (SetupStep.Seating, "setup.step.seating"),
+        (SetupStep.Objectives, "setup.step.objectives"),
+    };
+
+    private SeatOrderList? seatOrder;
+    private bool rolling;
+
+    /// <summary>The Red Tape explanation is open on this device (see RedTapeHelpModal).</summary>
+    private bool showRedTapeHelp;
+
+    private bool AllReady => Store.Session!.Players.Count > 0 && Store.Session!.Players.All(p => p.IsReady);
+
+    /// <summary>Why "Next" is off on this step, as a loc key — or null when nothing blocks. One place for both
+    /// the disabled state and the reason, so a button can never be off without saying why.
+    /// <list type="bullet">
+    /// <item>Players: everybody has to be ready. Faction and colour are what "ready" means, and a game that
+    /// starts without them leaves the wall full of blanks.</item>
+    /// <item>Seating: a speaker, or nobody knows who picks a strategy card first.</item>
+    /// </list></summary>
+    private string? NextBlockedReason(SetupStep step, SessionStateDto s) => step switch
+    {
+        SetupStep.Players when !AllReady => "setup.needReady",
+        SetupStep.Seating when s.SpeakerPlayerId is null => "setup.needSpeaker",
+        _ => null,
+    };
+
+    /// <summary>Roll for the speaker, visibly: the token hops between players before it settles (see
+    /// <see cref="SeatOrderList.RollAsync"/>). A silent jump to a random name looks like a bug to everyone
+    /// who wasn't watching that instant.</summary>
+    private async Task RollSpeaker()
+    {
+        if (seatOrder is null || rolling) return;
+        rolling = true;
+        try { await seatOrder.RollAsync(); }
+        finally { rolling = false; }
+    }
+
+    private Task StartGame() => Store.Mutate(Store.Api.StartGameAsync(Sid));
+
+    private Task SetTrackSecondary(ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null,
+            TrackSecondaryAbilities: e.Value as bool? ?? false)));
+
+    private Task SetName(ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            e.Value?.ToString(), null, null, null, null, null, null, null)));
+
+    // Base is always in (the server ORs it back in anyway) — these three are the choices.
+    private Task ToggleExpansion(Expansion x)
+    {
+        var now = Store.Session!.ActiveExpansions;
+        var next = now.HasFlag(x) ? now & ~x : now | x;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, next | Expansion.Base, null, null, null, null, null)));
+    }
 
     private string? TakenBy(string hex, Guid exceptId)
         => Store.Session!.Players.FirstOrDefault(p => p.Id != exceptId && string.Equals(p.ColorHex, hex, StringComparison.OrdinalIgnoreCase))?.Name;
@@ -122,6 +481,94 @@
             .Where(p => p.Id != exceptId && !string.IsNullOrEmpty(p.FactionId))
             .Select(p => p.FactionId!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    // ---- Turn timer: presets plus a number the host can type ----------------------------------------
+
+    private static readonly int[] TimerPresets = { 5, 8, 10, 12, 15, 20, 30 };
+
+    /// <summary>This device's select is on "custom". Display state only — the session stores just the
+    /// seconds, and which control the host reached them through is nobody else's business.</summary>
+    private bool timerCustom;
+
+    /// <summary>Show the number field: either the host asked for it, or the stored value matches no preset
+    /// (a value typed here earlier, or one set over the API). Without the second half the select would fall
+    /// back to its first option and read "off" while a timer was in fact running.</summary>
+    private bool TimerIsCustom
+    {
+        get
+        {
+            var sec = Store.Session!.TurnTimerSeconds;
+            return sec > 0 && (timerCustom || !TimerPresets.Any(m => m * 60 == sec));
+        }
+    }
+
+    private int CustomTimerMinutes => Math.Clamp(
+        (int)Math.Round(Store.Session!.TurnTimerSeconds / 60.0, MidpointRounding.AwayFromZero),
+        GameRules.TurnTimerMinMinutes, GameRules.TurnTimerMaxMinutes);
+
+    private Task SetTurnTimer(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        // "custom" carries no number, so it applies the value the field will show — the current budget, or a
+        // preset-sized default when the timer was off. Switching to it must leave a real state behind: the
+        // secondary-round option gates on the timer being on, and it would otherwise stay greyed out next to
+        // a select that says the host chose a time.
+        timerCustom = raw == "custom";
+        var seconds = timerCustom
+            ? (Store.Session!.TurnTimerSeconds > 0 ? Store.Session!.TurnTimerSeconds : 10 * 60)
+            : int.TryParse(raw, out var parsed) ? parsed : 0;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(
+            Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, seconds)));
+    }
+
+    /// <summary>Bumped to force the number field to be re-created — the only way to get a corrected value
+    /// back into it. Blazor's diff compares its own last render against the new one, so a field the host
+    /// typed 500 into keeps showing 500 when the clamp brings the render back to the same 120 it had
+    /// before. Only bumped when the field would otherwise disagree with what was stored, so valid typing
+    /// doesn't lose focus (and doesn't close a phone keyboard) for nothing.</summary>
+    private int timerFieldKey;
+
+    /// <summary>Applies the typed minutes. Bound to <c>change</c>, not <c>input</c>, so it is one request
+    /// when the field is left rather than one per keystroke.</summary>
+    private Task SetCustomTurnTimer(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        if (!int.TryParse(raw, out var minutes))
+        {
+            timerFieldKey++;            // an empty or unparseable field: put the stored value back
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+        timerCustom = true;
+        var clamped = Math.Clamp(minutes, GameRules.TurnTimerMinMinutes, GameRules.TurnTimerMaxMinutes);
+        if (clamped != minutes || raw != clamped.ToString()) timerFieldKey++;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, clamped * 60)));
+    }
+
+    private Task SetCardsPerPlayer(ChangeEventArgs e)
+    {
+        var count = int.TryParse(e.Value?.ToString(), out var c) ? c : 0;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(
+            Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, null, null, null, count)));
+    }
+
+    private Task SetRedTapeVariant(ChangeEventArgs e)
+    {
+        var v = int.TryParse(e.Value?.ToString(), out var n) && Enum.IsDefined(typeof(RedTapeVariant), n)
+            ? (RedTapeVariant)n : RedTapeVariant.None;
+        return Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, null, RedTapeVariant: v)));
+    }
+
+    // Radio buttons, so the number comes straight from the option rather than out of a change event.
+    private Task SetRedTapeCard(int cardNumber)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, RedTapeCardNumber: cardNumber)));
+
+    private Task SetPromptTech(ChangeEventArgs e)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(
+            null, null, null, null, null, null, null, null, null, null, PromptTechOnAction: e.Value as bool? ?? false)));
 
     private Task SetName(Guid id, ChangeEventArgs e)
         => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(e.Value?.ToString(), null, null, null, null, null)));

@@ -41,10 +41,93 @@
         <span class="dismiss">🗙</span>
     </div>
     <script>
+        // ---- Boot watchdog ---------------------------------------------------------------------------
+        // A Blazor boot that stalls leaves the loading screen above on screen and says NOTHING, which is
+        // exactly how a "the first visit just hangs, F5 fixes it" report is born — and such a report is
+        // unfixable, because it names no cause. So: collect what went wrong, and if the boot screen is
+        // still up after 8 seconds, put the state on the screen. Loaded before the framework, so the
+        // handlers catch errors from the boot itself.
+        window.ti4boot = { errors: [] };
+        addEventListener('error', function (e) {
+            window.ti4boot.errors.push((e.message || 'error') + ' @ ' + ((e.filename || '?').split('/').pop()));
+        }, true);
+        addEventListener('unhandledrejection', function (e) {
+            var r = e.reason;
+            window.ti4boot.errors.push('promise: ' + ((r && (r.message || r)) || '?'));
+        });
+        setTimeout(function () {
+            var app = document.getElementById('app');
+            if (!app || !app.querySelector('.loading-progress')) return;   // it booted; nothing to report
+            var pct = getComputedStyle(document.documentElement).getPropertyValue('--blazor-load-percentage');
+            var res = performance.getEntriesByType('resource');
+            var pending = res.filter(function (r) { return r.responseEnd === 0; });
+            var box = document.createElement('div');
+            box.className = 'boot-stuck';
+            box.innerHTML = '<b>Still starting…</b><br>' +
+                'loaded ' + (pct || '?').trim() + ' · ' + res.length + ' files, ' + pending.length + ' still pending' +
+                (pending.length ? '<br>waiting on: ' + pending.slice(0, 3).map(function (r) { return r.name.split('/').pop(); }).join(', ') : '') +
+                (window.ti4boot.errors.length ? '<br>' + window.ti4boot.errors.slice(0, 3).join('<br>') : '') +
+                '<br><br><a href="javascript:location.reload()">Reload</a>';
+            app.appendChild(box);
+        }, 8000);
+    </script>
+    <script>
         // Wall-display helper: flow the tech cards into balanced columns; while a column flow overflows its
         // height, collapse the lowest-prerequisite tech to just its name (top-down, one at a time) until it
         // fits. Reset (uncollapse) first so removing techs re-expands the cards. Purely visual (CSS classes).
         window.ti4 = window.ti4 || {};
+        // ---- "a new version is waiting" -------------------------------------------------------------
+        // The published service worker answers every navigation out of its cache and does NOT call
+        // skipWaiting, so after a deploy a reload keeps serving the OLD app until every tab of the origin is
+        // closed. That is the right default — a running game must not have its files pulled out from under
+        // it — but it needs to be VISIBLE, hence the bar the app shows from these two hooks.
+        window.ti4.update = {
+            waiting: false,
+            onFound: null,
+            /// Registers the .NET callback and reports whether an update is already waiting.
+            watch: function (dotNet) {
+                window.ti4.update.onFound = function () { dotNet.invokeMethodAsync('Found'); };
+                return window.ti4.update.waiting;
+            },
+            /// Hand over to the waiting worker and come back on the new files. Only ever called because the
+            /// user tapped "reload": activating clears the old cache, so it must be their decision.
+            /// Returns false when the hand-over did NOT happen — then reloading is pointless and the app says
+            /// what does work instead. That is not a rare case: a worker deployed BEFORE this message existed
+            /// cannot answer it, so the very first update after this change always lands here.
+            apply: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg && reg.waiting) {
+                        const switched = new Promise(function (resolve) {
+                            navigator.serviceWorker.addEventListener('controllerchange',
+                                function () { resolve(true); }, { once: true });
+                            setTimeout(function () { resolve(false); }, 2500);
+                        });
+                        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        if (await switched) { location.reload(); return true; }
+                        return false;
+                    }
+                } catch (e) { /* fall through */ }
+                location.reload();
+                return true;
+            }
+        };
+        // Resolves once the page is fully loaded and one frame has been painted. Used by the start page's
+        // senate backdrop: ~150 pods with 24 photographs must never be laid out while the browser is still
+        // pulling the app down, or the very first visit pays for decoration before it gets a page.
+        // ⚠️ The frame is RACED against a timer, never awaited on its own: in a tab that is not visible —
+        // opened in the background, or restored on startup — requestAnimationFrame never fires at all
+        // (verified: no callback within 1.2s while document.visibilityState was 'hidden'), so anything that
+        // waits for it simply never happens.
+        window.ti4.afterLoad = function () {
+            return new Promise(function (resolve) {
+                var done = false;
+                var finish = function () { if (!done) { done = true; resolve(true); } };
+                var go = function () { requestAnimationFrame(finish); setTimeout(finish, 300); };
+                if (document.readyState === 'complete') { go(); }
+                else { addEventListener('load', go, { once: true }); }
+            });
+        };
         // Copy text to the clipboard SYNCHRONOUSLY within the user gesture. Called via Blazor's
         // in-process (synchronous) JS interop — Safari/iPad discards async clipboard calls once the
         // click gesture has "expired", which the normal awaited interop roundtrip triggers. Falls back
@@ -70,6 +153,231 @@
                 return ok;
             } catch (e) { return false; }
         };
+        // Drag-to-reorder for the seat-order dialog. Pointer events, NOT the HTML5 drag events: those
+        // don't fire on touch, and the table's control device is an iPad. The helper only reports which
+        // row the pointer is over — Blazor keeps owning the DOM and re-renders the preview order, so we
+        // never move nodes behind its back (which would desync its diff).
+        window.ti4.seatDrag = function (container, dotNet) {
+            if (!container) return null;
+            let active = false;
+            var idxOf = function (el) {
+                var row = el && el.closest ? el.closest('[data-seat-idx]') : null;
+                return row ? parseInt(row.dataset.seatIdx, 10) : -1;
+            };
+            var down = function (e) {
+                // Only the grip starts a drag. Listening on the whole row meant the preventDefault()
+                // below swallowed the click on the ▲▼ buttons inside it, so they did nothing.
+                if (!(e.target && e.target.closest && e.target.closest('[data-seat-grip]'))) return;
+                var i = idxOf(e.target);
+                if (i < 0) return;
+                active = true;
+                // Capture on the container so moves keep coming once the finger leaves the row.
+                try { container.setPointerCapture(e.pointerId); } catch (err) { }
+                dotNet.invokeMethodAsync('DragStart', i);
+                e.preventDefault();
+            };
+            var move = function (e) {
+                if (!active) return;
+                var j = idxOf(document.elementFromPoint(e.clientX, e.clientY));
+                if (j >= 0) dotNet.invokeMethodAsync('DragOver', j);
+                e.preventDefault();
+            };
+            var up = function (e) {
+                if (!active) return;
+                active = false;
+                try { container.releasePointerCapture(e.pointerId); } catch (err) { }
+                dotNet.invokeMethodAsync('DragEnd');
+            };
+            container.addEventListener('pointerdown', down);
+            container.addEventListener('pointermove', move);
+            container.addEventListener('pointerup', up);
+            container.addEventListener('pointercancel', up);
+            return {
+                dispose: function () {
+                    container.removeEventListener('pointerdown', down);
+                    container.removeEventListener('pointermove', move);
+                    container.removeEventListener('pointerup', up);
+                    container.removeEventListener('pointercancel', up);
+                }
+            };
+        };
+        // Turn timer ran out: a short buzz on the player's own device. Vibration is unsupported on iOS
+        // Safari and requires a prior user gesture elsewhere, so failure is normal and ignored.
+        window.ti4.buzz = function () {
+            try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { }
+        };
+        // ---- QR scanner (join by pointing the phone at the wall) --------------------------------
+        // This side owns the CAMERA only; the decoding happens in .NET (ZXing.Net, compiled in), so no
+        // third-party script is fetched and the wall's offline rule is untouched. Frames are handed over as
+        // 8-bit luminance: it is exactly what the decoder wants, and a quarter of the bytes of RGBA.
+        window.ti4.qr = {
+            // Offered only where it can actually work AND where it makes sense. getUserMedia exists only in a
+            // SECURE CONTEXT — on a plain-HTTP LAN address `navigator.mediaDevices` is undefined, the same
+            // browser rule that gates the service worker — and a QR on the wall is scanned with a phone, not
+            // with a laptop webcam, hence the coarse-pointer check.
+            available: function () {
+                try {
+                    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+                        && window.matchMedia('(pointer: coarse)').matches;
+                } catch (e) { return false; }
+            },
+            _stream: null,
+            // Which cameras this device has. Deliberately asked AFTER a stream is open: before permission is
+            // granted the browser hands out entries with an empty id and no label, so there is nothing to
+            // choose between and nothing to name.
+            cameras: async function () {
+                try {
+                    const list = await navigator.mediaDevices.enumerateDevices();
+                    return list.filter(function (d) { return d.kind === 'videoinput' && d.deviceId; })
+                               .map(function (d, i) { return { id: d.deviceId, label: d.label || ('Camera ' + (i + 1)) }; });
+                } catch (e) { return []; }
+            },
+            // Returns '' on success, otherwise the browser's error NAME ('NotAllowedError' when the user says
+            // no, 'NotFoundError' with no camera) so the UI can say which it was.
+            // With no `deviceId` the choice is left to the browser via `facingMode: environment` — a HINT, not
+            // an instruction: it picks a rear camera where there is one, but on a phone with three of them
+            // which one is its business. Hence the switch button, which passes an explicit id.
+            start: async function (video, deviceId) {
+                try {
+                    window.ti4.qr.stop();
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        // Ask for as much resolution as the camera will give: a code read across a table is
+                        // only a few dozen pixels wide, and what the sensor doesn't capture the decoder
+                        // cannot recover. `ideal`, so a camera that cannot do it simply gives what it has.
+                        video: deviceId
+                            ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                            : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                        audio: false
+                    });
+                    window.ti4.qr._stream = stream;
+                    video.srcObject = stream;
+                    // Without `playsinline` iOS takes the video fullscreen and the dialog disappears behind it.
+                    video.setAttribute('playsinline', '');
+                    video.muted = true;
+                    await video.play();
+                    return '';
+                } catch (e) {
+                    window.ti4.qr.stop();
+                    return (e && (e.name || e.message)) || 'error';
+                }
+            },
+            // One frame as grayscale, scaled so the long side is at most `max`. Null while the stream has no
+            // picture yet (readyState < HAVE_CURRENT_DATA) — asking early just yields a black frame.
+            grab: function (video, canvas, max) {
+                try {
+                    if (!video || video.readyState < 2 || !video.videoWidth) return null;
+                    const scale = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight));
+                    const w = Math.max(1, Math.round(video.videoWidth * scale));
+                    const h = Math.max(1, Math.round(video.videoHeight * scale));
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(video, 0, 0, w, h);
+                    const rgba = ctx.getImageData(0, 0, w, h).data;
+                    const gray = new Uint8Array(w * h);
+                    for (let i = 0, p = 0; p < gray.length; i += 4, p++) {
+                        // Rec. 601 luma, the same weighting the decoder would apply itself.
+                        gray[p] = (rgba[i] * 77 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
+                    }
+                    // BASE64, not the array itself: this boundary is JSON, where a Uint8Array stringifies to
+                    // an object with numeric keys — while .NET reads a byte[] as base64. Handing the array
+                    // over directly decodes nothing, silently. Chunked because fromCharCode takes arguments,
+                    // and a whole frame overflows the argument list.
+                    let bin = '';
+                    for (let i = 0; i < gray.length; i += 0x8000) {
+                        bin += String.fromCharCode.apply(null, gray.subarray(i, i + 0x8000));
+                    }
+                    return { width: w, height: h, gray: btoa(bin) };
+                } catch (e) { return null; }
+            },
+            stop: function () {
+                try {
+                    const s = window.ti4.qr._stream;
+                    if (s) { s.getTracks().forEach(function (t) { t.stop(); }); }
+                } catch (e) { }
+                window.ti4.qr._stream = null;
+            }
+        };
+        // ---- Web Push ("you're up") -------------------------------------------------------------
+        // The notification itself is shown by the service worker (see service-worker*.js); this part only
+        // deals with the browser's subscription. Every call answers rather than throws, so the UI can
+        // explain what is wrong instead of failing silently.
+        window.ti4.push = {
+            supported: function () {
+                return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+            },
+            // iOS grants Web Push ONLY to a PWA installed on the home screen (Safari 16.4+). Report it so
+            // the UI can say so, rather than showing a switch that does nothing when tapped.
+            standalone: function () {
+                try {
+                    return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+                } catch (e) { return false; }
+            },
+            isApple: function () {
+                return /iPad|iPhone|iPod/.test(navigator.userAgent)
+                    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            },
+            permission: function () {
+                try { return window.Notification ? Notification.permission : 'unsupported'; }
+                catch (e) { return 'unsupported'; }
+            },
+            // Endpoint of the subscription this browser already has, or null.
+            current: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (!reg || !reg.pushManager) return null;
+                    const sub = await reg.pushManager.getSubscription();
+                    return sub ? sub.endpoint : null;
+                } catch (e) { return null; }
+            },
+            // The WHOLE existing subscription (endpoint + keys), without asking for permission or creating
+            // one. The app re-registers it with the server on every load: the server stores a subscription
+            // against ONE session and player, so a device that switched sessions — or whose subscription the
+            // server retired after a 410 — looked switched on here while nothing was being delivered.
+            existing: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (!reg || !reg.pushManager) return null;
+                    const sub = await reg.pushManager.getSubscription();
+                    if (!sub) return null;
+                    const j = sub.toJSON();
+                    return { endpoint: sub.endpoint, p256dh: j.keys && j.keys.p256dh, auth: j.keys && j.keys.auth };
+                } catch (e) { return null; }
+            },
+            subscribe: async function (publicKey) {
+                try {
+                    const perm = await Notification.requestPermission();
+                    if (perm !== 'granted') return { error: perm };
+                    const reg = await navigator.serviceWorker.ready;
+                    let sub = await reg.pushManager.getSubscription();
+                    if (!sub) {
+                        sub = await reg.pushManager.subscribe({
+                            userVisibleOnly: true,          // required by Chrome, and honest: we always show one
+                            applicationServerKey: b64ToBytes(publicKey)
+                        });
+                    }
+                    const j = sub.toJSON();
+                    return { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth };
+                } catch (e) { return { error: (e && e.message) || 'failed' }; }
+            },
+            unsubscribe: async function () {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+                    if (!sub) return null;
+                    const endpoint = sub.endpoint;
+                    await sub.unsubscribe();
+                    return endpoint;
+                } catch (e) { return null; }
+            }
+        };
+        // applicationServerKey wants raw bytes, and the key travels as base64url.
+        function b64ToBytes(base64url) {
+            const pad = '='.repeat((4 - base64url.length % 4) % 4);
+            const raw = atob((base64url + pad).replace(/-/g, '+').replace(/_/g, '/'));
+            const out = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+            return out;
+        }
         window.ti4.fitTechCols = function () {
             document.querySelectorAll('.beamer .tech-col, .beamer .tech-unit-row').forEach(function (col) {
                 col.querySelectorAll('.tech-item.collapsed').forEach(function (it) { it.classList.remove('collapsed'); });
@@ -116,7 +424,35 @@
         };
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
+    <script>
+        // Register AFTER the page has loaded, and only where service workers exist at all.
+        // Two reasons, both burned: at parse time the registration — and in a published build the worker's
+        // own precache of EVERY asset, ~250 files — competes with the boot download for the browser's six
+        // connections, which is a first-visit-only stall that a reload always appears to "fix". And on a
+        // plain-HTTP LAN address `navigator.serviceWorker` is undefined, so the bare call threw a TypeError
+        // on exactly the setup the wall display uses.
+        if ('serviceWorker' in navigator) {
+            addEventListener('load', async function () {
+                try {
+                    const reg = await navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });
+                    // A worker that is INSTALLED but waiting means a deploy has landed and this page is still
+                    // being served the old app out of the cache. Tell the app so it can offer a reload — see
+                    // UpdateNotice.razor. `controller` must exist: on a first visit there is a new worker too,
+                    // and that is not an update, that is the app arriving.
+                    const announce = function () {
+                        if (!reg.waiting || !navigator.serviceWorker.controller) return;
+                        window.ti4.update.waiting = true;
+                        if (window.ti4.update.onFound) window.ti4.update.onFound();
+                    };
+                    announce();                       // it may have been waiting since an earlier visit
+                    reg.addEventListener('updatefound', function () {
+                        const sw = reg.installing;
+                        if (sw) sw.addEventListener('statechange', function () { if (sw.state === 'installed') announce(); });
+                    });
+                } catch (e) { /* no offline support, no update notice — neither is fatal */ }
+            });
+        }
+    </script>
 </body>
 
 </html>

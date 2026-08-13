@@ -1,6 +1,7 @@
 @page "/display/{Code}"
 @layout EmptyLayout
 @inherits Ti4ComponentBase
+@inject NavigationManager Nav
 
 @if (Store.Session is null || Store.Content is null)
 {
@@ -20,7 +21,9 @@ else
             <div class="b-title">@s.Name</div>
             <div class="b-meta">@Loc["turn.round"] @s.CurrentRound · <span class="b-phase">@Loc[$"phase.{s.Phase}"]</span></div>
             <div class="spacer" style="flex:1"></div>
-            @* Prominent join code so players can join straight off the wall. *@
+            @* The join code stays in the header always; the QR does NOT. It is its own wall area now
+               (DisplayMode.JoinQr) — as a header strip its height squeezed the agenda view until the
+               per-player vote counts fell off the top of it. *@
             <div class="b-join">
                 <span class="b-join-lbl">@Loc["common.code"]</span>
                 <span class="b-join-code">@s.JoinCode</span>
@@ -28,12 +31,59 @@ else
             </div>
         </div>
 
-        @if (isAgenda && s.DisplayMode != DisplayMode.Statistics)
+        @if (Store.PlayerById(s.CombatAId) is { } cbA && Store.PlayerById(s.CombatBId) is { } cbB
+             && s.DisplayMode != DisplayMode.Statistics)
+        {
+            @* Combat takes the whole wall: two halves, each with the player's portrait, name and every
+               technology they hold, and VS between them. No player table, no objectives — while dice are on
+               the table this is the only thing anybody looks at. Derived from the session (not a DisplayMode),
+               so it appears and disappears with the combat itself. *@
+            <div class="combat-stage">
+                <div class="combat-title">@Loc["combat.title"]</div>
+                <div class="combat-cols">
+                    @foreach (var side in new[] { cbA, cbB })
+                    {
+                        @if (side == cbB)
+                        {
+                            <div class="combat-vs">@Loc["combat.vs"]</div>
+                        }
+                        var fac = Store.Faction(side.FactionId);
+                        var techs = side.TechnologyIds.Select(id => Store.Tech(id)).Where(t => t is not null).Select(t => t!)
+                            .OrderBy(t => t.Color).ThenBy(t => t.Prerequisites.Length).ThenBy(t => Loc.Pick(t.Name, t.NameDe)).ToList();
+                        <div class="combat-side" style="--player-color:@side.ColorHex">
+                            <div class="cs-head">
+                                <FactionPortrait Player="side" Faction="fac" Speaker="false" />
+                            </div>
+                            <div class="cs-fac">@(fac is null ? "" : Loc.Pick(fac.Name, fac.NameDe))</div>
+                            <div class="cs-techs">
+                                @if (techs.Count == 0) { <span class="muted">—</span> }
+                                @foreach (var t in techs)
+                                {
+                                    <span class="cs-tech" style="--tc:@TechColorHex(t.Color)">
+                                        <TechIcon Color="t.Color" Size="16" />
+                                        <span class="cs-tech-name">@Loc.Pick(t.Name, t.NameDe)</span>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (isAgenda && s.DisplayMode != DisplayMode.Statistics)
         {
             @* Agenda phase: the agenda + a portrait per player with their votes above and influence below. *@
-            var elect = agenda is null ? ElectType.ForAgainst : AgendaDisplay.ElectKind(agenda);
+            var elect = Store.AgendaElectKind;
             <div class="agenda-stage">
-                @if (agenda is null)
+                @if (agenda is null && Store.CustomVoteActive)
+                {
+                    @* A free vote has no card, so the headline the host typed stands in its place. Everything
+                       below — tally, result, portraits — keys off the elect kind and needs no special case. *@
+                    <div><span class="agenda-kind chip">@Loc["agenda.freeVote"]</span></div>
+                    <div class="agenda-headline">@s.CustomVoteTitle</div>
+                    <div class="agenda-elect">@Loc[$"elect.{elect}"]</div>
+                }
+                else if (agenda is null)
                 {
                     <div class="agenda-headline">@Loc["agenda.title"]</div>
                     <div class="agenda-kind">@Loc["agenda.waitingForHost"]</div>
@@ -45,15 +95,26 @@ else
                     </div>
                     <div class="agenda-headline">@Loc.Pick(agenda.Name, agenda.NameDe)</div>
                     <div class="agenda-body">@Loc.Pick(agenda.Text, agenda.TextDe)</div>
+                    <div class="agenda-elect"><b>@Loc["agenda.elect"]:</b> @agenda.Elect</div>
+                }
 
-                    @if (s.AgendaVotesHidden)
+                @* The tally sits OUTSIDE the branches above, because it depends only on the elect kind and
+                   the votes — an agenda card and a free vote count identically. Three states for a face-down
+                   vote: nothing, then the TOTALS only (server-computed, per-player rows stay redacted), then
+                   everything. *@
+                @if (agenda is not null || Store.CustomVoteActive)
+                {
+                    @if (s.AgendaVotesHidden && s.AgendaTotals is null)
                     {
                         <div class="agenda-elect">@Loc["agenda.hidden"]</div>
                     }
                     else if (elect == ElectType.ForAgainst)
                     {
-                        var forVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
-                        var againstVotes = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+                        var forVotes = s.AgendaTotals?.For
+                            ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
+                        var againstVotes = s.AgendaTotals?.Against
+                            ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+                        @if (s.AgendaTotals is not null) { <div class="agenda-elect totals-note">@Loc["agenda.totalsOnly"]</div> }
                         <div class="tally-row">
                             <span class="tally @(forVotes >= againstVotes && forVotes > 0 ? "lead" : "")" style="color:#8fe0bd;">@Loc["agenda.for"]: @forVotes</span>
                             <span class="tally @(againstVotes > forVotes ? "lead" : "")" style="color:#f1a3ae;">@Loc["agenda.against"]: @againstVotes</span>
@@ -61,16 +122,18 @@ else
                     }
                     else
                     {
-                        @* Elect agendas: tally locked votes per chosen candidate, leader highlighted. *@
-                        var tally = s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
-                            .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
-                            .OrderByDescending(t => t.Votes).ToList();
+                        @* Elect: tally per chosen candidate, leader highlighted. *@
+                        var tally = s.AgendaTotals is { } tot
+                            ? tot.Choices.Select(c => (Choice: c.Choice, Votes: c.Votes)).ToList()
+                            : s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
+                                .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
+                                .OrderByDescending(t => t.Votes).ToList();
                         var lead = tally.FirstOrDefault().Votes;
-                        <div class="agenda-elect"><b>@Loc["agenda.elect"]:</b> @agenda.Elect</div>
+                        @if (s.AgendaTotals is not null) { <div class="agenda-elect totals-note">@Loc["agenda.totalsOnly"]</div> }
                         <div class="tally-row">
                             @foreach (var t in tally)
                             {
-                                <span class="tally @(t.Votes == lead ? "lead" : "")">@ChoiceLabel(agenda, t.Choice): @t.Votes</span>
+                                <span class="tally @(t.Votes == lead ? "lead" : "")">@AgendaDisplay.ChoiceLabel(Store, Loc, elect, t.Choice): @t.Votes</span>
                             }
                             @if (tally.Count == 0) { <span class="agenda-kind">@Loc["agenda.noVotes"]</span> }
                         </div>
@@ -91,19 +154,22 @@ else
                     {
                         var p = order[vi];
                         var t = vn <= 1 ? 0.5 : (double)vi / (vn - 1);
-                        var lift = (int)Math.Round(Math.Sin(t * Math.PI) * 7); // 0 at the ends, ~7vh in the middle
+                        // Lift in cqh (percent of the votes-grid height), NOT vh: the grid shrinks when the header or the
+                        // result line takes space, and a viewport-based lift then pushed the middle portraits out of the
+                        // clipped box. See the .votes-grid rule for the matching headroom.
+                        var lift = (int)Math.Round(Math.Sin(t * Math.PI) * 7); // 0 at the ends, ~7cqh in the middle
                         var vote = s.AgendaVotes.FirstOrDefault(v => v.PlayerId == p.Id);
                         var isSpeaker = s.SpeakerPlayerId == p.Id;
                         var locked = vote?.Locked == true;
-                        <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;transform:translateY(-@(lift)vh);">
+                        <div class="vote-card @(isSpeaker ? "speaker-row" : "")" style="--player-color:@p.ColorHex;transform:translateY(-@(lift)cqh);">
                             <div class="vote-top">
-                                @if (agenda is null)
+                                @if (agenda is null && !Store.CustomVoteActive)
                                 {
                                     @* Influence-entry stage: no votes yet. *@
                                 }
                                 else if (s.AgendaVotesHidden)
                                 {
-                                    <span class="vote-choice">@(locked ? "✓ " + Loc["agenda.voted"] : Loc["agenda.waiting"])</span>
+                                    <span class="vote-choice">@if (locked) { <MaterialIcon Name="check" /> }@(locked ? Loc["agenda.voted"] : Loc["agenda.waiting"])</span>
                                 }
                                 else if (!locked)
                                 {
@@ -116,7 +182,7 @@ else
                                 else
                                 {
                                     <span class="vote-weight">@vote.Votes @Loc["agenda.votes"]</span>
-                                    <span class="vote-choice @(elect == ElectType.ForAgainst ? (vote.Outcome == VoteOutcome.For ? "v-for" : "v-against") : "")">@VoteLabel(agenda, elect, vote)</span>
+                                    <span class="vote-choice @(elect == ElectType.ForAgainst ? (vote.Outcome == VoteOutcome.For ? "v-for" : "v-against") : "")">@VoteLabel(elect, vote)</span>
                                 }
                             </div>
                             <FactionPortrait Player="p" Faction="Store.Faction(p.FactionId)" Speaker="isSpeaker" />
@@ -165,10 +231,27 @@ else
         else
         {
             var mode = s.DisplayMode;
+            // Status phase: the right panel follows the stage the table is on. Scoring keeps the objective
+            // list (that is where the glow has to be visible), the other two stages take the panel over.
+            // The left player table stays untouched in all cases — you still want to see who is up.
+            var statusStage = s.Phase == GamePhase.Status ? s.StatusStage : (StatusStage?)null;
+            // Reveal stage: the objectives revealed SINCE the stage began — one alone, or all of them
+            // together when the table reveals several. Until the first one appears the wall stays on the
+            // ordinary objective list; it used to jump straight to "the last objective in the list", which
+            // on entering the stage meant showing an old card as if it were news.
+            var revealNew = statusStage == StatusStage.RevealObjective && _revealBaseline is not null
+                ? s.Objectives.Where(o => !_revealBaseline.Contains(o.Id)).ToList()
+                : new List<SessionObjectiveDto>();
+            var revealWaiting = statusStage == StatusStage.RevealObjective && revealNew.Count == 0;
+            if ((statusStage == StatusStage.Scoring || revealWaiting) && mode != DisplayMode.JoinQr) mode = DisplayMode.Objectives;
             // All three modes share a left "player table" (Bereich 1); the right panel (Bereich 2) differs.
             // Objectives right panel: split by stage; collapse to one (half-width) column until a Stage II.
-            var objStage2 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageII).ToList() : new();
-            var objStage1 = mode == DisplayMode.Objectives ? s.Objectives.Where(o => Store.Objective(o.ObjectiveId)?.Stage != ObjectiveStage.StageII).ToList() : new();
+            // A PURGED objective is out of the game (Red Tape Lite), so it leaves the wall altogether — the
+            // control views keep it, struck through, because that is where the table looks up what happened;
+            // the wall is what the game currently is.
+            var onTable = s.Objectives.Where(o => !o.Purged).ToList();
+            var objStage2 = mode == DisplayMode.Objectives ? onTable.Where(o => Store.Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageII).ToList() : new();
+            var objStage1 = mode == DisplayMode.Objectives ? onTable.Where(o => Store.Objective(o.ObjectiveId)?.Stage != ObjectiveStage.StageII).ToList() : new();
             var objSingle = mode == DisplayMode.Objectives && objStage2.Count == 0;
             var objRows = Math.Max(Math.Max(objStage1.Count, objStage2.Count), 1);
             // Tech right panel: every UNIQUE researched tech across all players (shown once), grouped by colour.
@@ -201,7 +284,7 @@ else
                     <div class="big-strat" style="--c:@activeCard.ColorHex">
                         <div class="strat-head">
                             <span class="num">@activeCard.Initiative</span>
-                            <span class="sname">@Loc.Pick(activeCard.Name, activeCard.NameDe)</span>
+                            <span class="sname">@CardDisplay.Name(Loc, s, activeCard)</span>
                             @{ var owner = ordered.FirstOrDefault(p => p.StrategyCards.Any(c => c.StrategyCardId == activeCard.Id)); }
                             @if (owner is not null) { <span class="b-meta">— @owner.Name</span> }
                         </div>
@@ -223,7 +306,9 @@ else
                 <div class="panel players-panel">
                     <h3 style="color:var(--gold);">@Loc["nav.players"]</h3>
                     <div class="panel-body">
-                        <div class="ptable">
+                        @* The timer adds a 5th subgrid column — the class and the extra cell must switch
+                           together, or the rows would fall into an implicit (unaligned) track. *@
+                        <div class="ptable @(Store.TurnTimerEnabled ? "with-timer" : "")">
                             @foreach (var p in ordered)
                             {
                                 var fac = Store.Faction(p.FactionId);
@@ -252,10 +337,16 @@ else
                                             var card = Store.Card(pc.StrategyCardId);
                                             if (card is not null)
                                             {
-                                                <span class="s-pill @(pc.IsExhausted ? "used" : "")" style="--c:@card.ColorHex"><span class="pn">@card.Initiative</span> @Loc.Pick(card.Name, card.NameDe)</span>
+                                                <span class="s-pill @(pc.IsExhausted ? "used" : "")" style="--c:@card.ColorHex"><span class="pn">@card.Initiative</span> @CardDisplay.Name(Loc, s, card)</span>
                                             }
                                         }
                                     </div>
+                                    @if (Store.TurnTimerEnabled)
+                                    {
+                                        @* The wall is the one device that is reliably on and shows every
+                                           player, so it reports the overruns; the server drops duplicates. *@
+                                        <span class="ptr-timer"><TurnTimer PlayerId="@p.Id" Compact="true" Report="true" /></span>
+                                    }
                                 </div>
                             }
                         </div>
@@ -265,10 +356,78 @@ else
                 @* ===== Bereich 2 — right content panel: objectives list / all researched techs as cards /
                    all available strategy-card secondaries. Deduplicated, independent of the player table. ===== *@
                 <div class="panel content-panel">
-                    @if (mode == DisplayMode.Objectives)
+                    @* Red Tape Lite just pulled a tape at random. That is the one game action the app performs
+                       itself, so the table sees WHICH objective it freed, in the same big-card treatment a
+                       normally revealed one gets — and before anything else, whatever mode the wall is on. It
+                       clears when the host closes the result (RedTapeRandomRevealedId). *@
+                    @if (s.RedTapeRandomRevealedId is Guid rtShown
+                         && s.Objectives.FirstOrDefault(o => o.Id == rtShown) is { } rtRevealed)
+                    {
+                        <h3 style="color:var(--gold);">@Loc["redtape.randomResult"]</h3>
+                        <div class="panel-body status-reveal">
+                            <div class="status-reveal-card">
+                                <ObjectiveDisplayCard So="rtRevealed" Glow="true" />
+                            </div>
+                            <p class="status-detail">@Loc["redtape.randomResultBody"]</p>
+                        </div>
+                    }
+                    else if (mode == DisplayMode.JoinQr)
+                    {
+                        @* The QR as a wall area: same card as the agenda-phase overlay, just in the panel. *@
+                        <div class="panel-body qr-panel">
+                            <div class="qr-card">
+                                <div class="qr-title">@string.Format(Loc["nav.joinQrTitle"], s.Name)</div>
+                                <div class="qr-url">@InviteUrl(s.JoinCode)</div>
+                                <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="min(46vh, 34vw)" Alt="@Loc["nav.joinQr"]" />
+                                <div class="qr-code-big">@s.JoinCode</div>
+                            </div>
+                        </div>
+                    }
+                    else if (statusStage == StatusStage.RevealObjective && revealNew.Count > 0)
+                    {
+                        @* Bureaucracy replaces this step (nothing is revealed — everything already is), so the
+                           heading says which step the table is on. *@
+                        <h3 style="color:var(--gold);">@Loc[s.RedTapeVariant == RedTapeVariant.Bureaucracy ? "redtape.stepReplaced" : "status.stage.reveal"]</h3>
+                        <div class="panel-body status-reveal">
+                            @* One card gets the whole panel; several share it, so a double reveal doesn't
+                               hide the first one behind the second. *@
+                            <div class="status-reveal-card @(revealNew.Count > 1 ? "multi" : "")">
+                                @foreach (var so in revealNew) { <ObjectiveDisplayCard So="so" Glow="true" /> }
+                            </div>
+                            <p class="status-detail">@Loc["status.detail.reveal"]</p>
+                        </div>
+                    }
+                    else if (statusStage == StatusStage.RevealObjective && s.RedTapeVariant == RedTapeVariant.Bureaucracy)
+                    {
+                        @* Nothing to reveal in this variant: the step is the game-end check. *@
+                        <h3 style="color:var(--gold);">@Loc["redtape.stepReplaced"]</h3>
+                        <div class="panel-body status-reveal">
+                            <p class="status-detail">@Loc["redtape.stepReplacedHint"]</p>
+                        </div>
+                    }
+                    else if (statusStage == StatusStage.Checklist)
+                    {
+                        @* Short labels live in the host view; here the full step text, so the table can read
+                           what is actually being done. *@
+                        <h3 style="color:var(--gold);">@Loc["status.checklist"]</h3>
+                        <div class="panel-body status-big-list">
+                            @foreach (var (step, key, detail) in WallSteps)
+                            {
+                                var done = s.StatusStepsDone.HasFlag(step);
+                                <div class="big-step @(done ? "done" : "")">
+                                    <span class="step-box">@if (done) { <MaterialIcon Name="check" SizeCss="1em" /> }</span>
+                                    <div class="big-step-text">
+                                        <div class="big-step-name">@Loc[key]</div>
+                                        <div class="big-step-detail">@Loc[detail]</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (mode == DisplayMode.Objectives)
                     {
                         <h3 style="color:var(--gold);">@Loc["obj.title"]</h3>
-                        @if (s.Objectives.Count == 0)
+                        @if (onTable.Count == 0)
                         {
                             <div class="panel-body"><p class="muted">@Loc["obj.none"]</p></div>
                         }
@@ -277,12 +436,12 @@ else
                             @* Stage I (+ custom) left, Stage II right; --obj-rows drives a uniform card height. *@
                             <div class="panel-body obj-list @(objSingle ? "one" : "two")" style="--obj-rows:@objRows">
                                 <div class="obj-col">
-                                    @foreach (var so in objStage1) { <ObjectiveDisplayCard So="so" /> }
+                                    @foreach (var so in objStage1) { <ObjectiveDisplayCard So="so" Glow="Fresh(statusStage, so)" /> }
                                 </div>
                                 @if (!objSingle)
                                 {
                                     <div class="obj-col">
-                                        @foreach (var so in objStage2) { <ObjectiveDisplayCard So="so" /> }
+                                        @foreach (var so in objStage2) { <ObjectiveDisplayCard So="so" Glow="Fresh(statusStage, so)" /> }
                                     </div>
                                 }
                             </div>
@@ -333,13 +492,27 @@ else
                                 @foreach (var card in availCards)
                                 {
                                     <div class="sec-card" style="--c:@card.ColorHex">
-                                        <span class="sec-name"><span class="pn">@card.Initiative</span> @Loc.Pick(card.Name, card.NameDe)</span>
+                                        <span class="sec-name"><span class="pn">@card.Initiative</span> @CardDisplay.Name(Loc, s, card)</span>
                                         <ul class="ability-bullets">@foreach (var line in Lines(Loc.Pick(card.SecondaryText, card.SecondaryTextDe))) { <li>@line</li> }</ul>
                                     </div>
                                 }
                             }
                         </div>
                     }
+                </div>
+            </div>
+        }
+
+        @* Agenda phase: the QR is an overlay rather than a header strip. Latecomers can still scan it, and
+           the moment the host switches it off the vote view is whole again — no permanent height cost. *@
+        @if (s.DisplayMode == DisplayMode.JoinQr && isAgenda)
+        {
+            <div class="qr-overlay">
+                <div class="qr-card">
+                    <div class="qr-title">@string.Format(Loc["nav.joinQrTitle"], s.Name)</div>
+                    <div class="qr-url">@InviteUrl(s.JoinCode)</div>
+                    <JoinQr Text="@InviteUrl(s.JoinCode)" SizeCss="min(46vh, 40vw)" Alt="@Loc["nav.joinQr"]" />
+                    <div class="qr-code-big">@s.JoinCode</div>
                 </div>
             </div>
         }
@@ -351,6 +524,22 @@ else
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool _notFound;
+
+    /// <summary>Scored in the current round — highlighted while the table is in the status phase. Which
+    /// round a score belongs to is decided server-side (<c>ObjectiveScore.Round</c>).</summary>
+    private static bool Fresh(StatusStage? stage, SessionObjectiveDto so)
+        => stage is not null && so.ScoredThisRoundPlayerIds is { Count: > 0 };
+
+    // The checklist as the wall shows it: short name + the full step text. Mirrors StatusView.Steps.
+    private static readonly (StatusStep Step, string Key, string Detail)[] WallSteps =
+    {
+        (StatusStep.DrawActionCards, "status.step.drawActionCards", "status.detail.drawActionCards"),
+        (StatusStep.CommandTokens, "status.step.commandTokens", "status.detail.commandTokens"),
+        (StatusStep.ReadyCards, "status.step.readyCards", "status.detail.readyCards"),
+        (StatusStep.RepairUnits, "status.step.repairUnits", "status.detail.repairUnits"),
+        (StatusStep.ReturnStrategyCards, "status.step.returnStrategyCards", "status.detail.returnStrategyCards"),
+        (StatusStep.EndOfStatusAbilities, "status.step.endAbilities", "status.detail.endAbilities"),
+    };
 
     // End-game statistics (loaded from the log when the wall enters Statistics mode).
     private IReadOnlyList<SessionLogEntryDto> _log = Array.Empty<SessionLogEntryDto>();
@@ -366,10 +555,47 @@ else
         _notFound = !await Store.ConnectAsync(Code.ToUpperInvariant());
     }
 
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Store.OnSessionGone += Gone;
+    }
+
+    // The game was ended and closed while the wall was showing it. A projector has nowhere to navigate TO,
+    // so it says the session is gone instead of sitting on the loading screen for the rest of the evening.
+    private void Gone() => InvokeAsync(() =>
+    {
+        _notFound = true;
+        StateHasChanged();
+    });
+
+    public override void Dispose()
+    {
+        Store.OnSessionGone -= Gone;
+        base.Dispose();
+    }
+
+    /// <summary>The objectives already on the table when the status-phase reveal stage began. Anything that
+    /// appears afterwards is what the table just revealed. Kept per device rather than in the session: it is
+    /// only ever used to decide what this wall shows, and a reload legitimately starts over (then nothing is
+    /// "new" and the ordinary objective list is shown).</summary>
+    private HashSet<Guid>? _revealBaseline;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         var s = Store.Session;
         if (s is null) return;
+
+        // Snapshot / clear the reveal-stage baseline. After the render, so the first frame of the stage
+        // still shows the ordinary list — which is exactly what it should show until something is revealed.
+        if (s.Phase == GamePhase.Status && s.StatusStage == StatusStage.RevealObjective)
+        {
+            _revealBaseline ??= s.Objectives.Select(o => o.Id).ToHashSet();
+        }
+        else if (_revealBaseline is not null)
+        {
+            _revealBaseline = null;
+        }
 
         // Statistics wall: load the log once on entering the mode, then compute the timing breakdown.
         // Takes precedence over the agenda view (End game can be pressed in any phase).
@@ -403,6 +629,17 @@ else
 
     private static string[] Lines(string text) => (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    /// <summary>Accent colour per tech colour, for the combat view's technology chips.</summary>
+    private static string TechColorHex(TechColor c) => c switch
+    {
+        TechColor.Biotic => "#46c08a",
+        TechColor.Propulsion => "#4a78d6",
+        TechColor.Cybernetic => "#e0c341",
+        TechColor.Warfare => "#d6534a",
+        TechColor.Unit => "#c9d1e0",
+        _ => "#9aa7c0",
+    };
+
     private static string PhaseColor(GamePhase ph) => ph switch
     {
         GamePhase.Strategy => "#4a78d6",
@@ -414,34 +651,44 @@ else
 
     // Compute the agenda outcome for the wall — only once everyone has locked and (for a face-down vote)
     // the host has revealed. For/Against → passed / rejected / tie (speaker decides); elect → winner / tie.
+    // Free votes pass agenda = null; the outcome depends only on the elect kind and the votes.
     private string? AgendaResult(SessionStateDto s, AgendaDto? agenda, ElectType elect)
     {
-        if (agenda is null || s.AgendaVotesHidden) return null;
+        // Still fully face-down → no outcome. Once the TOTALS are public the outcome follows from them,
+        // so it is shown even though who voted what is still secret.
+        if ((agenda is null && !Store.CustomVoteActive) || (s.AgendaVotesHidden && s.AgendaTotals is null)) return null;
         var allLocked = s.Players.Count > 0 && s.Players.All(p => s.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
         if (!allLocked) return null;
         if (elect == ElectType.ForAgainst)
         {
-            var f = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
-            var a = s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
+            var f = s.AgendaTotals?.For
+                ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
+            var a = s.AgendaTotals?.Against
+                ?? s.AgendaVotes.Where(v => v.Locked && v.Outcome == VoteOutcome.Against).Sum(v => v.Votes);
             if (f == 0 && a == 0) return Loc["agenda.speakerDecides"];
             if (f == a) return Loc["agenda.speakerDecides"];
             return f > a ? Loc["agenda.passed"] : Loc["agenda.rejected"];
         }
-        var tally = s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
-            .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
-            .OrderByDescending(t => t.Votes).ToList();
+        var tally = s.AgendaTotals is { } tot
+            ? tot.Choices.Select(c => (Choice: c.Choice, Votes: c.Votes)).ToList()
+            : s.AgendaVotes.Where(v => v.Locked && !string.IsNullOrEmpty(v.Choice) && v.Votes > 0)
+                .GroupBy(v => v.Choice!).Select(g => (Choice: g.Key, Votes: g.Sum(v => v.Votes)))
+                .OrderByDescending(t => t.Votes).ToList();
         if (tally.Count == 0) return null;
         if (tally.Count > 1 && tally[0].Votes == tally[1].Votes) return Loc["agenda.speakerDecides"];
-        return $"{Loc["agenda.elected"]}: {ChoiceLabel(agenda, tally[0].Choice)}";
+        // By elect KIND, not by card: a free vote has no agenda, and passing null in here used to throw
+        // exactly when it mattered — the moment a free vote's winner was about to be announced.
+        return $"{Loc["agenda.elected"]}: {AgendaDisplay.ChoiceLabel(Store, Loc, elect, tally[0].Choice)}";
     }
 
     // Resolve a per-player vote into a human label for the display.
-    private string VoteLabel(AgendaDto agenda, ElectType elect, AgendaVoteDto vote)
+    // By elect KIND, not by agenda: a free vote has no card but still shows what each player chose.
+    private string VoteLabel(ElectType elect, AgendaVoteDto vote)
         => elect == ElectType.ForAgainst
             ? Loc[vote.Outcome == VoteOutcome.For ? "agenda.for" : "agenda.against"]
-            : ChoiceLabel(agenda, vote.Choice);
+            : AgendaDisplay.ChoiceLabel(Store, Loc, elect, vote.Choice);
 
-    // Resolve an elected candidate key (player id / planet / card number / law / objective) to a label.
-    private string ChoiceLabel(AgendaDto agenda, string? choice)
-        => AgendaDisplay.ChoiceLabel(Store, Loc, agenda, choice);
+    // The invite link the QR encodes. BaseUri already carries scheme/host/port, so this is the same URL a
+    // player would get from the host's "copy invite link" button — including on a LAN address.
+    private string InviteUrl(string joinCode) => $"{Nav.BaseUri}join/{joinCode}";
 }

@@ -1,0 +1,33 @@
+@inject SessionStore Store
+
+@*
+    Permanent "which instance is this" marker. Empty on production; the staging instance sets
+    Ti4__InstanceLabel=TEST, and then every screen — control views and the wall alike — carries a badge and
+    a frame so a test game can never be mistaken for a real one.
+
+    The label comes from the SERVER, not from the hostname: it has to survive a LAN address, a renamed
+    subdomain and a second staging box. Fetched once per app load (static cache), never blocking: if the
+    call fails the app simply shows nothing extra.
+
+    Both elements are pointer-events:none, so nothing they cover becomes untappable.
+*@
+@if (!string.IsNullOrWhiteSpace(label))
+{
+    <div class="instance-frame" aria-hidden="true"></div>
+    <div class="instance-badge" aria-hidden="true">@label</div>
+}
+
+@code {
+    // One request per app load rather than per navigation — the answer cannot change while the app runs.
+    private static string? cached;
+
+    private string? label = cached;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (cached is not null) { label = cached; return; }
+        try { cached = (await Store.Api.GetInstanceAsync())?.Label ?? ""; }
+        catch { cached = ""; }   // no label is the safe answer; never let this break a page
+        label = cached;
+    }
+}

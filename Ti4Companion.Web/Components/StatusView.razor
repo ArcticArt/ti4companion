@@ -1,8 +1,313 @@
 @inherits Ti4ComponentBase
 
-<div class="panel">
-    <h3 style="margin:0 0 .3rem;">@Loc["status.title"]</h3>
-    <p class="faint" style="margin:0;">@Loc["status.hint"]</p>
+@*
+    The status phase, walked through in three stages (GameSession.StatusStage):
+      1. scoring   — each player in initiative order taps ONE objective card, like taking a strategy card
+      2. reveal    — the next public objective goes on the table, shown large on the wall
+      3. checklist — the remaining upkeep steps, also large on the wall
+
+    Only the host moves between stages, and the target stage is absolute (see SetStatusStage) so a double
+    tap can't skip one. Nothing is enforced: every stage can be left at any time, in either direction.
+*@
+@{
+    var s = Store.Session!;
+    var host = Store.IsHost;
+    var stage = s.StatusStage;
+    var ordered = s.Players.OrderBy(p => p.Initiative ?? int.MaxValue).ThenBy(p => p.SeatOrder).ToList();
+    var scorerId = s.StatusScorerId;
+    var scorer = ordered.FirstOrDefault(p => p.Id == scorerId);
+    var mine = scorerId is not null && scorerId == Store.MyPlayerId;
+    var allDone = scorerId is null;
+}
+
+@* Stage strip: where the table is, and the host's way forward/back. *@
+<div class="panel status-stagebar">
+    <div class="stage-strip">
+        @foreach (var (st, key) in Stages)
+        {
+            <div class="stage-seg @(stage == st ? "on" : stage > st ? "done" : "")">@Loc[key]</div>
+        }
+    </div>
+    @if (host)
+    {
+        <div class="stage-nav">
+            @if (stage > StatusStage.Scoring)
+            {
+                <button class="btn btn-sm" @onclick="() => GoStage(stage - 1)"><MaterialIcon Name="chevron_left" /> @Loc["common.back"]</button>
+            }
+            @if (stage < StatusStage.Checklist)
+            {
+                <button class="btn btn-sm btn-gold" @onclick="() => GoStage(stage + 1)">@Loc["status.next"] <MaterialIcon Name="chevron_right" /></button>
+            }
+        </div>
+    }
 </div>
 
-<ObjectivesTab />
+@switch (stage)
+{
+    case StatusStage.Scoring:
+        @* Who is up, in initiative order. It used to be simultaneous, so nobody could tell who still
+           owed a decision. A guide plus the matching server gate — the game itself is not enforced. *@
+        <div class="panel" style="margin-top:.6rem;">
+            <div class="scoring-head">
+                <h3 style="margin:0;">@Loc["status.scoringOrder"]</h3>
+                @if (allDone)
+                {
+                    <span class="chip chip-done">@Loc["status.allScored"]</span>
+                }
+                else if (scorer is not null)
+                {
+                    <span class="faint">@(mine ? Loc["status.yourTurn"] : string.Format(Loc["status.waitingFor"], scorer.Name))</span>
+                }
+            </div>
+
+            <div class="scoring-order">
+                @foreach (var p in ordered)
+                {
+                    var isCurrent = p.Id == scorerId;
+                    <div class="so-row @(isCurrent ? "current" : "") @(p.StatusDone ? "done" : "")" style="--player-color:@p.ColorHex">
+                        <span class="so-init">@(p.Initiative?.ToString() ?? "—")</span>
+                        <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.8" Ring="@p.ColorHex" />
+                        <span class="so-name">@p.Name</span>
+                        @if (p.StatusDone)
+                        {
+                            <span class="chip chip-done"><MaterialIcon Name="check" /></span>
+                            @if (host || p.Id == Store.MyPlayerId)
+                            {
+                                <button class="btn btn-sm btn-ghost" @onclick="() => SetDone(p.Id, false)" title='@Loc["status.undoDone"]'><MaterialIcon Name="undo" /></button>
+                            }
+                        }
+                        else if (isCurrent && (host || p.Id == Store.MyPlayerId))
+                        {
+                            <button class="btn btn-sm btn-gold" @onclick="() => SetDone(p.Id, true)">@Loc["status.done"] <MaterialIcon Name="check" /></button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Score by tapping the card itself (not via the little markers, as in the action phase). The list is
+           what the player who is up can actually DO: a taped or purged objective is not scorable and one they
+           had already scored when their turn came round is not a decision, so neither is here (the Objectives
+           tab still shows the whole table, one tap away, tape and all). What they score NOW stays, marked, and
+           tapping it takes it back — a mis-tap has to be undoable in the same place it happened. *@
+        <div class="panel" style="margin-top:.6rem;">
+            @if (scorer is not null)
+            {
+                <h3 style="margin:0 0 .2rem;">@string.Format(Loc["status.scoreFor"], scorer.Name)</h3>
+                @* Say which it is: your decision to make, or somebody else's to watch. The cards below are
+                   only tappable in the first case (and the server refuses the second), so without this line
+                   the screen would read as a list that has stopped working. *@
+                <p class="faint" style="margin:0 0 .5rem;">
+                    @(Store.CanScoreFor(scorer.Id)
+                        ? Loc["status.tapToScore"]
+                        : string.Format(Loc["status.watchOnly"], scorer.Name))
+                </p>
+            }
+            else
+            {
+                <h3 style="margin:0 0 .5rem;">@Loc["obj.title"]</h3>
+            }
+            @{
+                var scorable = Scorable(s, scorer);
+            }
+            @if (scorable.Count == 0)
+            {
+                <p class="faint" style="margin:0;">@Loc[s.Objectives.Count == 0 ? "obj.none" : "status.nothingScorable"]</p>
+            }
+            else
+            {
+                <div class="obj-tap-grid">
+                    @foreach (var so in scorable)
+                    {
+                        var soId = so.Id;
+                        var already = scorer is not null && so.ScoredByPlayerIds.Contains(scorer.Id);
+                        <ObjectiveDisplayCard So="so"
+                                              Clickable="scorer is not null && Store.CanScoreFor(scorer.Id)"
+                                              Undo="already"
+                                              OnClick="() => Toggle(soId, scorer!.Id, already)"
+                                              TapeClickable="true"
+                                              OnRemoveTape="() => RemoveTape(soId)"
+                                              OnLockedTap="AskLocked" />
+                    }
+                </div>
+            }
+        </div>
+        break;
+
+    case StatusStage.RevealObjective:
+        @* Bureaucracy replaces this step outright: everything is already face-up, so nothing is revealed and
+           the step becomes a game-end check ("the game ends if there are no unrevealed public objectives at
+           the start of this step" — rulebook insert). Red Tape Lite keeps revealing, so it keeps the box. *@
+        @* A Red Tape variant REPLACES what this step is, so it replaces the text as well — the ordinary
+           "the speaker reveals the next objective" line is wrong at both of these tables and printing it
+           above the variant's own note only invited the table to do both. Red, because it is the variant
+           overruling the rulebook and not a hint about it. *@
+        var rtVariant = s.RedTapeVariant;
+        <div class="panel" style="margin-top:.6rem;">
+            <h3 style="margin:0 0 .2rem;">@Loc[rtVariant == RedTapeVariant.Bureaucracy ? "redtape.stepReplaced" : "status.stage.reveal"]</h3>
+            @if (rtVariant == RedTapeVariant.None)
+            {
+                <p class="faint" style="margin:0;">@Loc["status.revealHint"]</p>
+            }
+            else if (rtVariant == RedTapeVariant.Bureaucracy)
+            {
+                <p class="rt-step-note">@Loc["redtape.stepReplacedHint"]</p>
+            }
+            else
+            {
+                @* Lite: nothing is revealed HERE either. Either the card was taken this round and its holder
+                   already chose which marker came off, or nobody took it and one comes off at random when
+                   the phase ends (the app asks the host — see RedTapeModal). *@
+                <p class="rt-step-note">
+                    @string.Format(Loc[Store.CarrierTaken ? "redtape.stepLiteTaken" : "redtape.stepLiteRandom"], CarrierName(s))
+                </p>
+            }
+        </div>
+        <ObjectivesTab RevealOnTop="true" Scoreable="false" />
+        break;
+
+    case StatusStage.Checklist:
+        @* Short wording here, the full rules text on the wall — the host needs a list, the table needs
+           the explanation. *@
+        <div class="panel" style="margin-top:.6rem;">
+            <h3 style="margin:0 0 .4rem;">@Loc["status.checklist"]</h3>
+            @* Ticking the steps is the host's job — everyone else reads along, so the list renders without
+               a box for them. The checklist is shared state, and eight devices toggling one row is noise. *@
+            <div class="status-steps">
+                @foreach (var (step, key) in Steps)
+                {
+                    var done = s.StatusStepsDone.HasFlag(step);
+                    @if (host)
+                    {
+                        <button class="step @(done ? "done" : "")" @onclick="() => ToggleStep(step, !done)">
+                            <span class="step-box">@if (done) { <MaterialIcon Name="check" SizeCss="1em" /> }</span>
+                            <span>@Loc[key]</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="step readonly @(done ? "done" : "")">
+                            <span class="step-mark">@if (done) { <MaterialIcon Name="check" SizeCss="1em" /> }</span>
+                            <span>@Loc[key]</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+        break;
+}
+
+@* Same question as in the objectives tab: a tape a timing rule holds shut can be tapped, and overruled. *@
+<RedTapeSealModal Mode="@sealMode" Locked="@lockedAsk" OnClose="CloseSeal" />
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+
+    private RedTapeSealModal.SealMode? sealMode;
+    private SessionObjectiveDto? lockedAsk;
+
+    private void AskLocked(SessionObjectiveDto so)
+    {
+        lockedAsk = so;
+        sealMode = RedTapeSealModal.SealMode.Locked;
+    }
+
+    private void CloseSeal()
+    {
+        sealMode = null;
+        lockedAsk = null;
+    }
+
+    /// <summary>The card that carries the Red Tape ability, by the name the table sees (Bureaucracy renames
+    /// Imperial). Via <c>GameRules</c>, which normalises Lite back to Diplomacy — a stored Imperial from a
+    /// table that switched variants must not make the note point at the wrong card.</summary>
+    private string CarrierName(SessionStateDto s)
+    {
+        var card = Store.Card(GameRules.RedTapeCarrierCard(s.RedTapeVariant, s.RedTapeCardNumber));
+        return card is null ? "—" : CardDisplay.Name(Loc, s, card);
+    }
+
+    private static readonly (StatusStage Stage, string Key)[] Stages =
+    {
+        (StatusStage.Scoring, "status.stage.scoring"),
+        (StatusStage.RevealObjective, "status.stage.reveal"),
+        (StatusStage.Checklist, "status.stage.checklist"),
+    };
+
+    // The order and wording the user's table uses (command tokens discarded/gained is one entry).
+    // "Reveal objective" is NOT here anymore — it is its own stage. The last entry is not a rulebook step
+    // but the thing that gets forgotten: abilities that fire during or at the end of the phase.
+    private static readonly (StatusStep Step, string Key)[] Steps =
+    {
+        (StatusStep.DrawActionCards, "status.step.drawActionCards"),
+        (StatusStep.CommandTokens, "status.step.commandTokens"),
+        (StatusStep.ReadyCards, "status.step.readyCards"),
+        (StatusStep.RepairUnits, "status.step.repairUnits"),
+        (StatusStep.ReturnStrategyCards, "status.step.returnStrategyCards"),
+        (StatusStep.EndOfStatusAbilities, "status.step.endAbilities"),
+    };
+
+    private Task GoStage(StatusStage stage) => Store.Mutate(Store.Api.SetStatusStageAsync(Sid, stage));
+
+    private Task SetDone(Guid playerId, bool done)
+        => Store.Mutate(Store.Api.SetStatusDoneAsync(Sid, playerId, done));
+
+    private Task ToggleStep(StatusStep step, bool done)
+        => Store.Mutate(Store.Api.SetStatusStepAsync(Sid, step, done));
+
+    // What this scorer had ALREADY scored when their turn came round — snapshotted per scorer, so those cards
+    // stay out of their list while anything they score now stays in it, undoable. Per device and not in the
+    // session on purpose: it only decides what this screen offers, and it is re-taken when the scorer changes
+    // (the same reasoning as the wall's reveal baseline). An objective scored earlier in the round — Imperial's
+    // primary, say — is therefore gone from the list, which is exactly what "already scored" means here.
+    private Guid? baselineFor;
+    private HashSet<Guid> baseline = new();
+
+    private HashSet<Guid> Baseline(SessionStateDto s, PlayerDto? scorer)
+    {
+        if (scorer is null) return new HashSet<Guid>();
+        if (baselineFor != scorer.Id)
+        {
+            baselineFor = scorer.Id;
+            baseline = s.Objectives.Where(o => o.ScoredByPlayerIds.Contains(scorer.Id)).Select(o => o.Id).ToHashSet();
+        }
+        return baseline;
+    }
+
+    /// <summary>What the player who is up can act on: everything they may still score, plus what they have
+    /// scored SINCE their turn began so a mis-tap can be taken back. A taped or purged objective can't be
+    /// scored (the server refuses it too), so it would only be a card that does nothing when tapped; and one
+    /// they had already scored before this phase is not a decision either.
+    /// <para>With nobody up — everyone has said "done" — the same filter leaves the objectives that are
+    /// simply on the table, which is what the heading then says.</para></summary>
+    private List<SessionObjectiveDto> Scorable(SessionStateDto s, PlayerDto? scorer)
+    {
+        var was = Baseline(s, scorer);
+        bool ScoredNow(SessionObjectiveDto o) =>
+            scorer is not null && o.ScoredByPlayerIds.Contains(scorer.Id) && !was.Contains(o.Id);
+        return s.Objectives
+            .Where(o => !o.Purged && !was.Contains(o.Id)
+                        && (!Store.RedTapeBlocks(o) || ScoredNow(o)))
+            // Still to score first, scored just now after it: the top of the list is what there is to decide.
+            .OrderBy(o => ScoredNow(o) ? 1 : 0)
+            .ToList();
+    }
+
+    private Task Toggle(Guid sessionObjectiveId, Guid playerId, bool scored)
+        => scored ? Unscore(sessionObjectiveId, playerId) : Score(sessionObjectiveId, playerId);
+
+    private Task Score(Guid sessionObjectiveId, Guid playerId)
+        => Store.Mutate(Store.Api.ScoreObjectiveAsync(Sid, sessionObjectiveId, playerId));
+
+    // Taking a score back has no state to merge (the DELETE returns nothing), so it refreshes.
+    private async Task Unscore(Guid sessionObjectiveId, Guid playerId)
+    {
+        await Store.Api.UnscoreObjectiveAsync(Sid, sessionObjectiveId, playerId);
+        await Store.RefreshAsync();
+    }
+
+    // Red Tape: pull the tape off an objective so it can be scored (the card asks for a second tap first).
+    private Task RemoveTape(Guid sessionObjectiveId)
+        => Store.Mutate(Store.Api.SetObjectiveMarkerAsync(Sid, sessionObjectiveId, true));
+}

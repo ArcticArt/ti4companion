@@ -70,14 +70,43 @@ public static class SessionEndpoints
         g.MapDelete("/{id:guid}/players/{playerId:guid}/strategy-cards/{cardId:int}", UnassignStrategyCard);
         g.MapPost("/{id:guid}/players/{playerId:guid}/strategy-cards/{cardId:int}/used", SetStrategyCardUsed);
 
+        g.MapPost("/{id:guid}/seat-order", SetSeatOrder);   // whole table order in one call (host)
+        g.MapPost("/{id:guid}/summary", RecordSummary);     // permanent record of a finished game (host)
+
+        // ---- Status phase (scoring order + shared checklist) ----
+        g.MapPost("/{id:guid}/players/{playerId:guid}/status-done", SetStatusDone);
+        g.MapPost("/{id:guid}/status-step", SetStatusStep);
+        g.MapPost("/{id:guid}/status-stage", SetStatusStage);
+        g.MapPost("/{id:guid}/speaker", AppointSpeaker);
+        g.MapPost("/{id:guid}/secondary", SetSecondaryPlayers);
+        g.MapPost("/{id:guid}/secondary/close", CloseSecondary);
+        g.MapPost("/{id:guid}/combat", StartCombat);
+        g.MapPost("/{id:guid}/combat/end", EndCombat);
+        g.MapPost("/{id:guid}/archive", ArchiveSession);
+        g.MapPost("/{id:guid}/players/{playerId:guid}/secondary-done", SetSecondaryDone);
+        g.MapPost("/{id:guid}/players/{playerId:guid}/time-up", ReportTimeUp);
+        g.MapPost("/{id:guid}/push", SubscribePush);
+        // POST, not DELETE: minimal APIs refuse an inferred body on DELETE ("Body was inferred but the
+        // method does not allow inferred body parameters" — it crashes at startup), and the endpoint URL is
+        // far too long to hang off a query string.
+        g.MapPost("/{id:guid}/push/remove", UnsubscribePush);
+
         // ---- Objectives ----
         g.MapPost("/{id:guid}/objectives", RevealObjective);
         g.MapPost("/{id:guid}/objectives/custom", RevealCustomObjective); // secret made public / hand-added
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}", RemoveObjective);
+        g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/marker", SetObjectiveMarker); // Red Tape variant
+        g.MapPost("/{id:guid}/redtape/purge", AnswerRedTapePurge);   // Lite: confirm/decline the purge the app proposed
+        g.MapPost("/{id:guid}/redtape/random", AnswerRedTapeRandom); // Lite: confirm/decline the random removal
+        g.MapPost("/{id:guid}/redtape/random/seen", AckRedTapeRandom); // Lite: the table has seen which one it was
         g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores", ScoreObjective);
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores/{playerId:guid}", UnscoreObjective);
 
         // ---- Technologies (per player) ----
+        // The table records what it researched after a Technology action; the clock stands still until it is
+        // done (see RaiseTechPrompt).
+        g.MapPost("/{id:guid}/players/{playerId:guid}/tech-prompt-done", SetTechPromptDone);
+        g.MapPost("/{id:guid}/tech-prompt/close", CloseTechPromptRoute);
         g.MapPost("/{id:guid}/players/{playerId:guid}/technologies", AddTechnology);
         g.MapDelete("/{id:guid}/players/{playerId:guid}/technologies/{techId}", RemoveTechnology);
 
@@ -85,6 +114,7 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/agenda", SetAgenda);              // reveal an agenda / clear it (deducts spent influence)
         g.MapPost("/{id:guid}/agenda/start", StartVoting);      // host opens the vote (open or face-down)
         g.MapPost("/{id:guid}/agenda/cancel", CancelVoting);    // host aborts → back to influence entry
+        g.MapPost("/{id:guid}/agenda/reveal-totals", RevealVoteTotals); // totals only, no attribution
         g.MapPost("/{id:guid}/agenda/reveal", RevealVotes);     // host flips a face-down vote face-up
         g.MapPost("/{id:guid}/agenda/lock", LockVote);          // commit a vote (open or hidden); counts only once locked
 
@@ -126,7 +156,7 @@ public static class SessionEndpoints
             Name = string.IsNullOrWhiteSpace(req.Name) ? "Twilight Imperium" : Clamp(req.Name),
             DefaultLanguage = req.Language,
             ActiveExpansions = (req.ActiveExpansions ?? AllExpansions) | Expansion.Base,
-            RetentionHours = config.GetValue("Ti4:DefaultRetentionHours", 168),
+            RetentionHours = config.GetValue("Ti4:DefaultRetentionHours", GameRules.DefaultRetentionHours),
             Phase = GamePhase.Setup,
         };
 
@@ -151,12 +181,14 @@ public static class SessionEndpoints
         return Results.Ok(new JoinResultDto(state, host.Id, deviceToken));
     }
 
-    private static async Task<IResult> GetByCode(string code, Ti4DbContext db, CancellationToken ct)
+    private static async Task<IResult> GetByCode(string code, Ti4DbContext db, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphByCodeAsync(db, SessionHub.Normalize(code), ct);
         if (session is null) return Results.NotFound();
         var overrides = FactionInitiative.Overrides;
-        return Results.Ok(session.ToDto(overrides));
+        // The one response that says which seat the asking device holds. It is how a device learns that its
+        // seat has been taken over — see SessionStateDto.CallerPlayerId.
+        return Results.Ok(session.ToDto(overrides, GetCaller(session, http)?.Id));
     }
 
     // The match log (chronological). Read-only like GetByCode; the client only surfaces it to the host.
@@ -182,14 +214,54 @@ public static class SessionEndpoints
         if (req.ActiveExpansions is not null) session.ActiveExpansions = req.ActiveExpansions.Value | Expansion.Base;
         if (req.ShowTechOverview is not null) session.ShowTechOverview = req.ShowTechOverview.Value;
         if (req.AllowEditAllPlayers is not null) session.AllowEditAllPlayers = req.AllowEditAllPlayers.Value;
+        // A host correcting the phase or the round by hand is a real move on the timeline, so it has to be
+        // logged like the ordinary transitions are — MatchStats builds its per-round and per-phase figures
+        // ONLY from these two kinds. Without them a corrected round simply vanished from the statistics and
+        // its time was absorbed by the round before it (measured: rounds 1, 2, 3, 5 with round 4's nine
+        // minutes inside round 3). Only on an actual change, or re-sending the same settings would spam the log.
+        var roundChanged = req.CurrentRound is > 0 && req.CurrentRound.Value != session.CurrentRound;
+        var phaseChanged = req.Phase is not null && req.Phase.Value != session.Phase;
         if (req.Phase is not null) session.Phase = req.Phase.Value;
         if (req.CurrentRound is > 0) session.CurrentRound = req.CurrentRound.Value;
+        // Round first, then phase — the same order NextRound writes them in, so a reader diffing the timeline
+        // sees the round open before the phase inside it.
+        if (roundChanged) Log(db, session, http, SessionLogKind.RoundChange, round: session.CurrentRound);
+        if (phaseChanged) Log(db, session, http, SessionLogKind.PhaseChange, phase: session.Phase, round: session.CurrentRound);
         if (req.SpeakerPlayerId is not null && req.SpeakerPlayerId != session.SpeakerPlayerId)
         {
             session.SpeakerPlayerId = req.SpeakerPlayerId;
+            // Also the way out if a Politics appointment is stuck: the host setting the speaker by hand
+            // satisfies it, so no session can be wedged by a block the app itself put there.
+            session.SpeakerPending = false;
             Log(db, session, http, SessionLogKind.SpeakerSet, target: req.SpeakerPlayerId);
         }
         if (req.AgendaVotesHidden is not null) session.AgendaVotesHidden = req.AgendaVotesHidden.Value;
+        // Turn timer: 0 = off, otherwise clamped to a sane 10 s … 2 h budget per player per round. The setup
+        // field lets the host type minutes, so it offers exactly these bounds (see GameRules).
+        if (req.TurnTimerSeconds is { } tt)
+            session.TurnTimerSeconds = tt <= 0
+                ? 0
+                : Math.Clamp(tt, GameRules.TurnTimerMinSeconds, GameRules.TurnTimerMaxSeconds);
+        // Strategy cards per player: only 0 (automatic), 1 or 2 are meaningful.
+        if (req.StrategyCardsPerPlayer is { } cpp)
+            session.StrategyCardsPerPlayer = cpp is 1 or 2 ? cpp : 0;
+        if (req.RedTapeVariant is { } rtv && Enum.IsDefined(rtv))
+            session.RedTapeVariant = rtv;
+        // Only the two cards the variant is published for.
+        if (req.RedTapeCardNumber is { } rtc && (rtc == GameRules.RedTapeDiplomacyCard || rtc == GameRules.ImperialStrategyCard))
+            session.RedTapeCardNumber = rtc;
+        // Settle the carrier in ONE place, after both may have changed: only Bureaucracy replaces a card and
+        // therefore offers the choice — Lite is published for Diplomacy, full stop. Doing it here also means a
+        // table that picked Imperial and then switched to Lite cannot be left pointing at a card Lite has no
+        // rule for, which is otherwise invisible: Lite's random removal keys on "nobody holds the carrier".
+        if (session.RedTapeVariant != RedTapeVariant.None)
+            session.RedTapeCardNumber = GameRules.RedTapeCarrierCard(session.RedTapeVariant, session.RedTapeCardNumber);
+        if (req.PromptTechOnAction is not null) session.PromptTechOnAction = req.PromptTechOnAction.Value;
+        if (req.TrackSecondaryAbilities is not null) session.TrackSecondaryAbilities = req.TrackSecondaryAbilities.Value;
+        // Turning the timer off takes the secondary round with it — it has nothing left to measure, and an
+        // option left on that silently does nothing is worse than one that visibly turns itself off.
+        if (session.TurnTimerSeconds <= 0) session.TrackSecondaryAbilities = false;
+        if (req.ShowJoinQr is not null) session.ShowJoinQr = req.ShowJoinQr.Value;
 
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -239,40 +311,56 @@ public static class SessionEndpoints
     // Phase / round flow
     // -----------------------------------------------------------------------
 
-    private static async Task<IResult> StartGame(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> StartGame(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
-        // Seat order + speaker must be settled, and everyone ready, before the game can start.
+        // Everyone ready is the only gate. The SPEAKER is no longer required here: it is picked (or rolled)
+        // in the seat-order dialog, and a table that starts without one settles it during the strategy
+        // phase. TurnService already treats a missing speaker as "start at seat 0", so nothing breaks.
         if (session.Players.Count == 0 || session.Players.Any(p => !p.IsReady))
             return Results.BadRequest(new { error = "All players must be ready." });
-        if (session.SpeakerPlayerId is null)
-            return Results.BadRequest(new { error = "Choose a speaker before starting." });
         // The 2 starting public objectives are chosen physically and recorded by the host during
         // setup (see ObjectivesTab) — they are no longer auto-revealed here.
         session.Phase = GamePhase.Strategy;
+        // The speaker picks first, and may well be looking at their phone rather than at the table.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, MaxCards(session)), PushAction.StrategyPick);
+        // Everybody who was going to join has joined: the wall belongs to the game now, so it leaves the QR
+        // area for the objectives. Only a default - the QR is one of the four display areas and any player
+        // can switch back to it at any time.
+        if (session.DisplayMode == DisplayMode.JoinQr) session.DisplayMode = DisplayMode.Objectives;
         // Timeline markers for the statistics view: the match (and round 1) begin now.
         Log(db, session, SessionLogKind.RoundChange, GetCaller(session, http)?.Id, round: session.CurrentRound);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Strategy, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> StartActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> StartActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
 
-        // Every player must have taken their full strategy-card allotment first (≤4 players → 2 each, else 1).
-        var perPlayer = session.Players.Count <= 4 ? 2 : 1;
-        if (session.Players.Count == 0 || session.Players.Any(p => p.StrategyCards.Count < perPlayer))
+        // Every player must have taken their full strategy-card allotment first (printed rule unless the
+        // table pinned a count) — or the eight cards must be gone, which is the only way a five-player table
+        // playing "two each" can ever get here. See GameRules.StrategyPickDone.
+        if (!GameRules.StrategyPickDone(session.Players.Select(p => p.StrategyCards.Count).ToList(),
+                                        session.StrategyCardsPerPlayer))
             return Results.BadRequest(new { error = "All players must pick their strategy card(s) first." });
 
         // Trade goods are settled only now (start of the action phase): each player collects the
         // goods accumulated on the card they picked, and every card no one picked gains 1 more.
         // Keeping them on the card through the whole strategy phase means a pick→unpick doesn't lose them.
         var picked = session.Players.SelectMany(p => p.StrategyCards.Select(c => c.StrategyCardId)).ToHashSet();
+        // BUREAUCRACY's SPECIAL: "remove Red Tape counters equal to the number of trade goods on this card" —
+        // the count is read HERE, in the one moment it still exists, and remembered for the round. The goods
+        // are wiped in the same breath (the player collected them), so the action phase could not work it out.
+        // Captured for every table because it costs nothing; whether it MEANS anything is the variant's
+        // business, and Red Tape Lite has no such addition (GameRules.RedTapeAllowedRemovals).
+        session.RedTapeCarrierGoods = picked.Contains(session.RedTapeCardNumber)
+            ? session.StrategyCardStates.FirstOrDefault(x => x.StrategyCardId == session.RedTapeCardNumber)?.TradeGoods ?? 0
+            : 0;
         for (var cardId = 1; cardId <= 8; cardId++)
         {
             if (picked.Contains(cardId))
@@ -296,12 +384,16 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Action;
         session.ActiveStrategyCardId = null;
         session.ActivePlayerId = TurnService.FirstActive(session, overrides);
+        // "In Round 1, do this right after the Strategy Phase" — this is that moment. Later rounds get it
+        // when the status phase ends.
+        if (session.CurrentRound == 1) RedTapeRandom(session);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Action, round: session.CurrentRound);
         if (session.ActivePlayerId is Guid first) Log(db, session, SessionLogKind.TurnChange, GetCaller(session, http)?.Id, target: first);
+        NotifyTurn(session, push);
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
-    private static async Task<IResult> EndActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> EndActionPhase(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
@@ -312,7 +404,20 @@ public static class SessionEndpoints
         session.Phase = GamePhase.Status;
         session.ActivePlayerId = null;
         session.ActiveStrategyCardId = null;
+        // End of the phase bounds all three: no clock keeps running into the status phase, a combat nobody
+        // ended can't keep it stopped, and a Politics appointment nobody made can't block the rest of the
+        // evening.
+        CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+        CloseCombat(db, session, GetCaller(session, http)?.Id);
+        CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
+        session.SpeakerPending = false;
+        // Fresh status phase: back to stage 1, scoring starts over at the lowest initiative, checklist blank.
+        session.StatusStepsDone = StatusStep.None;
+        session.StatusStage = StatusStage.Scoring;
+        foreach (var p in session.Players) p.StatusDone = false;
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Status, round: session.CurrentRound);
+        // Scoring runs in initiative order, so the first scorer is the one who has to do something now.
+        NotifyAction(session, push, TurnService.CurrentScorer(session, FactionInitiative.Overrides), PushAction.Score);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -321,41 +426,73 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
+        // The status phase is over: Red Tape Lite's random removal is due (idempotent per round, so going
+        // status → agenda → next round does it once).
+        if (session.Phase == GamePhase.Status) RedTapeRandom(session);
         session.Phase = GamePhase.Agenda;
         // Fresh agenda phase: clear the agenda/votes and reset every player's entered influence.
         session.CurrentAgendaId = null;
+        // A free vote must be cleared with the agenda, or the table enters the next agenda phase still
+        // voting on last round's typed question (reported: "even next round I'm still in custom mode").
+        session.CustomVoteTitle = null;
+        session.CustomVoteElect = null;
         session.VotingStarted = false;
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         foreach (var p in session.Players) p.Influence = 0;
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Agenda, round: session.CurrentRound);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> NextRound(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> NextRound(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
 
         LogAgendaResult(db, session);   // capture the last agenda's result before the round resets
+        CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+        CloseCombat(db, session, GetCaller(session, http)?.Id);
+        CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
+        // A random-removal question nobody answered in an EARLIER round is stale — the moment has passed, and
+        // leaving it open would wedge every later one (only one question is ever open). Same reasoning as the
+        // escape hatches on the Politics block. A question raised in the round now ending stays open: the host
+        // answers it during the next strategy phase, which is exactly the normal case.
+        if (session.RedTapeRandomPendingRound != 0 && session.RedTapeRandomPendingRound < session.CurrentRound)
+            RedTape.DeclineRandom(session);
+        // A result the host never closed belongs to the round that is ending — clear it before the next one
+        // raises its own, or the wall would show last round's card over this round's question.
+        session.RedTapeRandomRevealedId = null;
+        // Same as in StartAgendaPhase — whichever way the table leaves the status phase, the removal is due
+        // once. Still in the OLD round here, which is what the per-round guard keys on.
+        RedTapeRandom(session);
         session.CurrentRound += 1;
         session.Phase = GamePhase.Strategy;
         session.ActivePlayerId = null;
         session.ActiveStrategyCardId = null;
+        session.SpeakerPending = false;
         session.CurrentAgendaId = null;
+        session.CustomVoteTitle = null;      // same reason as in StartAgendaPhase — a free vote is per agenda
+        session.CustomVoteElect = null;
         session.VotingStarted = false;
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
+        session.StatusStepsDone = StatusStep.None;
+        session.StatusStage = StatusStage.Scoring;
         foreach (var p in session.Players)
         {
             p.HasPassed = false;
+            p.StatusDone = false;
             p.Influence = 0;
             p.StrategyCards.Clear();
         }
 
         Log(db, session, SessionLogKind.RoundChange, GetCaller(session, http)?.Id, round: session.CurrentRound);
         Log(db, session, SessionLogKind.PhaseChange, GetCaller(session, http)?.Id, phase: GamePhase.Strategy, round: session.CurrentRound);
+        // New round, cards back in the middle: the speaker picks first.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, MaxCards(session)), PushAction.StrategyPick);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -368,7 +505,17 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
+        // A new action on the table ends whatever the previous one was still holding: its secondary round and
+        // a technology prompt nobody finished. The table has visibly moved on, so neither may keep the clock.
+        if (req.StrategyCardId is not null)
+        {
+            CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+            CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
+        }
         session.ActiveStrategyCardId = req.StrategyCardId;
+        // Politics: the appointment is the card. Playing it arms the block on ending the turn; taking the
+        // card back off the table (↺ "not done") disarms it again.
+        session.SpeakerPending = req.StrategyCardId == GameRules.PoliticsStrategyCard;
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -382,15 +529,32 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> AdvanceTurn(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> AdvanceTurn(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
+        if (session.SpeakerPending) return SpeakerFirst();
         var overrides = FactionInitiative.Overrides;
+        // A new turn begins: a combat from the last one is over whether or not anybody said so, and so is a
+        // technology prompt nobody finished — both stop the clock, so neither may outlive the turn. Closed
+        // BEFORE the two calls below, which may raise a fresh prompt for the turn that is ending.
+        CloseCombat(db, session, GetCaller(session, http)?.Id);
+        CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
+        // A secondary ability happens BETWEEN two turns, so a round from the previous turn is over before
+        // this one's opens. It used to outlive the turn advance deliberately ("the next player gets on with
+        // it while the others resolve") — but that also meant the next player's clock ran while the table was
+        // still working out who took the secondary, and it left a round nobody closed blocking every later
+        // one from opening at all (OpenSecondaries returns early while one is running).
+        CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+        // The turn is over → this player's clock stops and the others' can start (see OpenSecondaries).
+        OpenSecondaries(db, session, GetCaller(session, http)?.Id);
+        RaiseTechPromptWithoutRound(db, session);
+        NotifyTechPrompt(session, push);
         session.ActivePlayerId = TurnService.NextActive(session, overrides);
         session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
         if (session.ActivePlayerId is Guid next) Log(db, session, http, SessionLogKind.TurnChange, target: next);
+        NotifyTurn(session, push);
         return await SaveAndReturn(db, hub, session, ct, overrides);
     }
 
@@ -420,16 +584,20 @@ public static class SessionEndpoints
 
         if (req.ClaimPlayerId is Guid claimId)
         {
-            // Take over (claim) an existing seat. Any non-host player may be claimed; the host cannot.
+            // Take over (claim) an existing seat — the HOST's seat included. It used to be refused, which
+            // left a table stranded whenever the host's browser lost its storage or the host wanted to come
+            // back on another device: nobody could steer the phases any more. What guards this is the same
+            // thing that guards everything else here — knowing the join code — and any device with the code
+            // can already score and vote. The take-over is logged (SeatClaim) so the table can see it.
             var claimed = session.Players.FirstOrDefault(p => p.Id == claimId);
             if (claimed is null) return Results.NotFound();
-            if (claimed.IsHost) return Forbidden();
             // One device controls one seat: orphan any other player this device currently held.
             foreach (var other in session.Players.Where(p => p.Id != claimed.Id && p.DeviceToken == deviceToken))
                 other.DeviceToken = Guid.NewGuid().ToString("N");
             claimed.DeviceToken = deviceToken;
             if (!string.IsNullOrWhiteSpace(req.Name)) claimed.Name = Clamp(req.Name);
             target = claimed;
+            Log(db, session, SessionLogKind.SeatClaim, claimed.Id, claimed.Id);
         }
         else
         {
@@ -511,7 +679,7 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> SetPassed(Guid id, Guid playerId, SetPassedRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> SetPassed(Guid id, Guid playerId, SetPassedRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
@@ -523,13 +691,25 @@ public static class SessionEndpoints
             // A player may only pass once they have performed all of their strategy actions.
             if (player.StrategyCards.Count > 0 && player.StrategyCards.Any(c => !c.IsExhausted))
                 return Results.BadRequest(new { error = "Play all strategy actions before passing." });
+            if (session.SpeakerPending && playerId == session.ActivePlayerId) return SpeakerFirst();
 
             player.HasPassed = true;
             Log(db, session, http, SessionLogKind.Pass, target: playerId);
             var overrides = FactionInitiative.Overrides;
+            if (playerId == session.ActivePlayerId)
+            {
+                // Same as in AdvanceTurn: whatever stopped the clock on this turn ends with it, then the
+                // previous secondary round is closed before this turn's opens.
+                CloseTechPrompt(db, session, GetCaller(session, http)?.Id);
+                CloseSecondaries(db, session, GetCaller(session, http)?.Id);
+                OpenSecondaries(db, session, GetCaller(session, http)?.Id);
+                RaiseTechPromptWithoutRound(db, session);
+                NotifyTechPrompt(session, push);
+            }
             session.ActivePlayerId = TurnService.NextActiveAfter(session, overrides, playerId);
             session.ActiveStrategyCardId = null; // a new turn begins → close any played-action highlight
             if (session.ActivePlayerId is Guid nxt) Log(db, session, http, SessionLogKind.TurnChange, target: nxt);
+                NotifyTurn(session, push);
             return await SaveAndReturn(db, hub, session, ct, overrides);
         }
 
@@ -541,13 +721,13 @@ public static class SessionEndpoints
     // Strategy cards
     // -----------------------------------------------------------------------
 
-    private static async Task<IResult> AssignStrategyCard(Guid id, Guid playerId, AssignStrategyCardRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> AssignStrategyCard(Guid id, Guid playerId, AssignStrategyCardRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
         if (session is null || player is null) return Results.NotFound();
 
-        var maxCards = session.Players.Count <= 4 ? 2 : 1;
+        var maxCards = GameRules.StrategyCardsPerPlayer(session.Players.Count, session.StrategyCardsPerPlayer);
         // Pick order: speaker first, then clockwise by seat. A non-host may only take their own card
         // and only when it's their turn to pick; the host may pick for anyone.
         if (!CallerIsHost(session, http))
@@ -567,10 +747,11 @@ public static class SessionEndpoints
 
         // Accumulated trade goods stay on the card until the action phase begins (see StartActionPhase),
         // so picking and then returning a card no longer discards them.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, maxCards), PushAction.StrategyPick);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> UnassignStrategyCard(Guid id, Guid playerId, int cardId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> UnassignStrategyCard(Guid id, Guid playerId, int cardId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
@@ -578,6 +759,9 @@ public static class SessionEndpoints
         if (!CallerCanActFor(session, http, playerId)) return Forbidden();
         player.StrategyCards.RemoveAll(c => c.StrategyCardId == cardId);
         Log(db, session, http, SessionLogKind.StrategyReturn, target: playerId, detail: cardId.ToString());
+        // A returned card gives the pick back to THIS player (see TurnService.CurrentPicker), so they are the
+        // one to tell.
+        NotifyAction(session, push, TurnService.CurrentPicker(session, MaxCards(session)), PushAction.StrategyPick);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -605,7 +789,11 @@ public static class SessionEndpoints
         var objectiveId = ClampId(req.ObjectiveId) ?? "";
         if (!session.Objectives.Any(o => o.ObjectiveId == objectiveId))
         {
-            session.Objectives.Add(new SessionObjective { SessionId = session.Id, ObjectiveId = objectiveId });
+            var fresh = new SessionObjective { SessionId = session.Id, ObjectiveId = objectiveId };
+            session.Objectives.Add(fresh);
+            // Red Tape: the layout is taped EXCEPT the first two Stage I, which count as revealed — so the
+            // host doesn't have to pull two tapes by hand right after setting the table up.
+            fresh.MarkerRemoved = RedTape.RevealsUntaped(session, fresh);
             Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: objectiveId);
         }
         return await SaveAndReturn(db, hub, session, ct);
@@ -624,6 +812,8 @@ public static class SessionEndpoints
             ObjectiveId = "",
             CustomName = Clamp(req.Name, 100),
             CustomPoints = Math.Clamp(req.Points, 0, 10),
+            // A hand-added objective was never part of the taped layout (it is usually a secret made public).
+            MarkerRemoved = true,
         });
         Log(db, session, http, SessionLogKind.ObjectiveReveal, detail: Clamp(req.Name, 100));
         return await SaveAndReturn(db, hub, session, ct);
@@ -639,6 +829,631 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
+    // Record the permanent summary of a finished game (host). Idempotent, and a no-op for a session that
+    // never became a real game — the response says which it was, so the UI can stay quiet either way.
+    private static async Task<IResult> RecordSummary(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+
+        var recorded = await SessionSummaryService.TryRecordAsync(db, session, ct);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { recorded });
+    }
+
+    // Archive the match: keep the permanent summary, drop everything else. Two destinations, because "we are
+    // done with this game" means one of two things at a table:
+    //   Reset = true  → the session survives as a fresh setup with the same people (another game tonight),
+    //   Reset = false → the session is deleted outright (everyone goes home).
+    // Host only, and the summary is FORCED: the host declared this a finished match, so its length is not
+    // ours to second-guess — unlike the automatic recording, which filters out abandoned setups.
+    private static async Task<IResult> ArchiveSession(Guid id, ArchiveSessionRequest req, Ti4DbContext db, MasterDbContext master, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+
+        await SessionSummaryService.TryRecordAsync(db, session, ct, force: true);
+
+        if (!req.Reset)
+        {
+            // The summary has no FK to the session on purpose, so it outlives this delete.
+            db.Sessions.Remove(session);
+            await db.SaveChangesAsync(ct);
+            await hub.NotifySessionChanged(session.JoinCode);
+            return Results.Ok(new { archived = true, deleted = true });
+        }
+
+        // Back to setup: the TABLE stays (names, factions, colours, seats), the MATCH is gone. Ready flags are
+        // cleared so everyone confirms again, and the log goes with the match — otherwise the next game's
+        // statistics would start with the last one's timeline in them.
+        db.SessionLog.RemoveRange(db.SessionLog.Where(l => l.SessionId == session.Id));
+        session.Objectives.Clear();
+        session.StrategyCardStates.Clear();
+        session.AgendaVotes.Clear();
+        session.Phase = GamePhase.Setup;
+        session.CurrentRound = 1;
+        session.ActivePlayerId = null;
+        session.ActiveStrategyCardId = null;
+        session.CurrentAgendaId = null;
+        session.CustomVoteTitle = null;
+        session.CustomVoteElect = null;
+        session.VotingStarted = false;
+        session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
+        session.StatusStepsDone = StatusStep.None;
+        session.StatusStage = StatusStage.Scoring;
+        session.SpeakerPlayerId = null;
+        session.SpeakerPending = false;
+        session.SecondaryCardId = null;
+        session.SecondaryOwnerId = null;
+        session.CombatAId = null;
+        session.CombatBId = null;
+        session.TechPickPlayerId = null;
+        session.TechPromptOpen = false;
+        session.TechPromptOwnerId = null;
+        session.RedTapeCarrierGoods = 0;
+        session.RedTapeRandomRound = 0;
+        session.RedTapeRandomPendingRound = 0;      // no open question carries into the next match
+        session.RedTapeRandomRevealedId = null;
+        session.DisplayMode = DisplayMode.JoinQr;   // a fresh table starts on the join code again
+        foreach (var p in session.Players)
+        {
+            p.HasPassed = false;
+            p.IsReady = false;
+            p.StatusDone = false;
+            p.SecondaryPending = false;
+            p.TechPromptPending = false;
+            p.Influence = 0;
+            p.StrategyCards.Clear();
+            p.Technologies.Clear();
+        }
+        // Starting technologies come back from the chosen faction, exactly as they did when it was picked —
+        // otherwise a reset table would sit there with a faction and no starting techs.
+        foreach (var p in session.Players)
+            await UpdateStartingTechnologiesAsync(master, session, p, null, p.FactionId, ct);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Set the whole seat order at once (host). Players missing from the list keep their relative order
+    // after the listed ones, so a stale client can't drop somebody off the table.
+    private static async Task<IResult> SetSeatOrder(Guid id, SetSeatOrderRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+
+        var seat = 0;
+        foreach (var pid in req.PlayerIds.Distinct())
+        {
+            var p = session.Players.FirstOrDefault(x => x.Id == pid);
+            if (p is not null) p.SeatOrder = seat++;
+        }
+        foreach (var p in session.Players.Where(p => !req.PlayerIds.Contains(p.Id)).OrderBy(p => p.SeatOrder))
+            p.SeatOrder = seat++;
+
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Status phase: mark a player done scoring so the turn moves to the next initiative. Self or host,
+    // and reversible — someone who clicked too early gets their turn back.
+    private static async Task<IResult> SetStatusDone(Guid id, Guid playerId, SetStatusDoneRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
+        if (session is null || player is null) return Results.NotFound();
+        if (!CallerIsHost(session, http) && GetCaller(session, http)?.Id != playerId) return Forbidden();
+        player.StatusDone = req.Done;
+        // Handing over: whoever is up next has something to do. Only on "done", never on the undo — that is a
+        // correction, and a phone buzzing about it says the opposite of what happened.
+        if (req.Done)
+            NotifyAction(session, push, TurnService.CurrentScorer(session, FactionInitiative.Overrides), PushAction.Score);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Status phase: tick one of the shared post-scoring steps. Open to any device — it's a checklist on
+    // the table, and whoever does the step should be able to tick it.
+    private static async Task<IResult> SetStatusStep(Guid id, SetStatusStepRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        session.StatusStepsDone = req.Done
+            ? session.StatusStepsDone | req.Step
+            : session.StatusStepsDone & ~req.Step;
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Politics: the player who played the card appoints the speaker. Its own route rather than widening the
+    // host-only settings PATCH — the permission is narrow on purpose (only while the Politics action is on
+    // the table, and only for the player who played it), and a widened PATCH would grant far more than that.
+    private static async Task<IResult> AppointSpeaker(Guid id, SetSpeakerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        var isActive = caller is not null && caller.Id == session.ActivePlayerId;
+        if (!isActive && !CallerIsHost(session, http)) return Forbidden();
+        if (session.ActiveStrategyCardId != GameRules.PoliticsStrategyCard && !CallerIsHost(session, http))
+            return Results.BadRequest(new { error = "Politics is not the running strategy action." });
+        if (session.Players.All(p => p.Id != req.PlayerId)) return Results.NotFound();
+        // The card reads "choose a player other than the speaker", so the token has to move.
+        if (session.SpeakerPlayerId == req.PlayerId)
+            return Results.BadRequest(new { error = "Choose a player other than the current speaker." });
+        session.SpeakerPlayerId = req.PlayerId;
+        session.SpeakerPending = false;   // the appointment is done — the turn may end
+        Log(db, session, SessionLogKind.SpeakerSet, caller?.Id, target: req.PlayerId);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // A combat between two players. Declared by whoever is up (or the host) and ended by either side or the
+    // host — a battle is resolved on the table, so the app only needs to know that one is running: the wall
+    // puts the two of them opposite each other, and the turn clock stops until it is over.
+    private static async Task<IResult> StartCombat(Guid id, StartCombatRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        var declaring = req.PlayerId ?? session.ActivePlayerId;
+        if (declaring is null) return Results.BadRequest(new { error = "Nobody is up." });
+        if (!CallerCanActFor(session, http, declaring.Value)) return Forbidden();
+        if (session.Players.All(p => p.Id != req.OpponentId)) return Results.NotFound();
+        if (req.OpponentId == declaring) return Results.BadRequest(new { error = "Pick another player." });
+
+        session.CombatAId = declaring;
+        session.CombatBId = req.OpponentId;
+        Log(db, session, SessionLogKind.CombatStart, declaring, target: req.OpponentId);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Combat over. Either participant or the host — whoever puts the dice down first.
+    private static async Task<IResult> EndCombat(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (session.CombatAId is null) return await SaveAndReturn(db, hub, session, ct);   // already over
+        var caller = GetCaller(session, http);
+        var involved = caller is not null && (caller.Id == session.CombatAId || caller.Id == session.CombatBId);
+        if (!involved && !CallerIsHost(session, http)) return Forbidden();
+        CloseCombat(db, session, caller?.Id);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>Stop a running combat. Also called wherever the turn or phase moves on, so a forgotten
+    /// "combat over" can never keep the clock stopped for the rest of the evening.</summary>
+    private static void CloseCombat(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        if (session.CombatAId is null && session.CombatBId is null) return;
+        var b = session.CombatBId;
+        session.CombatAId = null;
+        session.CombatBId = null;
+        Log(db, session, SessionLogKind.CombatEnd, actor, target: b);
+    }
+
+    /// <summary>Ask the whole table to record what it researched, and STOP THE CLOCK while it does. Raised
+    /// when the Technology card's secondary round closes (see <see cref="CloseSecondaries"/>), because that is
+    /// when everyone who researched — the primary player and the secondaries — is finally done taking it.
+    /// <para>
+    /// A round, not a per-player popup: every player owes an entry, and the interval only ends when nobody is
+    /// pending any more or the card's owner (or the host) moves the table on. That is the same shape as the
+    /// secondary round, for the same reason — several people are busy at once, and none of it is the next
+    /// player's thinking time.
+    /// </para></summary>
+    private static void RaiseTechPrompt(Ti4DbContext db, GameSession session, Guid? owner, int card)
+    {
+        if (session.TechPromptOpen) return;
+        session.TechPromptOpen = true;
+        session.TechPromptOwnerId = owner;
+        // Everyone, deliberately. Narrowing it to "the ones who took the secondary" would be better — the
+        // table would be asked twice instead of seven times — but that set no longer exists by the time the
+        // round closes: each player's pending flag is cleared as they tick themselves off, and the last one
+        // out closes the round. Doing it properly needs one more per-player flag ("took the secondary this
+        // round"); see the note in CLAUDE.md before adding it.
+        foreach (var p in session.Players) p.TechPromptPending = true;
+        Log(db, session, SessionLogKind.TechPromptOpen, owner, detail: card.ToString());
+    }
+
+    /// <summary>The table is done recording (everybody said so, somebody moved it on, or a phase/turn boundary
+    /// arrived). This is what starts the clock again.</summary>
+    private static void CloseTechPrompt(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        if (!session.TechPromptOpen) return;
+        session.TechPromptOpen = false;
+        session.TechPromptOwnerId = null;
+        foreach (var p in session.Players) p.TechPromptPending = false;
+        Log(db, session, SessionLogKind.TechPromptClose, actor);
+    }
+
+    /// <summary>Without secondary tracking there is no round to close, so the prompt is due at the end of the
+    /// turn the Technology action was played on — the same moment, minus the round in between.</summary>
+    private static void RaiseTechPromptWithoutRound(Ti4DbContext db, GameSession session)
+    {
+        if (!session.PromptTechOnAction || session.TechPromptOpen) return;
+        if (session.SecondaryCardId is not null) return;               // a round is running; it will raise it
+        if (session.ActiveStrategyCardId != GameRules.TechnologyStrategyCard) return;
+        RaiseTechPrompt(db, session, session.ActivePlayerId, GameRules.TechnologyStrategyCard);
+    }
+
+    // One player is done recording. Self or host. The last one out closes the round, so the clock starts again
+    // without anybody having to press anything else.
+    private static async Task<IResult> SetTechPromptDone(Guid id, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var player = session.Players.FirstOrDefault(p => p.Id == playerId);
+        if (player is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (!CallerIsHost(session, http) && caller?.Id != playerId) return Forbidden();
+        if (!session.TechPromptOpen) return await SaveAndReturn(db, hub, session, ct);   // nothing standing
+        player.TechPromptPending = false;
+        if (session.Players.All(p => !p.TechPromptPending)) CloseTechPrompt(db, session, caller?.Id);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // "Move on" — the player who played the card, or the host, ends the recording for everyone. A table should
+    // never be held up by one phone somebody put down.
+    private static async Task<IResult> CloseTechPromptRoute(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (!CallerIsHost(session, http) && caller?.Id != session.TechPromptOwnerId) return Forbidden();
+        CloseTechPrompt(db, session, caller?.Id);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Who takes the secondary of the strategy action on the table. Announced by the player who played the
+    // primary (or the host). Idempotent: the request carries the whole set, so there is never an intermediate
+    // state where two players think they are the last one.
+    //
+    // A round already open keeps its card and owner — the turn will have moved on by then (the others resolve
+    // in parallel, which is the point), and re-deriving them from the *current* active player would hand the
+    // round to whoever is up now and reject every call as "no strategy action is running".
+    private static async Task<IResult> SetSecondaryPlayers(Guid id, SetSecondaryPlayersRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        var open = session.SecondaryCardId is not null;
+        var mayRun = CallerIsHost(session, http)
+                     || (caller is not null && caller.Id == (open ? session.SecondaryOwnerId : session.ActivePlayerId));
+        if (!mayRun) return Forbidden();
+        if (!open)
+        {
+            if (session.ActiveStrategyCardId is null)
+                return Results.BadRequest(new { error = "No strategy action is running." });
+            session.SecondaryCardId = session.ActiveStrategyCardId;
+            session.SecondaryOwnerId = session.ActivePlayerId;
+        }
+
+        var wanted = (req.PlayerIds ?? Array.Empty<Guid>()).ToHashSet();
+        // Whether anyone was on the clock BEFORE this call: a round that goes from "someone" to "nobody" is
+        // finished, while one that was empty all along has just been opened and is waiting for the answer to
+        // "who is taking it?".
+        var hadAny = session.Players.Any(p => p.SecondaryPending);
+        foreach (var p in session.Players)
+        {
+            // The player who played the primary is NOT in this set: their own clock is the turn clock and
+            // stops when the turn ends. Having them in it was technically neat and, in the words of the
+            // report, "very unintuitive" — you were ticking yourself off a list of people taking a
+            // secondary you are not taking.
+            var take = wanted.Contains(p.Id) && p.Id != session.SecondaryOwnerId;
+            if (take == p.SecondaryPending) continue;
+            p.SecondaryPending = take;
+            // One log entry per player, per direction: that is what the durations are diffed from.
+            Log(db, session, take ? SessionLogKind.SecondaryStart : SessionLogKind.SecondaryDone,
+                caller?.Id, target: p.Id, detail: session.SecondaryCardId?.ToString());
+            // Just put ON the clock by somebody else — that is exactly a moment worth a notification.
+            if (take) NotifyAction(session, push, p.Id, PushAction.Secondary);
+        }
+        if (hadAny && session.Players.All(p => !p.SecondaryPending)) CloseSecondaries(db, session, caller?.Id);
+        NotifyTechPrompt(session, push);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Owner or host: the secondary round is over, whether or not anyone is still marked. Its own route so
+    // that "everyone is done" is never confused with "nobody has answered yet" (an empty set means the
+    // latter — the round has just been opened by the turn ending).
+    private static async Task<IResult> CloseSecondary(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (!CallerIsHost(session, http) && caller?.Id != session.SecondaryOwnerId) return Forbidden();
+        CloseSecondaries(db, session, caller?.Id);
+        // Closing a Technology round raises the "record what you researched" prompt — tell the table.
+        NotifyTechPrompt(session, push);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>The turn is ending and this player played a strategy action: open the secondary round so the
+    /// others can be put on the clock. Only with time tracking on — without it there is nothing to track and
+    /// the popup would just be in the way.</summary>
+    private static void OpenSecondaries(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        // Its own option now, because "the popup never came" is exactly how the old timer-only gate read from
+        // the table's side. Still requires the timer: the round's whole purpose is separating decision time on
+        // a secondary from time on turn, and there is no clock to separate without it.
+        if (!session.TrackSecondaryAbilities || session.TurnTimerSeconds <= 0) return;
+        if (session.ActiveStrategyCardId is not int card) return;
+        if (session.SecondaryCardId is not null) return;        // one is still running
+        session.SecondaryCardId = card;
+        session.SecondaryOwnerId = session.ActivePlayerId;
+        // Round-level entry, not just the per-player ones: the stretch between the round opening and the first
+        // player being ticked off is exactly the time the table spends answering "who is taking it?", and that
+        // must not land on the next player's turn clock.
+        Log(db, session, SessionLogKind.SecondaryRoundOpen, actor, detail: card.ToString());
+    }
+
+    // "Done" for one player's secondary — stops their clock. Self or host: it is their own time.
+    private static async Task<IResult> SetSecondaryDone(Guid id, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var player = session.Players.FirstOrDefault(p => p.Id == playerId);
+        if (player is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (!CallerIsHost(session, http) && caller?.Id != playerId) return Forbidden();
+        if (!player.SecondaryPending) return await SaveAndReturn(db, hub, session, ct);   // already done
+        player.SecondaryPending = false;
+        Log(db, session, SessionLogKind.SecondaryDone, caller?.Id, target: playerId,
+            detail: session.SecondaryCardId?.ToString());
+        // The last one out closes the round, so the popup disappears by itself instead of needing a tap.
+        // Through the shared helper, or the round-close log entry would be missing on this path — and that
+        // entry is what starts the next player's clock again.
+        if (session.Players.All(p => !p.SecondaryPending)) CloseSecondaries(db, session, caller?.Id);
+        NotifyTechPrompt(session, push);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>Close the secondary round: everybody's clock stops. Called at every turn advance (a secondary
+    /// happens between two turns — see AdvanceTurn), when the next strategy action goes on the table, and when
+    /// the action phase / round ends, so a forgotten "done" can never run for the rest of the game.</summary>
+    private static void CloseSecondaries(Ti4DbContext db, GameSession session, Guid? actor)
+    {
+        if (session.SecondaryCardId is null && session.Players.All(p => !p.SecondaryPending)) return;
+        foreach (var p in session.Players.Where(p => p.SecondaryPending))
+        {
+            p.SecondaryPending = false;
+            Log(db, session, SessionLogKind.SecondaryDone, actor, target: p.Id);
+        }
+        // The round itself is over: this is what un-freezes the active player's clock (see SecondaryRoundOpen).
+        if (session.SecondaryCardId is int closing)
+        {
+            Log(db, session, SessionLogKind.SecondaryRoundClose, actor, detail: closing.ToString());
+            // Technology: everyone who took it has just finished, so NOW is the moment to ask the table to
+            // record what it researched — the primary player and the secondaries alike. Asking while the
+            // action was still being played (the old band in ActionView) came too early for everyone but
+            // the player holding the card.
+            if (closing == GameRules.TechnologyStrategyCard && session.PromptTechOnAction)
+                RaiseTechPrompt(db, session, session.SecondaryOwnerId, closing);
+        }
+        session.SecondaryCardId = null;
+        session.SecondaryOwnerId = null;
+    }
+
+    /// <summary>The strategy-card allotment for this table: the printed rule unless the host pinned a count.</summary>
+    private static int MaxCards(GameSession s)
+        => GameRules.StrategyCardsPerPlayer(s.Players.Count, s.StrategyCardsPerPlayer);
+
+    /// <summary>Tell one player that something is waiting for them — a strategy card to pick, a vote to cast,
+    /// objectives to score, a technology to record, a secondary to resolve. The phone in a pocket is the whole
+    /// point of push; "your turn" was only the first of these moments.
+    /// <para>Only called where the moment really ARRIVES, never on a host correction: a notification is a
+    /// tap on the shoulder, and one that fires because somebody fixed a number is noise.</para></summary>
+    private static void NotifyAction(GameSession s, PushService push, Guid? playerId, PushAction kind)
+    {
+        if (playerId is not Guid pid) return;
+        if (s.Players.FirstOrDefault(p => p.Id == pid) is not { } player) return;
+        push.NotifyAction(s.Id, pid, player.Name, s.JoinCode, kind, s.DefaultLanguage);
+    }
+
+    /// <summary>Same, for everyone the session is currently waiting on.</summary>
+    private static void NotifyAll(GameSession s, PushService push, IEnumerable<Player> players, PushAction kind)
+    {
+        foreach (var p in players) push.NotifyAction(s.Id, p.Id, p.Name, s.JoinCode, kind, s.DefaultLanguage);
+    }
+
+    /// <summary>Whoever still owes a technology entry. Called after anything that may have raised the prompt,
+    /// where a PushService is at hand — the raising itself happens deep inside CloseSecondaries.</summary>
+    private static void NotifyTechPrompt(GameSession s, PushService push)
+    {
+        if (!s.TechPromptOpen) return;
+        NotifyAll(s, push, s.Players.Where(p => p.TechPromptPending), PushAction.Technology);
+    }
+
+    /// <summary>Tell the player who is now up that it is their turn. Only called where a turn really moves
+    /// on in play (phase start, advance, pass) — deliberately NOT on the host's "jump to player" or "step
+    /// back", where a buzzing phone would be noise from a correction.</summary>
+    private static void NotifyTurn(GameSession session, PushService push)
+    {
+        if (session.ActivePlayerId is not Guid pid) return;
+        var player = session.Players.FirstOrDefault(x => x.Id == pid);
+        if (player is null) return;
+        push.NotifyTurn(session.Id, pid, player.Name, session.JoinCode, session.CurrentRound, session.DefaultLanguage);
+    }
+
+    // A player's turn budget has run out. The clients derive the countdown from the match log, so the server
+    // only ever hears about it here; whoever notices first (the wall, the host, the player's own phone) may
+    // report it, and PushService drops the duplicates. Nothing is enforced — this sends one notification.
+    private static async Task<IResult> ReportTimeUp(Guid id, Guid playerId, Ti4DbContext db, HttpContext http, PushService push, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        var player = session?.Players.FirstOrDefault(p => p.Id == playerId);
+        if (session is null || player is null) return Results.NotFound();
+        if (session.TurnTimerSeconds <= 0) return Results.NoContent();     // no timer → nothing ran out
+        if (GetCaller(session, http) is null) return Forbidden();          // spectators don't report
+        push.NotifyTimeUp(session.Id, playerId, player.Name, session.JoinCode, session.CurrentRound, session.DefaultLanguage);
+        return Results.NoContent();                                        // no state change, no broadcast
+    }
+
+    // Register this browser for "you're up" notifications. The caller is resolved from the device token, so
+    // a device can only ever subscribe itself — and the endpoint URL is unique, so re-subscribing the same
+    // browser updates its row instead of adding another.
+    private static async Task<IResult> SubscribePush(Guid id, PushSubscribeRequest req, Ti4DbContext db, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        var caller = GetCaller(session, http);
+        if (caller is null) return Forbidden();
+        if (string.IsNullOrWhiteSpace(req.Endpoint) || string.IsNullOrWhiteSpace(req.P256dh) || string.IsNullOrWhiteSpace(req.Auth))
+            return Results.BadRequest(new { error = "Incomplete subscription." });
+        // Push endpoints are long URLs; cap them like every other free-text field reaching the DB.
+        if (req.Endpoint.Length > 500 || req.P256dh.Length > 200 || req.Auth.Length > 100)
+            return Results.BadRequest(new { error = "Subscription too long." });
+
+        var existing = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == req.Endpoint, ct);
+        if (existing is null)
+        {
+            db.PushSubscriptions.Add(new Data.PushSubscription
+            {
+                SessionId = session.Id, PlayerId = caller.Id, DeviceToken = caller.DeviceToken ?? "",
+                Endpoint = req.Endpoint, P256dh = req.P256dh, Auth = req.Auth
+            });
+        }
+        else
+        {
+            // Same browser, possibly a different player or session now (a device can be handed on).
+            existing.SessionId = session.Id;
+            existing.PlayerId = caller.Id;
+            existing.DeviceToken = caller.DeviceToken ?? "";
+            existing.P256dh = req.P256dh;
+            existing.Auth = req.Auth;
+            existing.FailedAtUtc = null;
+        }
+        await db.SaveChangesAsync(ct);
+        return Results.Ok();
+    }
+
+    // The browser dropped its subscription (or the player switched notifications off).
+    private static async Task<IResult> UnsubscribePush(Guid id, PushSubscribeRequest req, Ti4DbContext db, CancellationToken ct)
+    {
+        var row = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == req.Endpoint, ct);
+        if (row is not null)
+        {
+            db.PushSubscriptions.Remove(row);
+            await db.SaveChangesAsync(ct);
+        }
+        return Results.Ok();
+    }
+
+    // Status phase: move to a stage (score → reveal → checklist, and back). Host-only, like every other
+    // step through the game. The target stage is absolute, so a double tap can't skip one.
+    private static async Task<IResult> SetStatusStage(Guid id, SetStatusStageRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (!Enum.IsDefined(req.Stage)) return Results.BadRequest(new { error = "Unknown status stage." });
+        // Leaving the reveal stage means the objective for the next round is on the table — record it on the
+        // checklist flag, which is where that step used to live.
+        if (session.StatusStage == StatusStage.RevealObjective && req.Stage > StatusStage.RevealObjective)
+            session.StatusStepsDone |= StatusStep.RevealObjective;
+        session.StatusStage = req.Stage;
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Red Tape variant: take the marker off an objective, or put it back. Open to any device like
+    // scoring — it's a token on the table, not a privileged action.
+    // Pull a Red Tape marker off an objective (or put it back). Open to any device, like scoring — it is a
+    // token on the table. The VARIANT's gates are enforced here (see RedTape): Stage II is locked for the
+    // first three rounds in Bureaucracy and until the five scorable Stage I are clear in Lite, and a purged
+    // objective is final.
+    private static async Task<IResult> SetObjectiveMarker(Guid id, Guid sessionObjectiveId, SetObjectiveMarkerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
+        if (session is null || obj is null) return Results.NotFound();
+        // A purged objective is not "locked", it is out of the game — that one is never overridable.
+        if (req.Removed && obj.Purged)
+            return Results.BadRequest(new { error = "This objective was purged — its tape stays on." });
+        // The variant's TIMING rules (Bureaucracy's first three rounds, Lite's five clear Stage I) can be
+        // overridden by an explicit ask: the app enforces the variant so nobody has to remember it, but the
+        // table is still the authority on its own game, and it may have a reason the app cannot know. Without
+        // the override the answer is still no — the UI only sends it after the host confirmed a dialog.
+        if (req.Removed && !req.Override && RedTape.WhyCannotRemove(session, obj) is { } why)
+            return Results.BadRequest(new { error = why });
+        // Who may overrule a timing rule: the host, or the player who is UP — they are the one holding the
+        // carrier card and the one the rule applies to, and the "remove markers" dialog is where they are
+        // resolving it (2026-08-12; it used to be host-only, which left a non-host player's confirmed override
+        // silently refused). Either way it is logged below.
+        if (req.Removed && req.Override
+            && !CallerIsHost(session, http)
+            && GetCaller(session, http)?.Id != session.ActivePlayerId) return Forbidden();
+        // Logged only when a rule really was in the way — the table has to be able to see that the app was
+        // overruled, and by whom.
+        if (req.Removed && req.Override && RedTape.WhyCannotRemove(session, obj) is not null)
+            Log(db, session, http, SessionLogKind.RedTapeOverride, round: session.CurrentRound,
+                phase: session.Phase, detail: string.IsNullOrEmpty(obj.ObjectiveId) ? obj.CustomName : obj.ObjectiveId);
+        if (!req.Removed && obj.Purged)
+            return Results.BadRequest(new { error = "This objective was purged — its tape stays on." });
+        obj.MarkerRemoved = req.Removed;
+        // Red Tape Lite: if that was the fifth clear Stage I, ASK about the rest — purging is irreversible, so
+        // the app proposes and the table answers (POST /redtape/purge).
+        RedTape.ProposePurge(session);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Red Tape Lite: answer the purge question the app raised when the fifth Stage I tape came off. Host only —
+    // it decides who can still win. A no-op when nothing is pending, so a double tap is harmless.
+    private static async Task<IResult> AnswerRedTapePurge(Guid id, RedTapeAnswerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (!session.Objectives.Any(o => o.PurgePending)) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
+
+        if (req.Confirm)
+        {
+            foreach (var p in RedTape.ConfirmPurge(session))
+                Log(db, session, http, SessionLogKind.RedTapePurge, round: session.CurrentRound,
+                    phase: session.Phase, detail: string.IsNullOrEmpty(p.ObjectiveId) ? p.CustomName : p.ObjectiveId);
+        }
+        else RedTape.DeclinePurge(session);
+
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    // Red Tape Lite: answer the random-removal question. Host only, no-op when nothing is pending.
+    private static async Task<IResult> AnswerRedTapeRandom(Guid id, RedTapeAnswerRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (session.RedTapeRandomPendingRound == 0) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
+
+        if (req.Confirm)
+        {
+            var round = session.RedTapeRandomPendingRound;
+            if (RedTape.ConfirmRandom(session) is { } picked)
+            {
+                Log(db, session, http, SessionLogKind.RedTapeRandom, round: round, phase: session.Phase,
+                    detail: string.IsNullOrEmpty(picked.ObjectiveId) ? picked.CustomName : picked.ObjectiveId);
+                // Which one it was, until the host closes the result: the table has to SEE what the app just
+                // did to their game, and the wall shows it the way it shows any other reveal.
+                session.RedTapeRandomRevealedId = picked.Id;
+                // That tape may have been the fifth Stage I — then the purge question follows this one.
+                RedTape.ProposePurge(session);
+            }
+        }
+        else RedTape.DeclineRandom(session);
+
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>The host has seen which objective the random removal cleared: take the result off the popup
+    /// and off the wall, and the game goes on. Host only, and a no-op when there is nothing showing, so a
+    /// double tap is harmless.</summary>
+    private static async Task<IResult> AckRedTapeRandom(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (session.RedTapeRandomRevealedId is null) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
+        session.RedTapeRandomRevealedId = null;
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
     private static async Task<IResult> ScoreObjective(Guid id, Guid sessionObjectiveId, ScoreObjectiveRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
@@ -647,23 +1462,58 @@ public static class SessionEndpoints
         // Scoring is open to any device, but the scorer must be a real player in THIS session —
         // otherwise an anonymous caller could insert unbounded score rows with random GUIDs.
         if (session.Players.All(p => p.Id != req.PlayerId)) return Results.NotFound();
+        // In the STATUS phase scoring runs in initiative order, and it is the PLAYER's own decision: a device
+        // may only score for the seat it holds, and only while that seat is the one up (the host may act for
+        // anyone, which is how a table sharing one device still works). It used to check the turn but not the
+        // device, so any phone could score for whoever was up — including the six players who are not.
+        // Outside that phase — during the action phase, or an ability that scores at another time — it stays
+        // open as before.
+        if (session.Phase == GamePhase.Status && !CallerIsHost(session, http)
+            && !CallerScoringFor(session, http, req.PlayerId))
+        {
+            return Forbidden();
+        }
+        // Red Tape variant: while the tape is still on the objective, it cannot be scored, and a purged one
+        // never can. A deliberate exception to "the app enforces no rules" — the table asked for it and it
+        // only applies when they switched the variant on. The client disables the same thing, so no button
+        // silently fails.
+        if (RedTape.On(session) && obj.Purged)
+            return Results.BadRequest(new { error = "Red Tape: this objective was purged." });
+        if (RedTape.On(session) && !obj.MarkerRemoved)
+            return Results.BadRequest(new { error = "Red Tape: the tape is still on this objective." });
         if (!obj.Scores.Any(s => s.PlayerId == req.PlayerId))
         {
-            obj.Scores.Add(new ObjectiveScore { SessionObjectiveId = obj.Id, PlayerId = req.PlayerId });
+            obj.Scores.Add(new ObjectiveScore
+            {
+                SessionObjectiveId = obj.Id, PlayerId = req.PlayerId, Round = session.CurrentRound
+            });
             Log(db, session, http, SessionLogKind.ObjectiveScore, target: req.PlayerId,
                 detail: string.IsNullOrEmpty(obj.ObjectiveId) ? obj.CustomName : obj.ObjectiveId);
         }
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> UnscoreObjective(Guid id, Guid sessionObjectiveId, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    private static async Task<IResult> UnscoreObjective(Guid id, Guid sessionObjectiveId, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
         if (session is null || obj is null) return Results.NotFound();
+        // The same gate as scoring, or tightening one of them would be pointless: taking a score back and
+        // putting it on again is the same power. (This route had no gate at all.)
+        if (session.Phase == GamePhase.Status && !CallerIsHost(session, http)
+            && !CallerScoringFor(session, http, playerId))
+        {
+            return Forbidden();
+        }
         obj.Scores.RemoveAll(s => s.PlayerId == playerId);
         return await SaveAndReturn(db, hub, session, ct);
     }
+
+    /// <summary>The calling device holds <paramref name="playerId"/>'s seat AND that seat is the one whose
+    /// turn it is to score. Host callers are checked separately — they may act for anyone.</summary>
+    private static bool CallerScoringFor(GameSession session, HttpContext http, Guid playerId)
+        => GetCaller(session, http)?.Id == playerId
+           && TurnService.CurrentScorer(session, FactionInitiative.Overrides) == playerId;
 
     // -----------------------------------------------------------------------
     // Technologies
@@ -713,25 +1563,44 @@ public static class SessionEndpoints
             if (p is not null) p.Influence = Math.Max(0, p.Influence - v.Votes);
         }
         LogAgendaResult(db, session);   // summarise the concluding agenda before its votes are cleared
-        session.CurrentAgendaId = ClampId(req.AgendaId);
+        // A free vote and an agenda are mutually exclusive: whichever is being started clears the other, so
+        // there is never a screen showing both a card and a typed headline.
+        // Clamp does not take null (it trims) — and "no custom title" is the normal case for a real agenda.
+        var custom = string.IsNullOrWhiteSpace(req.CustomTitle) ? null : Clamp(req.CustomTitle!, 100);
+        if (!string.IsNullOrWhiteSpace(custom))
+        {
+            session.CustomVoteTitle = custom;
+            session.CustomVoteElect = req.CustomElect is { } e && Enum.IsDefined(e) ? e : ElectType.ForAgainst;
+            session.CurrentAgendaId = null;
+        }
+        else
+        {
+            session.CustomVoteTitle = null;
+            session.CustomVoteElect = null;
+            session.CurrentAgendaId = ClampId(req.AgendaId);
+        }
         session.AgendaVotes.Clear();
         session.VotingStarted = false;     // back to influence entry until the host starts the vote
         session.AgendaVotesHidden = false;
-        Log(db, session, http, SessionLogKind.AgendaReveal, detail: session.CurrentAgendaId ?? "");
+        Log(db, session, http, SessionLogKind.AgendaReveal, detail: session.CurrentAgendaId ?? session.CustomVoteTitle ?? "");
         return await SaveAndReturn(db, hub, session, ct);
     }
 
     // Host opens the vote on the revealed agenda (open or face-down). Influence then locks.
-    private static async Task<IResult> StartVoting(Guid id, StartVotingRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> StartVoting(Guid id, StartVotingRequest req, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, PushService push, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerIsHost(session, http)) return Forbidden();
-        if (session.CurrentAgendaId is null) return Results.BadRequest(new { error = "Reveal an agenda first." });
+        if (session.CurrentAgendaId is null && string.IsNullOrEmpty(session.CustomVoteTitle))
+            return Results.BadRequest(new { error = "Reveal an agenda or start a free vote first." });
         session.VotingStarted = true;
         session.AgendaVotesHidden = req.Hidden;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         Log(db, session, http, SessionLogKind.AgendaStartVote, detail: req.Hidden ? "hidden" : "open");
+        // Everybody votes, so everybody is told — this is the one moment the whole table owes an answer at once.
+        NotifyAll(session, push, session.Players, PushAction.Vote);
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -743,10 +1612,31 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
         session.VotingStarted = false;
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false;
         session.AgendaVotes.Clear();
         Log(db, session, http, SessionLogKind.AgendaCancel);
         return await SaveAndReturn(db, hub, session, ct);
     }
+
+    // Intermediate step for a face-down vote: publish the TOTALS while keeping the attribution hidden
+    // (Galactic Event / hidden agenda). Deliberately its own route rather than a second meaning for
+    // /reveal — a double tap must not skip straight to the full reveal. Host only.
+    private static async Task<IResult> RevealVoteTotals(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (!AllVotesLocked(session))
+            return Results.BadRequest(new { error = "All players must lock their vote first." });
+        session.AgendaTotalsRevealed = true;
+        Log(db, session, http, SessionLogKind.AgendaRevealTotals);
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>Every player has a locked vote — the gate for both reveal steps.</summary>
+    private static bool AllVotesLocked(GameSession session)
+        => session.Players.Count > 0
+           && session.Players.All(p => session.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked));
 
     // Host flips a face-down vote face-up (reveal). Host only.
     private static async Task<IResult> RevealVotes(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
@@ -756,9 +1646,10 @@ public static class SessionEndpoints
         if (!CallerIsHost(session, http)) return Forbidden();
         // Same gate the client UI applies: a face-down vote is only flipped once EVERY player has
         // locked — otherwise late voters would cast into an already-open vote (secrecy broken).
-        if (session.Players.Count == 0 || !session.Players.All(p => session.AgendaVotes.Any(v => v.PlayerId == p.Id && v.Locked)))
+        if (!AllVotesLocked(session))
             return Results.BadRequest(new { error = "All players must lock their vote first." });
         session.AgendaVotesHidden = false;
+        session.AgendaTotalsRevealed = false; // fully open now, the intermediate step is over
         Log(db, session, http, SessionLogKind.AgendaReveal2);
         return await SaveAndReturn(db, hub, session, ct);
     }
@@ -833,6 +1724,18 @@ public static class SessionEndpoints
     private static IResult Forbidden() =>
         Results.Json(new { error = "Not allowed — host only." }, statusCode: StatusCodes.Status403Forbidden);
 
+    /// <summary>Politics is on the table and the speaker has not been appointed — the turn can't end yet.</summary>
+    private static IResult SpeakerFirst() =>
+        Results.BadRequest(new { error = "Appoint the new speaker before ending the turn." });
+
+    /// <summary>Red Tape Lite: a round in which nobody took the carrier card takes one tape off at random.
+    /// Called at the two moments the variant names — right after the strategy phase in round 1, and when the
+    /// status phase ends — and it is idempotent per round, so both callers are safe.</summary>
+    // Red Tape Lite: raise the random-removal question if this is its moment. It used to take the tape off
+    // here and now; it is irreversible and it changes who can still win, so the app only asks — the host
+    // answers via POST /redtape/random and only then does anything move.
+    private static void RedTapeRandom(GameSession session) => RedTape.ProposeRandom(session);
+
     // -----------------------------------------------------------------------
     // Match log — append a structured event; persisted by the next SaveChangesAsync (SaveAndReturn).
     // -----------------------------------------------------------------------
@@ -852,7 +1755,9 @@ public static class SessionEndpoints
     // and the leading elect candidate so the client can render either kind; see SessionLogKind.AgendaResult.
     private static void LogAgendaResult(Ti4DbContext db, GameSession session)
     {
-        if (session.CurrentAgendaId is null) return;
+        // A free vote has no agenda id; summarise it under its title so the log still shows the outcome.
+        var subject = session.CurrentAgendaId ?? session.CustomVoteTitle;
+        if (subject is null) return;
         var locked = session.AgendaVotes.Where(v => v.Locked).ToList();
         if (locked.Count == 0) return;
         var forVotes = locked.Where(v => v.Outcome == VoteOutcome.For).Sum(v => v.Votes);
@@ -863,7 +1768,7 @@ public static class SessionEndpoints
         var topKey = (tally.Count > 0 ? tally[0].Key : "").Replace("|", "/");
         var topVotes = tally.Count > 0 ? tally[0].Votes : 0;
         var runnerUp = tally.Count > 1 ? tally[1].Votes : 0;
-        var detail = $"{session.CurrentAgendaId}|{forVotes}|{againstVotes}|{topKey}|{topVotes}|{runnerUp}";
+        var detail = $"{subject.Replace("|", "/")}|{forVotes}|{againstVotes}|{topKey}|{topVotes}|{runnerUp}";
         Log(db, session, SessionLogKind.AgendaResult, null, detail: detail);
     }
 

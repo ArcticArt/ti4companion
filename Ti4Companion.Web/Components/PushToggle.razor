@@ -1,0 +1,145 @@
+@inherits Ti4ComponentBase
+@inject IJSRuntime JS
+
+@*
+    Per-device switch for the "you're up" notification.
+
+    Per DEVICE, not per player: a subscription belongs to one browser, and the same player may sit at the
+    table with a phone and a tablet. The server keys subscriptions by the push endpoint, so switching it on
+    twice on the same device changes nothing.
+
+    Hidden entirely when the server has no VAPID keys or the browser can't do push — a switch that cannot
+    work is worse than no switch. On iPhone/iPad Web Push needs the page installed on the home screen
+    (Safari 16.4+); there the button explains that instead of silently doing nothing.
+*@
+@if (show)
+{
+    <button class="btn btn-sm @(on ? "btn-gold" : "btn-ghost")" @onclick="Toggle" title="@Title">
+        <MaterialIcon Name="@(on ? "notifications" : "notifications_off")" />
+    </button>
+    @if (note is not null)
+    {
+        <span class="chip push-note" @onclick="() => note = null" title='@Loc["common.close"]'>@note</span>
+    }
+}
+@* The iOS home-screen requirement is a three-step walk-through, not a sentence on a chip. *@
+@if (showInstall)
+{
+    <InstallHelpModal OnClose="() => showInstall = false" />
+}
+
+@code {
+    // The public key can't change while the app runs, so ask once per app load.
+    private static string? key;
+    private static bool keyLoaded;
+
+    private bool show;
+    private bool on;
+    private string? note;
+    private bool busy;
+    private bool iosNotInstalled;
+    private bool showInstall;
+
+    private string Title => on ? Loc["push.disable"] : Loc["push.enable"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Store.Session is null) return;
+        if (!keyLoaded)
+        {
+            keyLoaded = true;
+            try { key = (await Store.Api.GetPushKeyAsync())?.PublicKey; } catch { key = null; }
+        }
+        if (string.IsNullOrEmpty(key)) return;                       // push not configured on this server
+        // In iOS Safari that is NOT installed on the home screen, `PushManager` doesn't exist at all, so the
+        // support check fails and the bell used to vanish — on a phone, which is the one device that needs
+        // it. Show it there anyway and let the tap explain the home-screen requirement (reported as
+        // "no notification button in the mobile view").
+        iosNotInstalled = await Call<bool>("ti4.push.isApple") && !await Call<bool>("ti4.push.standalone");
+        if (!iosNotInstalled && !await Call<bool>("ti4.push.supported")) return;   // browser can't do it at all
+        show = true;
+        if (!iosNotInstalled) await AdoptExistingAsync();
+    }
+
+    /// <summary>
+    /// Re-register a subscription this browser already has against the CURRENT session, on every app load.
+    ///
+    /// Two ways the bell used to read "on" while nothing was delivered, and both are silent:
+    /// the server keeps one row per push endpoint and it names a single session and player, so a device that
+    /// enabled notifications in one game and then joined another was still on file for the FIRST one; and a
+    /// row retired after a 404/410 (the browser threw its subscription away, e.g. the home-screen app was
+    /// reinstalled) is never revived, because the switch asks the BROWSER whether it has a subscription and
+    /// the browser happily says yes. Re-sending it heals both — the endpoint is the key, so this moves the row
+    /// to this session and clears the failure flag. Costs one request per load, and only when there is
+    /// something to re-register.
+    /// </summary>
+    private async Task AdoptExistingAsync()
+    {
+        var sub = await Call<PushResult?>("ti4.push.existing");
+        if (sub is null || string.IsNullOrEmpty(sub.Endpoint)) { on = false; return; }
+        on = true;
+        if (string.IsNullOrEmpty(sub.P256dh) || string.IsNullOrEmpty(sub.Auth)) return;   // nothing to send
+        try
+        {
+            await Store.Api.SubscribePushAsync(Store.Session!.Id,
+                new PushSubscribeRequest(sub.Endpoint!, sub.P256dh!, sub.Auth!));
+        }
+        catch { /* the bell is not worth a visible error; the next load tries again */ }
+    }
+
+    private async Task Toggle()
+    {
+        if (busy || Store.Session is null) return;
+        busy = true;
+        note = null;
+        try
+        {
+            if (on)
+            {
+                var endpoint = await Call<string?>("ti4.push.unsubscribe");
+                if (endpoint is not null) await Store.Api.UnsubscribePushAsync(Store.Session.Id, endpoint);
+                on = false;
+                return;
+            }
+
+            // iOS refuses outside an installed PWA, and the failure is silent — show the how-to before asking.
+            if (iosNotInstalled)
+            {
+                showInstall = true;
+                return;
+            }
+
+            var result = await Call<PushResult?>("ti4.push.subscribe", key!);
+            if (result is null || !string.IsNullOrEmpty(result.Error) || string.IsNullOrEmpty(result.Endpoint))
+            {
+                note = result?.Error == "denied" ? Loc["push.blocked"] : Loc["push.failed"];
+                return;
+            }
+            await Store.Api.SubscribePushAsync(Store.Session.Id,
+                new PushSubscribeRequest(result.Endpoint!, result.P256dh ?? "", result.Auth ?? ""));
+            on = true;
+        }
+        catch
+        {
+            note = Loc["push.failed"];   // never let a notification switch break the app bar
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task<T> Call<T>(string fn, params object?[] args)
+    {
+        try { return await JS.InvokeAsync<T>(fn, args); }
+        catch { return default!; }
+    }
+
+    private class PushResult
+    {
+        public string? Endpoint { get; set; }
+        public string? P256dh { get; set; }
+        public string? Auth { get; set; }
+        public string? Error { get; set; }
+    }
+}

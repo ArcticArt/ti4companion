@@ -8,8 +8,12 @@
     var allPassed = s.Players.Count > 0 && s.Players.All(p => p.HasPassed);
     var host = Store.IsHost;
     var mine = active is not null && active.Id == Store.MyPlayerId;
-    // Players control only their own turn; the host controls only after pressing "Take over".
-    var canControl = active is not null && (mine || (host && takeover));
+    // A player controls their own turn. The host MAY control whoever is up — the server allows it ("active
+    // player or host") — but only after saying so: with it always on, the host's device carried somebody
+    // else's pass and play buttons the whole game, and at a table where everyone holds a phone it stops being
+    // clear whose taps count. So it is a mode, off by default, with a button to enter and leave it.
+    var takeover = host && Store.HostTakeover;
+    var canControl = active is not null && (mine || takeover);
 }
 
 @if (allPassed)
@@ -26,37 +30,199 @@
             @if (mine) { <span class="tb-big">@Loc["turn.youAreUp"]</span> }
             else { <span class="tb-big">@active.Name <span class="faint">@Loc["turn.isUp"]</span></span> }
         </div>
+        @* Signal only on your own turn — the buzz belongs to the player whose time is running out. *@
+        @if (Store.TurnTimerEnabled)
+        {
+            <TurnTimer PlayerId="@active.Id" Signal="@mine" Report="@(mine || host)" />
+        }
         <div class="spacer" style="flex:1"></div>
-        @if (host && !takeover) { <button class="btn btn-gold" @onclick="() => takeover = true">@Loc["turn.takeOver"]</button> }
-        else if (host && takeover) { <button class="btn btn-ghost" @onclick="() => takeover = false">@Loc["turn.takeOverEnd"]</button> }
+        @* The switch into (and out of) acting for the player who is up. Only for the host, and only when the
+           turn is somebody else's — on their own turn there is nothing to take over. *@
+        @if (host && !mine)
+        {
+            <button class="btn btn-sm @(takeover ? "btn-gold" : "")" @onclick="() => Store.HostTakeover = !takeover">
+                @if (takeover)
+                {
+                    <MaterialIcon Name="close" />
+                    @Loc["host.takeOverEnd"]
+                }
+                else
+                {
+                    @Loc["host.takeOver"]
+                }
+            </button>
+        }
+    </div>
+    @if (takeover && !mine)
+    {
+        <div class="faint takeover-note">@string.Format(Loc["host.takeOverHint"], active.Name)</div>
+    }
+}
+
+@* Card-specific actions. Only three of the eight have one worth offering; the other five are resolved on
+   the table and the app would only be in the way. Technology and Imperial are offers; Politics is the one
+   exception — see the modal below. *@
+@if (s.SpeakerPending && canControl && !speakerDismissed)
+{
+    @* Politics: the appointment IS the card, and it comes first. A modal rather than a panel further down
+       the page, because the turn cannot be ended until it is done (server-side too) and a blocked button
+       with the reason off-screen is how a table gets stuck.
+       It CAN be dismissed, though (on request): a player may want to look something up first, and a dialog
+       with no way out is its own kind of stuck. The block itself stays — the band below then carries the way
+       back, and the server still refuses to end the turn. *@
+    <div class="modal-backdrop centered blurred">
+        <div class="modal politics-modal">
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["politics.speaker"]</h3>
+            </div>
+            <div class="modal-body">
+                <p class="faint" style="margin:0 0 .6rem;">@Loc["politics.modalHint"]</p>
+                @* Only the CURRENT speaker is out ("choose a player other than the speaker") — you may well
+                   choose yourself, and often want to. *@
+                <PlayerPicker Players="Appointable(s)" OnPick="AppointSpeaker" />
+                @if (!Appointable(s).Any())
+                {
+                    <p class="faint" style="margin:.6rem 0 0;">—</p>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn" @onclick="() => speakerDismissed = true">@Loc["common.cancel"]</button>
+                <div class="spacer" style="flex:1"></div>
+                <span class="faint" style="font-size:.75rem;">@Loc["politics.cancelHint"]</span>
+            </div>
+        </div>
     </div>
 }
+else if (s.SpeakerPending && canControl)
+{
+    @* Dismissed, but still owed: the way back in, where the turn buttons are. *@
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text"><strong>@Loc["politics.speaker"]</strong> — @Loc["politics.stillOwed"]</span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-gold btn-sm" @onclick="() => speakerDismissed = false">
+            @Loc["politics.reopen"] <MaterialIcon Name="chevron_right" />
+        </button>
+    </div>
+}
+else if (s.SpeakerPending)
+{
+    @* Everyone else just sees who the table is waiting for. *@
+    <div class="panel" style="margin-top:.6rem;">
+        <strong>@Loc["politics.speaker"]</strong>
+        <span class="faint"> — @string.Format(Loc["politics.waitingFor"], active?.Name ?? "—")</span>
+    </div>
+}
+@* Technology has no band here any more. It used to offer the entry while the action was still being played,
+   which is too early for everyone but the player holding the card — the players taking the secondary research
+   as well. The table is now asked once, after that round, on every device at the same time (see
+   TechPromptModal in the shell). *@
+@* Combat. The battle itself happens on the table — the app only needs to know one is running: the wall puts
+   the two of them opposite each other with their technologies, and the turn clock stops (a battle with
+   somebody else is not the active player's thinking time). Anyone involved, or the host, can end it. *@
+@if (s.CombatAId is Guid ca)
+{
+    var foeA = Store.PlayerById(ca);
+    var foeB = Store.PlayerById(s.CombatBId);
+    var mayEnd = host || Store.MyPlayerId == ca || Store.MyPlayerId == s.CombatBId;
+    <div class="panel combat-band" style="margin-top:.6rem;">
+        <span class="tp-text">
+            <strong>@Loc["combat.running"]</strong> —
+            @(foeA?.Name ?? "?") <span class="combat-vs-inline">@Loc["combat.vs"]</span> @(foeB?.Name ?? "?")
+            @if (Store.TurnTimerEnabled) { <span class="faint"> · @Loc["combat.clockStopped"]</span> }
+        </span>
+        <div class="spacer" style="flex:1"></div>
+        @if (mayEnd)
+        {
+            <button class="btn btn-gold btn-sm" @onclick="EndCombat">@Loc["combat.end"] <MaterialIcon Name="chevron_right" /></button>
+        }
+    </div>
+}
+
+@* Declaring a combat is offered ON the player card now (a button next to pass/advance), not as a panel of
+   opponent buttons that sat there all turn whether or not anybody was fighting. The opponent is chosen in a
+   popup — the same shape as every other "pick a player" question in the app. *@
+@if (showCombatPick && canControl && active is not null)
+{
+    <div class="modal-backdrop centered blurred" @onclick="() => showCombatPick = false">
+        <div class="modal combat-pick-modal" @onclick:stopPropagation>
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["combat.title"]</h3>
+            </div>
+            <div class="modal-body">
+                <p class="faint" style="margin:0 0 .6rem;">@Loc["combat.hint"]</p>
+                <PlayerPicker Players="s.Players.Where(p => p.Id != active.Id).OrderBy(p => p.SeatOrder)"
+                              OnPick="StartCombat" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn" @onclick="() => showCombatPick = false">@Loc["common.cancel"]</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Red Tape's carrier card: "remove a marker of your choice" — the choice, as a list of the ones it may be. *@
+<RedTapeSealModal Mode="@sealMode" OnClose="() => sealMode = null" />
+
+@* Red Tape variant: the carrier card's own step, which the variant puts BEFORE everything else on the card.
+   An offer like the others — the app tapes the objectives and refuses to score a taped one, but which tape
+   comes off is the table's decision (and the rest of the variant's rules stay with them). *@
+@if (Store.RedTapeOn && PlayedNow(s, active, s.RedTapeCardNumber) && canControl)
+{
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text">
+            <strong>@Loc["redtape.action"]</strong> —
+            @Loc[s.RedTapeVariant == RedTapeVariant.Lite ? "redtape.actionLite" : "redtape.actionBureaucracy"]
+        </span>
+        <div class="spacer" style="flex:1"></div>
+        @* The card's ability is "remove a marker of your choice", so ask for the choice right here instead of
+           sending the player to the objectives tab to hunt for one whose tape may legally come off. *@
+        <button class="btn btn-gold btn-sm" @onclick="() => sealMode = RedTapeSealModal.SealMode.Pick">
+            @Loc["redtape.pickTitle"] <MaterialIcon Name="chevron_right" />
+        </button>
+    </div>
+}
+@* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). The
+   choice is a popup listing what this player may score, like the technology picker and the Red Tape one —
+   sending them to the objectives tab meant finding the card and the right marker two screens away. *@
+@if (PlayedNow(s, active, GameRules.ImperialStrategyCard) && canControl && active is not null)
+{
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text">@Loc["imperial.promptText"]</span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-gold btn-sm" @onclick="() => imperialFor = active.Id">
+            @Loc["imperial.promptOpen"] <MaterialIcon Name="chevron_right" />
+        </button>
+    </div>
+}
+<ImperialScoreModal PlayerId="@imperialFor" OnClose="() => imperialFor = null" />
 
 @if (activeCard is not null && canControl)
 {
     <div class="panel" style="margin-top:.6rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
-            <h3 style="margin:0;">@Loc.Pick(activeCard.Name, activeCard.NameDe)</h3>
-            <button class="btn btn-sm" @onclick="EndHighlight">✕ @Loc["turn.endHighlight"]</button>
+            <h3 style="margin:0;">@CardDisplay.Name(Loc, s, activeCard)</h3>
+            <button class="btn btn-sm" @onclick="EndHighlight"><MaterialIcon Name="close" /> @Loc["turn.endHighlight"]</button>
         </div>
         <StrategyCardView Card="activeCard" ShowText="true" />
     </div>
 }
 
-@* Host takeover: tap any player to steer their turn. *@
-@if (host && takeover)
+@* The secondary round has moved into its own popup (SecondaryModal, rendered by the shell): it opens when
+   the turn is ENDED, which is the moment the others' clocks should start and this player's should stop.
+   Asking for it while the primary was still being resolved meant a list you had to tick yourself off.
+   Here only the way back in, for a device the popup does not address (the host running the table). *@
+@if (s.SecondaryCardId is int secCard)
 {
-    <div class="panel turn-strip" style="margin-top:.6rem;">
-        <span class="faint" style="margin-right:.2rem;">@Loc["turn.takeOver"]:</span>
-        @foreach (var p in ordered)
-        {
-            <button class="turn-chip @(p.Id == s.ActivePlayerId ? "active" : "") @(p.HasPassed ? "passed" : "")" @onclick="() => SetActive(p.Id)">
-                <span class="ti">@(p.Initiative?.ToString() ?? "—")</span>
-                <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.5" Ring="@p.ColorHex" />
-                <span>@p.Name</span>
-                @if (p.HasPassed) { <span class="chip chip-passed">@Loc["turn.passed"]</span> }
-            </button>
-        }
+    var secOwner = Store.PlayerById(s.SecondaryOwnerId);
+    var secRunning = s.Players.Count(p => p.SecondaryPending);
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text">
+            @Loc["secondary.title"]: <strong>@(Store.Card(secCard) is { } sc ? CardDisplay.Name(Loc, s, sc) : "—")</strong>
+            @if (secOwner is not null) { <span class="faint"> · @string.Format(Loc["secondary.playedBy"], secOwner.Name)</span> }
+            @if (secRunning > 0) { <span class="faint"> · @Loc["secondary.running"]: @secRunning</span> }
+        </span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-sm" @onclick="() => Store.ShowSecondary = true">@Loc["secondary.open"] <MaterialIcon Name="chevron_right" /></button>
     </div>
 }
 
@@ -88,14 +254,16 @@ else
                         <StrategyCardView Card="card" Used="pc.IsExhausted" Highlight="@(s.ActiveStrategyCardId == card.Id)" />
                         @if (canControl)
                         {
+                            @* Full height too — this is the button that plays the card, so it cannot be the
+                               smallest one on the screen. *@
                             <div>
                                 @if (!pc.IsExhausted)
                                 {
-                                    <button class="btn btn-sm btn-gold btn-block" @onclick="() => PlayAction(active.Id, card.Id)">@Loc["turn.strategyAction"]</button>
+                                    <button class="btn btn-gold btn-block" @onclick="() => PlayAction(active.Id, card.Id)">@Loc["turn.strategyAction"]</button>
                                 }
                                 else
                                 {
-                                    <button class="btn btn-sm btn-ghost btn-block" @onclick="() => Unplay(active.Id, card.Id)">↺ @Loc["turn.notDone"]</button>
+                                    <button class="btn btn-ghost btn-block" @onclick="() => Unplay(active.Id, card.Id)"><MaterialIcon Name="undo" /> @Loc["turn.notDone"]</button>
                                 }
                             </div>
                         }
@@ -106,18 +274,29 @@ else
 
         @if (canControl)
         {
-            <div style="margin-top:.7rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+            @* One height for every button on this row (`.turn-actions` drops the `btn-sm` sizing): pass, combat
+               and the two turn buttons are equally weighty things to press, and a row of three sizes reads as
+               three kinds of importance. "Previous turn" is abbreviated so it fits that height on a phone. *@
+            <div class="turn-actions" style="margin-top:.7rem;">
                 @if (active.HasPassed)
                 {
-                    <button class="btn btn-sm" @onclick="() => Pass(active.Id, false)">@Loc["turn.unpass"]</button>
+                    <button class="btn" @onclick="() => Pass(active.Id, false)">@Loc["turn.unpass"]</button>
                 }
                 else
                 {
                     <button class="btn btn-danger" disabled="@(!canPass)" @onclick="() => Pass(active.Id, true)">@Loc["turn.pass"]</button>
                 }
+                @* Combat sits with the other things this player can do on their turn. Only offered when none
+                   is running — while one is, the band above carries the "combat over" button instead. *@
+                @if (s.CombatAId is null)
+                {
+                    <button class="btn" @onclick="() => showCombatPick = true">@Loc["combat.declare"]</button>
+                }
+                @* No "record technology" button: the table is asked for its technologies after the action, in
+                   one popup on every device (TechPromptModal). Corrections stay in the Technologies tab. *@
                 <div class="spacer" style="flex:1"></div>
-                <button class="btn btn-sm" @onclick="Prev">◂ @Loc["turn.previous"]</button>
-                <button class="btn btn-sm btn-primary" @onclick="Next">@Loc["turn.advance"] ▸</button>
+                <button class="btn" @onclick="Prev"><MaterialIcon Name="chevron_left" /> @Loc["turn.previousShort"]</button>
+                <button class="btn btn-primary" @onclick="Next">@Loc["turn.advance"] <MaterialIcon Name="chevron_right" /></button>
             </div>
             @if (!active.HasPassed && !canPass) { <div class="faint" style="font-size:.72rem;margin-top:.3rem;">@Loc["turn.passHint"]</div> }
         }
@@ -126,10 +305,34 @@ else
 
 @code {
     private Guid Sid => Store.Session!.Id;
-    private bool takeover;
+
+    /// <summary>Choosing a combat opponent, as a popup rather than a permanent row of buttons.</summary>
+    private bool showCombatPick;
+
+    /// <summary>The Politics dialog was closed without appointing anybody. Per device and per appointment —
+    /// <see cref="AppointSpeaker"/> resets it, and so does a fresh <c>SpeakerPending</c> (see below), so the
+    /// next Politics action opens the dialog again rather than starting hidden behind a band.</summary>
+    private bool speakerDismissed;
+
+    /// <summary>Red Tape's "which tape comes off" popup (the carrier card's own ability).</summary>
+    private RedTapeSealModal.SealMode? sealMode;
+
+    /// <summary>Who is scoring via Imperial's primary on THIS device (null = the popup is closed).</summary>
+    private Guid? imperialFor;
+
+    /// <summary>This card's action is the one being resolved right now: either it is on the table (the wall
+    /// highlight) or the player who is up has already performed it this round.
+    /// <para>
+    /// The second half is why "end highlight" no longer takes the card's own step with it. That button is
+    /// about the WALL — it stops the big card taking over the screen — but it also cleared
+    /// <c>ActiveStrategyCardId</c>, and with it the Red Tape and Imperial buttons, leaving the player in the
+    /// middle of resolving a card with nothing left to press.
+    /// </para></summary>
+    private static bool PlayedNow(SessionStateDto s, PlayerDto? active, int card)
+        => s.ActiveStrategyCardId == card
+           || (active?.StrategyCards.Any(c => c.StrategyCardId == card && c.IsExhausted) ?? false);
 
     private Task EndHighlight() => Store.Mutate(Store.Api.SetActiveStrategyAsync(Sid, null));
-    private Task SetActive(Guid playerId) => Store.Mutate(Store.Api.SetActivePlayerAsync(Sid, playerId));
     private Task Next() => Store.Mutate(Store.Api.AdvanceTurnAsync(Sid));
     private Task Prev() => Store.Mutate(Store.Api.PreviousTurnAsync(Sid));
 
@@ -147,4 +350,31 @@ else
 
     private Task Pass(Guid playerId, bool passed)
         => Store.Mutate(Store.Api.SetPassedAsync(Sid, playerId, passed));
+
+    /// <summary>Who may be given the speaker token by a Politics action: everyone except the player who
+    /// already holds it — "choose a player other than the speaker". Choosing yourself is allowed and is
+    /// usually the point.</summary>
+    private static IEnumerable<PlayerDto> Appointable(SessionStateDto s)
+        => s.Players.Where(p => p.Id != s.SpeakerPlayerId).OrderBy(p => p.SeatOrder);
+
+    private async Task AppointSpeaker(Guid playerId)
+    {
+        speakerDismissed = false;   // the next Politics action opens the dialog, not the band
+        await Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
+    }
+
+    // A dismissal belongs to ONE pending appointment. The flag is cleared as soon as none is pending, so
+    // playing Politics again (or the next round's) puts the dialog back up rather than the band.
+    protected override void OnParametersSet()
+    {
+        if (Store.Session is { SpeakerPending: false }) speakerDismissed = false;
+    }
+
+    private async Task StartCombat(Guid opponentId)
+    {
+        showCombatPick = false;
+        await Store.Mutate(Store.Api.StartCombatAsync(Sid, opponentId));
+    }
+
+    private Task EndCombat() => Store.Mutate(Store.Api.EndCombatAsync(Sid));
 }

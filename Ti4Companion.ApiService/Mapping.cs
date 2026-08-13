@@ -86,7 +86,11 @@ public static class Mapping
     public static SessionLogEntryDto ToDto(this SessionLogEntry l)
         => new(l.Id, l.TimestampUtc, l.Kind, l.ActorPlayerId, l.TargetPlayerId, l.Phase, l.Round, l.Detail);
 
-    public static SessionStateDto ToDto(this GameSession s, IReadOnlyDictionary<string, int?> factionOverrides)
+    /// <param name="callerPlayerId">Which seat the requesting device holds — see
+    /// <see cref="SessionStateDto.CallerPlayerId"/>. Only the by-code read passes it; everything else is
+    /// produced by the shared save-and-return path, which has no request in scope.</param>
+    public static SessionStateDto ToDto(this GameSession s, IReadOnlyDictionary<string, int?> factionOverrides,
+        Guid? callerPlayerId = null)
     {
         var players = s.Players
             .OrderBy(p => p.SeatOrder)
@@ -98,14 +102,15 @@ public static class Mapping
                     .Select(c => new PlayerStrategyCardDto(c.StrategyCardId, c.IsExhausted))
                     .ToList(),
                 p.Technologies.Select(t => t.TechnologyId).ToList(),
-                p.Influence))
+                p.Influence, p.StatusDone, p.SecondaryPending, p.TechPromptPending))
             .ToList();
 
         var objectives = s.Objectives
             .OrderBy(o => o.RevealedAtUtc)
             .Select(o => new SessionObjectiveDto(
                 o.Id, o.ObjectiveId, o.Scores.Select(x => x.PlayerId).ToList(),
-                o.CustomName, o.CustomPoints))
+                o.CustomName, o.CustomPoints, o.MarkerRemoved, o.Purged, o.PurgePending,
+                o.Scores.Where(x => x.Round == s.CurrentRound).Select(x => x.PlayerId).ToList()))
             .ToList();
 
         var cardStates = s.StrategyCardStates
@@ -125,11 +130,39 @@ public static class Mapping
                 : new AgendaVoteDto(v.PlayerId, v.Outcome, v.Votes, v.Choice, v.Locked))
             .ToList();
 
+        // Intermediate step of a face-down vote: the table may see the TOTALS without learning who voted
+        // what. Since the per-player rows above stay redacted, the aggregate has to be computed here —
+        // only locked votes count, exactly as in the final tally.
+        AgendaTotalsDto? totals = null;
+        if (s.VotingStarted && s.AgendaTotalsRevealed)
+        {
+            var locked = s.AgendaVotes.Where(v => v.Locked).ToList();
+            totals = new AgendaTotalsDto(
+                locked.Where(v => v.Outcome == VoteOutcome.For).Sum(v => v.Votes),
+                locked.Where(v => v.Outcome == VoteOutcome.Against).Sum(v => v.Votes),
+                locked.Count(v => v.Outcome == VoteOutcome.Abstain),
+                locked.Where(v => !string.IsNullOrEmpty(v.Choice))
+                    .GroupBy(v => v.Choice!)
+                    .Select(g => new AgendaChoiceTallyDto(g.Key, g.Sum(v => v.Votes)))
+                    .OrderByDescending(t => t.Votes)
+                    .ToList());
+        }
+
         return new SessionStateDto(
             s.Id, s.JoinCode, s.Name, s.DefaultLanguage, s.ActiveExpansions,
             s.CurrentRound, s.Phase, s.SpeakerPlayerId, s.ActivePlayerId, s.ActiveStrategyCardId,
             s.CurrentAgendaId, s.AllowEditAllPlayers, s.ShowTechOverview, s.DisplayMode, s.AgendaVotesHidden, s.VotingStarted, s.Paused, s.RetentionHours,
+            s.TurnTimerSeconds, s.StrategyCardsPerPlayer, s.RedTapeVariant, s.RedTapeCardNumber, s.PromptTechOnAction,
+            s.TrackSecondaryAbilities,
             s.CreatedAtUtc, s.LastActivityUtc,
-            players, objectives, cardStates, votes);
+            players, objectives, cardStates, votes,
+            s.AgendaTotalsRevealed, totals,
+            s.StatusStepsDone,
+            // Only meaningful in the status phase; null elsewhere so the client can't mistake it for a turn.
+            s.Phase == GamePhase.Status ? TurnService.CurrentScorer(s, factionOverrides) : null,
+            s.ShowJoinQr, s.StatusStage, s.SecondaryCardId, s.SecondaryOwnerId, s.SpeakerPending,
+            s.RedTapeRandomRound, s.RedTapeRandomPendingRound, s.RedTapeRandomRevealedId,
+            s.CombatAId, s.CombatBId, s.TechPickPlayerId, s.TechPromptOpen, s.TechPromptOwnerId,
+            s.RedTapeCarrierGoods, s.CustomVoteTitle, s.CustomVoteElect, callerPlayerId);
     }
 }

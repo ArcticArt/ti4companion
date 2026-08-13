@@ -76,6 +76,63 @@ public enum GamePhase
     Agenda = 4
 }
 
+/// <summary>
+/// The status-phase steps that follow the scoring, as a shared checklist so the whole table sees the same
+/// ticks. The list is the one the user gave (command tokens discarded/gained are one entry, as at their
+/// table) — it is a reminder of the sequence, not a transcription of the rulebook, and nothing is enforced.
+/// </summary>
+[Flags]
+public enum StatusStep
+{
+    None = 0,
+    /// <summary>No longer part of the checklist — revealing is its own stage now
+    /// (<see cref="StatusStage.RevealObjective"/>). The flag is kept (and set when that stage is left) so
+    /// no stored value has to be rewritten.</summary>
+    RevealObjective = 1,
+    DrawActionCards = 2,
+    CommandTokens = 4,
+    ReadyCards = 8,
+    RepairUnits = 16,
+    ReturnStrategyCards = 32,
+    /// <summary>Abilities that trigger during or at the end of the status phase (the Sol flagship
+    /// <em>Genesis</em>, for example). Not a rulebook step — a reminder the table asked for, because it is
+    /// the one thing that gets forgotten once the checklist is done.</summary>
+    EndOfStatusAbilities = 64
+}
+
+/// <summary>Where the table is inside the status phase. Advanced by the host with "next" (and back), reset
+/// whenever the phase is entered and on a round change. Scoring itself runs player by player inside
+/// <see cref="Scoring"/> (see <c>TurnService.CurrentScorer</c>).</summary>
+public enum StatusStage
+{
+    /// <summary>Each player in initiative order may score one objective by tapping its card.</summary>
+    Scoring = 0,
+    /// <summary>The next public objective is revealed and shown large on the wall.</summary>
+    RevealObjective = 1,
+    /// <summary>The remaining upkeep steps as a checklist, shown large on the wall.</summary>
+    Checklist = 2
+}
+
+/// <summary>
+/// Which Red Tape variant the table plays. Both are community variants, so the app tracks the tape and
+/// blocks scoring a taped objective — it does not run the rest of the rules (purging, the random removal
+/// timing, the Stage II gate); those stay with the table.
+/// <para>
+/// Sources: "Bureaucracy: Red Tape for TI4" by WildFalkon (BGG file 221470) and "Red Tape Lite" by
+/// van nguyen (BGG thread 3553379).
+/// </para>
+/// </summary>
+public enum RedTapeVariant
+{
+    None = 0,
+    /// <summary>The full variant: every public objective face-up at setup, taped; the player who takes the
+    /// carrier strategy card removes counters equal to the trade goods on it.</summary>
+    Bureaucracy = 1,
+    /// <summary>The leaner take: only the first two objectives start untaped, five Stage I can ever score,
+    /// and if nobody takes the carrier card one counter comes off at random.</summary>
+    Lite = 2
+}
+
 public enum ObjectiveStage
 {
     StageI = 1,
@@ -229,7 +286,10 @@ public enum DisplayMode
     Tech = 2,
     /// <summary>Match statistics (timing). Set ONLY by the host "End game" action — it is deliberately
     /// not offered in the display-control segments, so players can't switch the wall to it mid-game.</summary>
-    Statistics = 3
+    Statistics = 3,
+    /// <summary>The join QR code, large, as its own wall area. In the agenda phase there is no right panel,
+    /// so it renders as a centred overlay instead.</summary>
+    JoinQr = 4
 }
 
 /// <summary>
@@ -268,5 +328,71 @@ public enum SessionLogKind
     /// <summary>Host paused the game. <see cref="GameResumed"/> ends it. The interval between them is
     /// subtracted from all statistics durations (a pause doesn't count as play time).</summary>
     GamePaused = 22,
-    GameResumed = 23
+    GameResumed = 23,
+    /// <summary>Host published the totals of a face-down vote without the attribution (intermediate step
+    /// before <see cref="AgendaReveal2"/>).</summary>
+    AgendaRevealTotals = 24,
+    /// <summary>A player started working through a strategy card's SECONDARY ability (TargetPlayerId = that
+    /// player, Detail = card number). Ended by <see cref="SecondaryDone"/>.
+    ///
+    /// These intervals OVERLAP each other and the active player's turn by design — that is precisely what
+    /// makes "decision time on secondaries" separable from "time on turn" without asking the table for any
+    /// extra bookkeeping. New numeric values, so no migration was needed; keep them stable, the statistics
+    /// view diffs them.</summary>
+    SecondaryStart = 25,
+    SecondaryDone = 26,
+
+    /// <summary>Red Tape Lite: nobody took the carrier card, so the app took one tape off at random
+    /// (Detail = the objective). Logged because it is the one game action the app takes on its own —
+    /// the table has to be able to see that it happened, and to which objective.</summary>
+    RedTapeRandom = 27,
+
+    /// <summary>Red Tape Lite: an objective was purged once five Stage I were clear (Detail = the
+    /// objective). It can never be scored afterwards.</summary>
+    RedTapePurge = 28,
+
+    /// <summary>A combat was declared (Actor = who declared it, Target = the opponent) and resolved. The
+    /// interval between the two is excluded from time-on-turn, the same way a pause is — see
+    /// <c>MatchStats</c>. Keep the numeric values stable, the statistics read them.</summary>
+    CombatStart = 29,
+    CombatEnd = 30,
+
+    /// <summary>A device took over an existing seat, the HOST's seat included (Target = that seat). Worth a
+    /// line in the log precisely because it can hand the host role to another device: the table should be
+    /// able to see when that happened, since there is no account behind it, only the join code.</summary>
+    SeatClaim = 31,
+
+    /// <summary>A player had the technology picker open (Target = that player) and closed it again. The
+    /// interval is excluded from time-on-turn exactly like a combat is: looking up a technology in the app is
+    /// the app's overhead, not the player's thinking time. Keep the numeric values stable — the statistics
+    /// read them.
+    /// <para><b>No longer emitted</b> since the per-player picker became the table-wide prompt below; kept
+    /// because old logs contain them and the statistics still subtract them.</para></summary>
+    TechPickStart = 32,
+    TechPickEnd = 33,
+
+    /// <summary>A tape the variant's timing rules held shut was removed anyway, on the host's explicit
+    /// confirmation (Detail = the objective). Logged because the app was overruled: the table is the authority
+    /// on its own game, but the rest of it should be able to see that it happened.</summary>
+    RedTapeOverride = 34,
+
+    /// <summary>The secondary round of a strategy action opened (Detail = card number) and closed again.
+    /// <para>
+    /// The per-player <see cref="SecondaryStart"/>/<see cref="SecondaryDone"/> entries say who was on the
+    /// clock; these two bound the round itself, which is what the statistics need: a secondary ability
+    /// happens BETWEEN two turns, so the interval is subtracted from the next active player's
+    /// time-on-turn. Without a round-level entry the client cannot see the stretch where the round was
+    /// open but nobody had been ticked off yet — which is exactly the stretch the host spends asking.
+    /// Keep the numeric values stable.
+    /// </para></summary>
+    SecondaryRoundOpen = 35,
+    SecondaryRoundClose = 36,
+
+    /// <summary>The table is recording the technologies from a Technology action, and is done again
+    /// (Detail = the card number on open). Like a secondary round this is a round-level bracket, and for the
+    /// same reason: **the clock stands still while it is open**, so the interval is subtracted from
+    /// time-on-turn. It closes when every player has said they are done, or when the player who played the
+    /// card (or the host) moves the table on. Keep the numeric values stable.</summary>
+    TechPromptOpen = 37,
+    TechPromptClose = 38
 }

@@ -1,56 +1,53 @@
 @inherits Ti4ComponentBase
 
+@*
+    The players, mid-game. Deliberately NOT the setup view: during a match this tab is something you glance at
+    ("who is the speaker, what is everyone playing"), so it is one compact row per player with a big faction
+    symbol — the whole faction grid and colour palette used to be open under every single row, which made a
+    six-player table a page of pickers nobody was using.
+
+    Changing anything is a popup instead (see below): name, faction, colour and removal in one place, applied on
+    Save. That also makes it ONE request rather than one per keystroke-and-pick, and it gives Cancel a meaning.
+*@
 @{
     var s = Store.Session!;
 }
 
 <div class="panel">
     <h3>@Loc["players.title"]</h3>
-    <div class="grid" style="gap:.6rem;">
+    <div class="player-rows">
         @foreach (var p in s.Players.OrderBy(p => p.SeatOrder))
         {
+            var pid = p.Id;
             var fac = Store.Faction(p.FactionId);
             var isSpeaker = s.SpeakerPlayerId == p.Id;
             var editable = Store.CanEdit(p.Id);
-            <div class="player-card" style="--player-color:@p.ColorHex;flex-wrap:wrap;gap:.6rem;flex-direction:column;align-items:stretch;">
-                <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
-                    <FactionBadge Faction="fac" Ring="@p.ColorHex" />
-                    <div style="flex:1 1 140px;">
-                        @if (editable)
-                        {
-                            <input type="text" value="@p.Name" @onchange="e => SetName(p.Id, e)" />
-                        }
-                        else
-                        {
-                            <strong>@p.Name</strong>
-                        }
+            <div class="player-card player-row" style="--player-color:@p.ColorHex">
+                <FactionBadge Faction="fac" Size="3" Ring="@p.ColorHex" />
+                <div class="pr-id">
+                    <div class="pr-name">
+                        @p.Name
+                        @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
+                        @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
                     </div>
-                    @if (p.Id == Store.MyPlayerId) { <span class="chip">@Loc["players.you"]</span> }
-                    @if (p.IsHost) { <span class="chip chip-active">@Loc["host.only"]</span> }
-                    @if (isSpeaker) { <span class="chip chip-active"><SpeakerIcon SizeCss="1em" /> @Loc["players.speaker"]</span> }
-                    else if (Store.IsHost) { <button class="btn btn-sm" @onclick="() => MakeSpeaker(p.Id)">@Loc["players.makeSpeaker"]</button> }
+                    <div class="pr-fac">@(fac is null ? "—" : Loc.Pick(fac.Name, fac.NameDe))</div>
+                </div>
+                <div class="pr-actions">
+                    @if (isSpeaker)
+                    {
+                        <span class="chip chip-active pr-speaker"><SpeakerIcon SizeCss="1.5em" /></span>
+                    }
+                    else if (Store.IsHost)
+                    {
+                        <button class="btn pr-speaker-btn" @onclick="() => MakeSpeaker(pid)">
+                            <SpeakerIcon SizeCss="1.3em" /> @Loc["players.makeSpeaker"]
+                        </button>
+                    }
                     @if (editable)
                     {
-                        <button class="btn btn-sm btn-ghost" @onclick="() => Remove(p.Id)" title="@RemoveTitle">✕</button>
+                        <button class="btn btn-sm" @onclick="() => OpenEdit(p)">@Loc["players.edit"]</button>
                     }
                 </div>
-                @if (editable)
-                {
-                    <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start;">
-                        <div style="flex:1 1 220px;">
-                            <label>@Loc["players.faction"]</label>
-                            <FactionPicker Factions="Store.ActiveFactions()" Current="@p.FactionId" OnPick="id => SetFactionId(p.Id, id)" />
-                        </div>
-                        <div>
-                            <label>@Loc["players.color"]</label>
-                            <PlayerColorPicker Current="@p.ColorHex" OnPick="hex => SetColor(p.Id, hex)" TakenByResolver="hex => TakenBy(hex, p.Id)" />
-                        </div>
-                    </div>
-                }
-                else
-                {
-                    <div class="faint" style="font-size:.8rem;">@(fac is null ? "—" : Loc.Pick(fac.Name, fac.NameDe)) · @Loc["players.editLocked"]</div>
-                }
             </div>
         }
     </div>
@@ -64,29 +61,128 @@
     }
 </div>
 
+@* Everything editable about one player, in one place. Changes are staged locally and sent on Save, so Cancel
+   really does mean "forget it" — the old inline pickers wrote to the server on every tap, which left no way
+   back from a mis-tap on a faction. *@
+@if (edit is { } ed)
+{
+    <div class="modal-backdrop centered blurred" @onclick="CancelEdit">
+        <div class="modal player-edit-modal" @onclick:stopPropagation>
+            <div class="modal-head">
+                <FactionBadge Faction="Store.Faction(draftFaction)" Size="2.2" Ring="@draftColor" />
+                <h3 style="margin:0;">@Loc["players.edit"]</h3>
+            </div>
+            <div class="modal-body">
+                <div class="game-option">
+                    <label for="peName">@Loc["players.name"]</label>
+                    <input id="peName" type="text" @bind="draftName" @bind:event="oninput" />
+                </div>
+                @* Colour BEFORE the faction grid: the grid is thirty-odd symbols tall, and with it in between
+                   changing a colour on a phone meant scrolling past all of them to find the swatches. *@
+                <div class="game-option">
+                    <label>@Loc["players.color"]</label>
+                    <div>
+                        <PlayerColorPicker Current="@draftColor" OnPick="hex => draftColor = hex"
+                                           TakenByResolver="hex => TakenBy(hex, ed.Id)" />
+                    </div>
+                </div>
+                <div class="game-option">
+                    <label>@Loc["players.faction"]</label>
+                    <div>
+                        @* Other players' factions are filtered out, this player's own stays selectable. *@
+                        <FactionPicker Factions="Store.ActiveFactions()" Current="@draftFaction"
+                                       Taken="@TakenFactions(ed.Id)" OnPick="id => draftFaction = id" />
+                    </div>
+                </div>
+
+                @* Removing a player takes their scores and technologies with them, so it asks twice — the same
+                   arm-then-confirm the Red Tape band uses, rather than a browser confirm() nobody styles. *@
+                @if (Store.IsHost && ed.Id != Store.MyPlayerId)
+                {
+                    <div class="pe-danger">
+                        <button class="btn @(removeArmed ? "btn-danger" : "btn-ghost")" @onclick="ArmOrRemove">
+                            @(removeArmed ? Loc["players.removeConfirm"] : Loc["players.remove"])
+                        </button>
+                        @if (removeArmed)
+                        {
+                            <span class="rt-ask-warn">@Loc["players.removeWarn"]</span>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gold" disabled="@(!DraftValid)" @onclick="SaveEdit">@Loc["common.save"]</button>
+                <button class="btn" @onclick="CancelEdit">@Loc["common.cancel"]</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private Guid Sid => Store.Session!.Id;
     private string newName = "";
     private string AddPlaceholder => Loc["players.add"];
-    private string RemoveTitle => Loc["players.remove"];
+
+    // The player being edited, plus the staged values. Null = the popup is closed.
+    private PlayerDto? edit;
+    private string draftName = "";
+    private string? draftFaction;
+    private string draftColor = "";
+    private bool removeArmed;
+
+    private bool DraftValid => !string.IsNullOrWhiteSpace(draftName);
+
+    private void OpenEdit(PlayerDto p)
+    {
+        edit = p;
+        draftName = p.Name;
+        draftFaction = p.FactionId;
+        draftColor = p.ColorHex;
+        removeArmed = false;
+    }
+
+    private void CancelEdit()
+    {
+        edit = null;
+        removeArmed = false;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (edit is not { } ed || !DraftValid) return;
+        var name = draftName.Trim();
+        // One request for the lot — and only the fields that actually changed, so a save never rewrites a
+        // value somebody else changed in the meantime.
+        await Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, ed.Id, new UpdatePlayerRequest(
+            name == ed.Name ? null : name,
+            draftFaction == ed.FactionId ? null : draftFaction,
+            string.Equals(draftColor, ed.ColorHex, StringComparison.OrdinalIgnoreCase) ? null : draftColor,
+            null, null, null)));
+        CancelEdit();
+    }
+
+    private async Task ArmOrRemove()
+    {
+        if (!removeArmed) { removeArmed = true; return; }
+        if (edit is not { } ed) return;
+        await Store.Api.RemovePlayerAsync(Sid, ed.Id);
+        CancelEdit();
+        await Store.RefreshAsync();
+    }
 
     private string? TakenBy(string hex, Guid exceptId)
         => Store.Session!.Players.FirstOrDefault(p => p.Id != exceptId && string.Equals(p.ColorHex, hex, StringComparison.OrdinalIgnoreCase))?.Name;
 
-    private Task SetName(Guid id, ChangeEventArgs e)
-        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(e.Value?.ToString(), null, null, null, null, null)));
-    private Task SetFactionId(Guid id, string factionId)
-        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(null, factionId, null, null, null, null)));
-    private Task SetColor(Guid id, string hex)
-        => Store.Mutate(Store.Api.UpdatePlayerAsync(Sid, id, new UpdatePlayerRequest(null, null, hex, null, null, null)));
+    /// <summary>Factions other players hold — hidden from this player's picker, their own stays so it can be
+    /// changed away from.</summary>
+    private IReadOnlySet<string> TakenFactions(Guid exceptId)
+        => Store.Session!.Players
+            .Where(p => p.Id != exceptId && !string.IsNullOrEmpty(p.FactionId))
+            .Select(p => p.FactionId!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     private Task MakeSpeaker(Guid id)
         => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, id)));
-
-    private async Task Remove(Guid id)
-    {
-        await Store.Api.RemovePlayerAsync(Sid, id);
-        await Store.RefreshAsync();
-    }
 
     private async Task Add()
     {

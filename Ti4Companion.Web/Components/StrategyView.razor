@@ -27,6 +27,11 @@
             <div class="pb-lbl">@Loc["strategy.picking"]</div>
             <div class="pb-name">@picker.Name @if (myTurn) { <span class="chip chip-active">@Loc["players.you"]</span> } @if (host && !myTurn) { <span class="chip">@Loc["host.pickFor"]</span> }</div>
         </div>
+        @if (Store.TurnTimerEnabled)
+        {
+            <div class="spacer" style="flex:1"></div>
+            <TurnTimer PlayerId="@picker.Id" Signal="@myTurn" />
+        }
     </div>
 }
 else
@@ -55,7 +60,7 @@ else
                     <span>@owner.Name</span>
                     @if (host || Store.CanEdit(owner.Id))
                     {
-                        <button class="btn btn-sm btn-ghost" @onclick="() => Return(owner.Id, card.Id)">↩ @Loc["strategy.unpick"]</button>
+                        <button class="btn btn-sm btn-ghost" @onclick="() => Return(owner.Id, card.Id)"><MaterialIcon Name="undo" /> @Loc["strategy.unpick"]</button>
                     }
                 </div>
             }

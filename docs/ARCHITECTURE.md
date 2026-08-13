@@ -106,29 +106,95 @@ The session creator is the **host** (`Player.IsHost`, stable across seat changes
 - Active player or host: playing a strategy action, passing, advancing the turn.
 - Current picker or host: picking a strategy card.
 - Self or host: profile edits, technologies, agenda influence, casting/locking a vote.
-- Any joined device: scoring objectives (validated to be a real session member) and switching the wall
-  display mode. A device with no token is a read-only spectator (that's how the wall display works).
+- Own seat while it is up, or host: scoring an objective in the status phase (and taking that score back).
+  Scoring stays open to any joined device *outside* that phase, because abilities score at other times;
+  either way the player scored for must be a real member of the session.
+- Any joined device: switching the wall display mode. A device with no token is a read-only spectator
+  (that's how the wall display works).
 
 Rejected calls return 403/400; the client treats both as "refresh to authoritative state", never as an
 exception.
 
 **Game flow.** Phases: Setup → Strategy → Action → Status → (Agenda) → Strategy (next round).
 
-- **Setup:** players pick faction and colour and mark themselves ready (pickers hide options other
-  players already hold); the host arranges the seat order (▲/▼) and sets the speaker; the two starting
-  public objectives are recorded by hand. Starting the game requires everyone ready + a speaker; the
-  start button first shows a **seat-order confirmation dialog**. Faction changes reconcile starting
-  technologies automatically. Maximum 8 players (server-enforced).
+- **Setup** runs as four steps for the host — session & options → players → seating & speaker → objectives —
+  while everyone else always sees the player step, because a joiner has to be able to pick a faction and ready
+  up whenever they arrive. Players pick faction and colour and mark themselves ready (pickers hide options
+  other players already hold); the host arranges the seat order (drag or ▲/▼), says who the speaker is, and
+  records the two starting public objectives by hand. **The start button is the last thing on the last step**,
+  so the walk through seating and objectives *is* the confirmation — there is no separate "is this right?"
+  dialog, and the seating step will not let the host past without a speaker. Faction changes reconcile
+  starting technologies automatically. Maximum 8 players (server-enforced).
 - **Joining:** players join with a 5-character code or an invite link, and can either create a new seat
-  or **take over** an existing non-host seat (e.g. after switching devices).
+  or **take over** an existing one — **including the host's**, which is what lets a host who cleared their
+  browser or switched device pick the role back up instead of leaving the table unable to change phases.
+  The join code is the only thing guarding that, and a device holding it can already score and vote; the
+  take-over is written to the match log so the table can see it. The claiming device gives up any other
+  seat it held (one device, one seat) — **and the displaced device notices**: `GET /api/sessions/{code}`
+  answers with the seat the *asking* device holds, so the one that lost it drops the seat and goes back to
+  the join screen. Without that it kept a session where every control was present and none of them worked,
+  because the server no longer recognised it as that player.
+- **Coming back:** each device remembers the sessions it has played in `localStorage` — the last ten with
+  the session name, the code, when the game was created and **which player it was there**. That last part is
+  the reason the record exists: the device token identifies the device and is shared by every session it
+  plays, so a single stored player id could only ever describe one game. Leaving a session keeps its entry,
+  and asks which kind of leaving was meant: keep the seat (coming back walks straight into it) or give it up
+  (coming back asks who you are). An entry whose code the server no longer knows removes itself on the next
+  attempt.
 - **Strategy:** cards are picked in order — speaker first, then clockwise by seat; with ≤4 players
-  everyone picks 2 cards. Unpicked cards gain 1 trade good per round; goods are settled when the action
-  phase starts. Initiative = lowest held card number (the Naalu Collective is always 0).
+  everyone picks 2 cards, and a table may pin the count instead. Whose pick it is comes from **who holds
+  what**, not from how many cards have gone: a returned card goes back to the player who returned it. The
+  phase is over when everyone has their allotment **or the eight cards have run out** — pinning two cards
+  with five players asks for ten, so "everyone has two" can never happen. Unpicked cards gain 1 trade good
+  per round; goods are settled when the action phase starts. Initiative = lowest held card number (the Naalu
+  Collective is always 0).
 - **Action:** turns run in initiative order. Playing a strategy action highlights the card on the wall;
   the highlight clears on the next turn change. A player may pass only once all of their strategy cards
-  are exhausted; the round can end only when everyone has passed.
-- **Status:** objectives are revealed (searchable picker) and scored; custom/secret-made-public
-  objectives can be added by hand.
+  are exhausted; the round can end only when everyone has passed. Whoever is up — or the host, after
+  switching **take over** on, which starts off so the table device does not permanently carry somebody else's
+  buttons — can declare a **combat**, as a popup on the player card.
+  A combat stops that player's clock while it runs, and so does the technology prompt below; both use the
+  same mechanism, a logged start/end interval that `MatchStats` subtracts from **time on turn only** (not
+  from the round or the match). A battle with someone else is not their thinking time, and neither is hunting
+  for a technology in a list — but both are still time the table spent playing. Because a popup can be walked
+  away from, the server closes either one at every turn and phase boundary. Imperial's primary opens a third
+  popup, listing the objectives that player may actually score.
+- **Recording technologies** (optional, a table setting) is asked once the Technology action is resolved, not
+  while it is being played: the players taking the secondary research as well. The host then sees **the whole
+  table as a list**, one "record" button per seat, and can fill anything in for anyone; every other device
+  sees two buttons for its own seat — record, or skip. The picker itself stages its changes and only sends
+  them when confirmed, so cancelling really cancels. **The clock stands still** until everybody has answered
+  or the host moves the table on. Like the other clock stops it is a logged interval, and every turn or phase
+  boundary ends it, so a phone somebody put down cannot stop the clock for the rest of the evening.
+- **Secondary abilities** (an optional extra, and only meaningful with the turn timer on) are followed as a
+  *round*: it opens when the player who played the primary ends their turn, each participant is put on their
+  own clock, and it closes when the last one is done. A secondary happens **between two turns**, so while the
+  round is open the next player's turn clock does not run — the same subtraction as a combat, from a logged
+  open/close interval — and the round is closed at the next turn advance whether or not anybody said so.
+- **Status:** walked through in three stages — score, reveal the next objective, remaining steps. Scoring
+  runs in initiative order and is **the player's own decision**: their device scores for their seat while it
+  is up, every other phone watches, and the host can act for anyone (so a table sharing one device still
+  works). The list holds only what that player can act on (a sealed or purged objective cannot be scored, so
+  it is not offered), and what they have already scored stays in it as an "undo" so a mis-tap can be taken
+  back where it happened. Both ways out of the phase ("agenda phase", "next round") appear only on the last
+  stage. Custom / secret-made-public objectives can be added by hand in the Objectives tab.
+- **Optional table variants** (all off by default — the app never forces a rule). The **Red Tape**
+  community variants are the one deliberate exception to "the app tracks, it does not enforce": a table
+  that chose one gets its rules applied server-side in `Services/RedTape.cs`, so a taped objective simply
+  cannot be scored. Two of those rules would otherwise take something away from the table irreversibly —
+  purging the Stage I objectives left over once five are clear, and pulling a tape at random in a round
+  where nobody took the carrier card. **Both are questions, not events:** the server marks them as
+  *proposed* and the host confirms in a dialog, and only that answer changes anything. The purge proposal
+  is flagged per objective at the moment it is raised, which is what keeps an objective revealed *later*
+  out of a pending purge; the random question stores the round it belongs to, because the moment it is
+  raised in can end before anyone answers it. The variant's *timing* rules can also be **overruled** by the
+  host through an explicit dialog (and the override is logged) — the app enforces them so nobody has to
+  remember them, but the table remains the authority on its own game. A purged objective is the exception:
+  that is not a lock, it is out of the game. Removing markers is a small workspace rather than a one-shot
+  pick: every sealed objective is a card with its tape, tapping toggles the tape off and on again, and the
+  allowance shown at the top is one for the card's primary plus one per trade good that was on it when it was
+  taken (captured at the start of the action phase, because the goods are collected in the same step). The
+  setup option carries a "?" that explains both variants and links their authors' posts.
 - **Agenda:** a small state machine driven by `CurrentAgendaId` + `VotingStarted` + `AgendaVotesHidden`:
   1. *Influence entry* — every player enters their available influence (non-hosts see only their own).
   2. *Agenda revealed* — the host picks an agenda and starts the vote, open or **face-down**.
@@ -143,7 +209,11 @@ exception.
   paused, the clients show a lock overlay, and the paused interval is excluded from all statistics.
 - **Match log & statistics:** every meaningful mutation writes a structured `SessionLogEntry`. The
   client derives match/round/phase/per-player durations from the log timeline (`MatchStats`); the host's
-  "End game" action switches the wall to a statistics view with charts.
+  "End game" action switches the wall to a statistics view with charts. Because those figures come from the
+  `RoundChange`/`PhaseChange` entries and nothing else, **anything that moves the round or the phase has to
+  log it** — including a host correcting either by hand in the settings, which is easy to forget and leaves
+  a round missing from the statistics with its time absorbed by the round before it. Such a correction can
+  also point backwards, so the per-round figures are aggregated by round *number* rather than per entry.
 - **Retention:** inactive sessions are wiped automatically after `Ti4:DefaultRetentionHours`
   (server-side background worker).
 
@@ -152,7 +222,8 @@ exception.
 Everything lives under `/api/sessions` (mutations broadcast a SignalR `SessionChanged` event and return
 the full updated session state) plus one content endpoint:
 
-- Lifecycle: `POST /` · `GET /{code}` · `GET /{code}/log` · `PATCH /{id}` · `DELETE /{id}` ·
+- Lifecycle: `POST /` · `GET /{code}` (the only response that also says which seat the *asking* device
+  holds) · `GET /{code}/log` · `PATCH /{id}` · `DELETE /{id}` ·
   `POST /{id}/display` · `POST /{id}/pause` · `POST /{id}/resume`
 - Phases/rounds: `POST /{id}/phase/{start|action|status|agenda}` · `POST /{id}/round/next`
 - Turn: `POST /{id}/active-strategy` · `POST /{id}/turn/{active|advance|previous}`
@@ -179,11 +250,29 @@ Enums travel over the wire **as numbers** (no string conversion) — keep numeri
 - `Localization/Loc.cs` holds all UI strings as EN/DE pairs (`Loc["key"]`, `Loc.Pick(en, de)`); the
   language toggle persists per device.
 - Components inherit `Ti4ComponentBase` (re-renders on store/language changes).
+- **Anything clickable is a real control**, never a `<div>` with a click handler: a styled div is
+  unreachable by keyboard and shows up as nothing in the accessibility tree. Tab strips are `<button>`s in a
+  `role="tablist"` with `aria-selected` and a `role="tabpanel"`; cards that act as buttons carry
+  `role="button"`, `tabindex` and Enter/Space handling. Styling a `<button>` back to a flat look needs
+  `appearance: none; background: none; font-family: inherit` — and an explicit `color`, because a button does
+  not inherit it and `appearance: none` does not reset the UA's black.
+- **No emoji in the UI.** Where a glyph is needed it is an inlined Google Material Symbol
+  (`Components/MaterialIcon.razor`, Apache 2.0, credited in the footer): an emoji is drawn by whatever font
+  the platform picks, never takes the button's colour, and carries no name for a screen reader. The paths are
+  copied from `google/material-design-icons` rather than redrawn.
 - Pages: `Home` (create/join, `/join/{code}` invite links), `Session` (`/s/{code}` control view with
   Phase/Players/Objectives/Tech tabs), `Display` (`/display/{code}` — the full-screen wall).
 - The wall display has three player-switchable modes (Objectives / Secondary abilities / Tech overview)
   plus a Statistics mode reachable only through the host's "End game" action. During the agenda phase it
   shows the voting arc ("galactic council") instead.
+- **Updates.** The app is a PWA, and its service worker answers navigations from its own cache. It
+  deliberately does **not** call `skipWaiting()`: activating a new worker clears the cache the running
+  version is still reading from, and its fingerprinted framework files are gone from the server after a
+  deploy, so a game open on somebody's phone would break mid-update. Consequence: a deploy does not reach
+  an open browser by itself. `Components/UpdateNotice.razor` therefore shows a bar when a new worker is
+  waiting and offers a reload that hands over properly (it posts `SKIP_WAITING`, waits for
+  `controllerchange`, then reloads) — and says "close every tab" instead when the waiting worker is old
+  enough not to answer that message.
 
 ## Security & public hosting
 

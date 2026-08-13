@@ -19,35 +19,57 @@ else
            control — stays ~1.5 lines on a phone. Statistics is NOT here (set only by "End game"). *@
         <div class="display-ctl">
             <span class="display-ctl-lbl">@Loc["display.control"]</span>
-            <div class="seg">
-                <button class="seg-btn @(s.DisplayMode == DisplayMode.Objectives ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Objectives)">@Loc["display.objectives"]</button>
-                <button class="seg-btn @(s.DisplayMode == DisplayMode.Secondary ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Secondary)">@Loc["display.secondaryShort"]</button>
-                <button class="seg-btn @(s.DisplayMode == DisplayMode.Tech ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Tech)">@Loc["display.techShort"]</button>
+            <div class="display-ctl-row">
+                <div class="seg">
+                    <button class="seg-btn @(s.DisplayMode == DisplayMode.Objectives ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Objectives)">@Loc["display.objectives"]</button>
+                    <button class="seg-btn @(s.DisplayMode == DisplayMode.Secondary ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Secondary)">@Loc["display.secondaryShort"]</button>
+                    <button class="seg-btn @(s.DisplayMode == DisplayMode.Tech ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.Tech)">@Loc["display.techShort"]</button>
+                    @* The QR is a wall AREA of its own, so it belongs in this group and behaves like the
+                       others: exactly one is active. It used to be a separate toggle beside the group, which
+                       made two controls for one screen. Host only — inviting people to the table is the
+                       host's business, and everyone else already has the code. *@
+                    @if (Store.IsHost)
+                    {
+                        <button class="seg-btn @(s.DisplayMode == DisplayMode.JoinQr ? "on" : "")" @onclick="() => SetDisplay(DisplayMode.JoinQr)" title='@Loc["nav.joinQr"]'>
+                            <MaterialIcon Name="qr_code" SizeCss="1em" /> @Loc["display.qrShort"]
+                        </button>
+                    }
+                </div>
             </div>
         </div>
 
-        <div class="tabs" style="margin-top:.6rem;">
+        @* Real <button>s, not styled <div>s: a bare div with @onclick is unreachable by keyboard and shows up
+           as nothing in the accessibility tree — the same fix ObjectiveDisplayCard already got. `aria-selected`
+           carries the state the `.active` class only shows visually. Arrow-key roving between tabs is
+           deliberately NOT implemented: every tab is its own tab stop, so Tab + Enter reaches all four, which
+           is what was missing. *@
+        <div class="tabs" role="tablist" style="margin-top:.6rem;">
             @foreach (var t in Tabs)
             {
-                <div class="tab @(tab == t ? "active" : "")" @onclick="() => tab = t">@Loc[TabKey(t)]</div>
+                var isActive = tab == t;
+                <button type="button" class="tab @(isActive ? "active" : "")" role="tab"
+                        id="@($"sessiontab-{t}")" aria-selected="@(isActive ? "true" : "false")"
+                        @onclick="() => tab = t">@Loc[TabKey(t)]</button>
             }
         </div>
 
-        @switch (tab)
-        {
-            case TabId.Phase:
-                <PhaseView />
-                break;
-            case TabId.Players:
-                <PlayersTab />
-                break;
-            case TabId.Objectives:
-                <ObjectivesTab />
-                break;
-            case TabId.Techs:
-                <TechsTab />
-                break;
-        }
+        <div role="tabpanel" aria-labelledby="@($"sessiontab-{tab}")">
+            @switch (tab)
+            {
+                case TabId.Phase:
+                    <PhaseView />
+                    break;
+                case TabId.Players:
+                    <PlayersTab />
+                    break;
+                case TabId.Objectives:
+                    <ObjectivesTab />
+                    break;
+                case TabId.Techs:
+                    <TechsTab />
+                    break;
+            }
+        </div>
     </div>
 }
 
@@ -68,6 +90,42 @@ else
         _ => "",
     };
 
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Store.OnShowTechTab += ShowTechs;
+        Store.OnSeatLost += SeatLost;
+        Store.OnSessionGone += SessionGone;
+    }
+
+    // The session was ended and closed (or wiped) while this device was still in it. There is nothing left
+    // to show — staying here is the loading screen, forever — so go back to the start page.
+    private void SessionGone() => InvokeAsync(async () =>
+    {
+        await Store.LeaveAsync();
+        Nav.NavigateTo("/");
+    });
+
+    // The action view's optional "record your technology" prompt asks the shell to switch tabs.
+    private void ShowTechs() => InvokeAsync(() =>
+    {
+        tab = TabId.Techs;
+        StateHasChanged();
+    });
+
+    // Somebody joined and took this device's seat. Staying here means a screen where every control is
+    // present and none of them does anything — the server stopped recognising this device as that player.
+    // So go back to the join menu for the same code, where a seat can be chosen again.
+    private void SeatLost() => InvokeAsync(() => Nav.NavigateTo($"/join/{Code.ToUpperInvariant()}"));
+
+    public override void Dispose()
+    {
+        Store.OnShowTechTab -= ShowTechs;
+        Store.OnSeatLost -= SeatLost;
+        Store.OnSessionGone -= SessionGone;
+        base.Dispose();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (Store.Session?.JoinCode == Code.ToUpperInvariant()) return;
@@ -79,4 +137,5 @@ else
     private void GoHome() => Nav.NavigateTo("/");
 
     private Task SetDisplay(DisplayMode mode) => Store.Mutate(Store.Api.SetDisplayModeAsync(Store.Session!.Id, mode));
+
 }

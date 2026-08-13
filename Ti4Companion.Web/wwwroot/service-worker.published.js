@@ -37,6 +37,14 @@ async function onActivate(event) {
         .map(key => caches.delete(key)));
 }
 
+// Switch over NOW, because the app asked. A newly installed worker otherwise waits until every tab of the
+// origin is closed — which is why a deploy kept serving the old app to anyone who just pressed reload. The
+// request only ever comes from the user tapping "reload" on the update bar (see UpdateNotice.razor): the
+// activation below clears the previous cache, so it must not happen behind the back of a running game.
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 async function onFetch(event) {
     let cachedResponse = null;
     if (event.request.method === 'GET') {
@@ -53,3 +61,37 @@ async function onFetch(event) {
 
     return cachedResponse || fetch(event.request);
 }
+// ---------------------------------------------------------------------------
+// Web Push: "you're up". Payload is the JSON from Services/PushService.cs.
+// A service worker is the only thing that can show a notification while the tab
+// is closed or the phone is locked, which is the whole point of the feature.
+// ---------------------------------------------------------------------------
+self.addEventListener('push', event => {
+    let d = {};
+    try { d = event.data ? event.data.json() : {}; } catch (e) { d = {}; }
+    // One pending "your turn" per device: the tag makes a newer notification REPLACE the older one
+    // instead of stacking six of them after a long turn.
+    const options = {
+        body: d.body || '',
+        icon: 'icon-192.png',
+        badge: 'icon-192.png',
+        tag: d.tag || 'ti4',
+        renotify: true,
+        data: { code: d.code || '' }
+    };
+    event.waitUntil(self.registration.showNotification(d.title || 'TI4 Companion', options));
+});
+
+// Tapping it should land in the game, and reuse an already open tab rather than piling up windows.
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const code = (event.notification.data && event.notification.data.code) || '';
+    const path = code ? '/s/' + code : '/';
+    event.waitUntil((async () => {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const w of windows) {
+            if (w.url.indexOf(path) !== -1) { await w.focus(); return; }
+        }
+        await self.clients.openWindow(path);
+    })());
+});

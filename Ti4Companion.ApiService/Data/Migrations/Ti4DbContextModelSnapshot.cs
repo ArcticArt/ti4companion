@@ -62,11 +62,20 @@ namespace Ti4Companion.ApiService.Data.Migrations
                     b.Property<int?>("ActiveStrategyCardId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("AgendaTotalsRevealed")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("AgendaVotesHidden")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("AllowEditAllPlayers")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("CombatAId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CombatBId")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("TEXT");
@@ -76,6 +85,12 @@ namespace Ti4Companion.ApiService.Data.Migrations
 
                     b.Property<int>("CurrentRound")
                         .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CustomVoteElect")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomVoteTitle")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("DefaultLanguage")
                         .HasColumnType("INTEGER");
@@ -100,14 +115,71 @@ namespace Ti4Companion.ApiService.Data.Migrations
                     b.Property<int>("Phase")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("PromptTechOnAction")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RedTapeCardNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RedTapeCarrierGoods")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RedTapeRandomPendingRound")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("RedTapeRandomRevealedId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RedTapeRandomRound")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RedTapeVariant")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("RetentionHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SecondaryCardId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("SecondaryOwnerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ShowJoinQr")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("ShowTechOverview")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("SpeakerPending")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("SpeakerPlayerId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("StatusStage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StatusStepsDone")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StrategyCardsPerPlayer")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("TechPickPlayerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("TechPromptOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("TechPromptOwnerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("TrackSecondaryAbilities")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TurnTimerSeconds")
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("VotingStarted")
                         .HasColumnType("INTEGER");
@@ -127,6 +199,9 @@ namespace Ti4Companion.ApiService.Data.Migrations
 
                     b.Property<Guid>("PlayerId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("ScoredAtUtc")
                         .HasColumnType("TEXT");
@@ -175,8 +250,17 @@ namespace Ti4Companion.ApiService.Data.Migrations
                     b.Property<int>("SeatOrder")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("SecondaryPending")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("SessionId")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("StatusDone")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("TechPromptPending")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -235,6 +319,49 @@ namespace Ti4Companion.ApiService.Data.Migrations
                     b.ToTable("PlayerTechnologies");
                 });
 
+            modelBuilder.Entity("Ti4Companion.ApiService.Data.PushSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceToken")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("FailedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("PushSubscriptions");
+                });
+
             modelBuilder.Entity("Ti4Companion.ApiService.Data.SessionLogEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -282,9 +409,18 @@ namespace Ti4Companion.ApiService.Data.Migrations
                     b.Property<int?>("CustomPoints")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("MarkerRemoved")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ObjectiveId")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("PurgePending")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Purged")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("RevealedAtUtc")
                         .HasColumnType("TEXT");
@@ -297,6 +433,124 @@ namespace Ti4Companion.ApiService.Data.Migrations
                     b.HasIndex("SessionId");
 
                     b.ToTable("SessionObjectives");
+                });
+
+            modelBuilder.Entity("Ti4Companion.ApiService.Data.SessionSummary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ActiveExpansions")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DefaultLanguage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DeviceCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DurationSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("EndPhase")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("JoinCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastActivityUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ObjectivesRevealed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PausedSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PlayerCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("RecordedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RedTapeVariant")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RoundsReached")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StrategyCardsPerPlayer")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TopPoints")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TurnTimerSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WinnerFactionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WinnerName")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("SessionId")
+                        .IsUnique();
+
+                    b.ToTable("SessionSummaries");
+                });
+
+            modelBuilder.Entity("Ti4Companion.ApiService.Data.SessionSummaryPlayer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColorHex")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FactionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SeatOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SessionSummaryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TechnologyCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionSummaryId");
+
+                    b.ToTable("SessionSummaryPlayers");
                 });
 
             modelBuilder.Entity("Ti4Companion.ApiService.Data.StrategyCardState", b =>
@@ -376,6 +630,15 @@ namespace Ti4Companion.ApiService.Data.Migrations
                     b.Navigation("Player");
                 });
 
+            modelBuilder.Entity("Ti4Companion.ApiService.Data.PushSubscription", b =>
+                {
+                    b.HasOne("Ti4Companion.ApiService.Data.GameSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Ti4Companion.ApiService.Data.SessionLogEntry", b =>
                 {
                     b.HasOne("Ti4Companion.ApiService.Data.GameSession", null)
@@ -394,6 +657,17 @@ namespace Ti4Companion.ApiService.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("Ti4Companion.ApiService.Data.SessionSummaryPlayer", b =>
+                {
+                    b.HasOne("Ti4Companion.ApiService.Data.SessionSummary", "Summary")
+                        .WithMany("Players")
+                        .HasForeignKey("SessionSummaryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Summary");
                 });
 
             modelBuilder.Entity("Ti4Companion.ApiService.Data.StrategyCardState", b =>
@@ -428,6 +702,11 @@ namespace Ti4Companion.ApiService.Data.Migrations
             modelBuilder.Entity("Ti4Companion.ApiService.Data.SessionObjective", b =>
                 {
                     b.Navigation("Scores");
+                });
+
+            modelBuilder.Entity("Ti4Companion.ApiService.Data.SessionSummary", b =>
+                {
+                    b.Navigation("Players");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,10 +1,16 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using System.Reflection
 @inject Loc Loc
 @inject SessionStore Store
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
+<InstanceBadge />
+@* A deploy landed while this page was open (or between two visits): offer the reload that actually picks the
+   new version up. Not on `/display` — that uses EmptyLayout, and a wall nobody stands at cannot tap a bar;
+   the wall is reloaded from the device that runs the table. *@
+<UpdateNotice />
 <div class="app-shell">
 <div class="appbar">
     @if (Store.Session is { } s)
@@ -19,9 +25,13 @@
         @if (Store.IsHost)
         {
             <span class="codechip ab-code" @onclick="CopyCode" title='@Loc["common.copy"]'>@s.JoinCode</span>
-            <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'>@(inviteCopied ? "✓" : "🔗")</button>
+            <button class="btn btn-sm btn-ghost" @onclick="CopyInvite" title='@Loc["nav.invite"]'><MaterialIcon Name="@(inviteCopied ? "check" : "link")" /></button>
+            @* A real link, not window.open via interop: popup blockers (and Safari, once an awaited
+               interop roundtrip has expired the gesture) would swallow a scripted open. *@
+            <a class="btn btn-sm btn-ghost" href="@($"/display/{s.JoinCode}")" target="_blank" rel="noopener" title='@Loc["nav.openDisplay"]'><MaterialIcon Name="open_in_new" /></a>
+            <button class="btn btn-sm btn-ghost" @onclick="() => showQr = true" title='@Loc["nav.joinQr"]'><MaterialIcon Name="qr_code" /></button>
             <button class="btn btn-sm btn-ghost" @onclick="() => showStats = true" title='@Loc["stats.button"]'><StatIcon /></button>
-            <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'>⏸</button>
+            <button class="btn btn-sm btn-ghost" @onclick="Pause" title='@Loc["pause.pause"]'><MaterialIcon Name="pause" /></button>
         <button class="btn btn-sm btn-danger ab-endgame" @onclick="EndGame" title='@Loc["turn.endGame"]'>@Loc["turn.endGame"]</button>
             @if (codeCopied || inviteCopied) { <span class="chip chip-done">@Loc["common.copied"]</span> }
         }
@@ -31,13 +41,15 @@
             <FactionBadge Faction="Store.Faction(me.FactionId)" Size="2" Ring="@me.ColorHex" />
             <span class="ab-name">@me.Name</span>
         }
+        @* Per-device notification switch — every player wants it for their own phone, not just the host. *@
+        <PushToggle />
         <span class="dot @(Store.Connected ? "on" : "off")" title="@(Store.Connected ? "live" : Loc["common.connecting"])"></span>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
-        <button class="btn btn-sm btn-ghost" @onclick="Leave" title='@Loc["nav.leave"]'>✕</button>
+        <button class="btn btn-sm btn-ghost" @onclick="() => showExit = true" title='@Loc["nav.leave"]'><MaterialIcon Name="close" /></button>
     }
     else
     {
-        <a class="brand" href="/">@Loc["app.title"]</a>
+        @* No brand here: outside a session the title stands large over the start page itself (see Home). *@
         <div class="spacer"></div>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
     }
@@ -61,14 +73,76 @@
         @Loc["legal.thanks"]:
         <a href="https://ti4lookup.com" target="_blank" rel="noopener noreferrer">ti4lookup.com</a> ·
         <a href="https://twilight-imperium.fandom.com" target="_blank" rel="noopener noreferrer">TI4 Wiki (Fandom)</a> ·
+        @* The thanks row names the GAME sources — what a player might want to look up. The software libraries
+           are not listed here: Apache-2.0 asks for the licence and the notices to travel WITH the work, not
+           for a credit in the interface, and they do (THIRD-PARTY-NOTICES.md, plus the source comments in
+           MaterialIcon.razor and QrScanModal.razor). *@
         <a href="https://boardgamegeek.com/filepage/180049/ti4-race-and-tech-symbols-vectorized" target="_blank" rel="noopener noreferrer">TI4 Race &amp; Tech Symbols (BGG)</a>
     </p>
+    @* The word is the same in both languages, so this needs no loc key. It is read off the assembly rather
+       than written here, so it can only ever say what was actually deployed. *@
+    <p class="legal-meta">Version @AppVersion</p>
 </footer>
 </div>
 
 @if (showStats && Store.Session is not null)
 {
-    <MatchStatsModal OnClose="CloseStats" />
+    <MatchStatsModal OnClose="CloseStats" EndGame="endGame" OnArchived="Archived" />
+}
+
+@* Join QR for the people at the table — hold the phone up instead of dictating the code. *@
+@if (showQr && Store.Session is { } qs)
+{
+    @* In this app `.modal-backdrop` is the overlay and `.modal` the box — bootstrap.min.css also defines
+       `.modal` (position:fixed, top/left 0), so using it as the overlay pins it to the corner. *@
+    <div class="modal-backdrop centered blurred" @onclick="() => showQr = false">
+        @* Same card as the wall's QR area — the session name, the URL to type if scanning fails, and the
+           code. It used to be a generic "scan to join this session" hint, which told a phone holder less
+           than the link itself does. *@
+        <div class="modal qr-box" @onclick:stopPropagation="true">
+            <div class="qr-title">@string.Format(Loc["nav.joinQrTitle"], qs.Name)</div>
+            <div class="qr-url">@InviteLink(qs.JoinCode)</div>
+            <JoinQr Text="@InviteLink(qs.JoinCode)" SizeCss="min(72vw, 20rem)" Alt="@Loc["nav.joinQr"]" />
+            <div class="qr-code-big">@qs.JoinCode</div>
+            <button class="btn" @onclick="() => showQr = false">@Loc["common.close"]</button>
+        </div>
+    </div>
+}
+
+@* Leaving is TWO different intentions and a confirm() could only ask one of them: keep the seat for next
+   time, or hand it back and be asked who you are. Both keep the session in the start page's list — that list
+   is how you come back at all. *@
+@if (showExit && Store.Session is { } xs)
+{
+    <div class="modal-backdrop centered blurred" @onclick="() => showExit = false">
+        <div class="modal exit-modal" @onclick:stopPropagation="true">
+            <div class="modal-head"><h3 style="margin:0;">@Loc["nav.exitTitle"]</h3></div>
+            <div class="modal-body">
+                <button class="btn btn-gold btn-block" @onclick="() => Exit(false)">@Loc["nav.exitClose"]</button>
+                <p class="faint exit-hint">@string.Format(Loc["nav.exitCloseHint"], Store.Me?.Name ?? xs.Name)</p>
+                <button class="btn btn-block" @onclick="() => Exit(true)">@Loc["nav.exitLeave"]</button>
+                <p class="faint exit-hint">@Loc["nav.exitLeaveHint"]</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" @onclick="() => showExit = false">@Loc["common.cancel"]</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* The secondary round of a strategy action. In the shell, not in the action view: it opens when a turn is
+   ended and has to be visible whatever tab the device happens to be on. It shows itself only to the people
+   it concerns (see SecondaryModal). *@
+@if (Store.Session is not null)
+{
+    <SecondaryModal />
+    @* "Record what you researched", after a Technology action — every device, its own seat, and the clock
+       stands still until the table is done. In the shell for the same reason as the secondary round: it is
+       raised by somebody else's action. *@
+    <TechPromptModal />
+    @* Red Tape Lite's purge / random-removal questions. Same reason they live in the shell: they are raised by
+       a phase change or by somebody else pulling a tape, so they must show whatever tab this device is on. *@
+    <RedTapeModal />
 }
 
 @* Pause overlay — blocks all input while the game is paused; only the host can resume. *@
@@ -76,11 +150,11 @@
 {
     <div class="pause-overlay">
         <div class="pause-box">
-            <div class="pause-icon">⏸</div>
+            <div class="pause-icon"><MaterialIcon Name="pause" SizeCss="1em" /></div>
             <div class="pause-title">@Loc["pause.title"]</div>
             @if (Store.IsHost)
             {
-                <button class="btn btn-gold btn-lg" @onclick="Resume">▶ @Loc["pause.resume"]</button>
+                <button class="btn btn-gold btn-lg" @onclick="Resume"><MaterialIcon Name="play_arrow" /> @Loc["pause.resume"]</button>
             }
             else
             {
@@ -91,8 +165,41 @@
 }
 
 @code {
+    /// <summary>The product version from <c>Directory.Build.props</c>, shown in the footer. The informational
+    /// version carries a <c>+&lt;commit&gt;</c> suffix once a build stamps one, which is for a bug report,
+    /// not for a footer — so it is cut off here.</summary>
+    private static readonly string AppVersion =
+        (typeof(MainLayout).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+         ?? typeof(MainLayout).Assembly.GetName().Version?.ToString()
+         ?? "").Split('+')[0];
+
     private bool showStats;
-    private void CloseStats() { showStats = false; StateHasChanged(); }
+    private bool showQr;
+    private bool endGame;
+    private void CloseStats() { showStats = false; endGame = false; StateHasChanged(); }
+
+    // The match was archived: with the session deleted there is nothing left to look at, so leave. After a
+    // reset the same session is sitting in setup again — stay on it.
+    private async Task Archived(bool deleted)
+    {
+        showStats = false;
+        endGame = false;
+        if (deleted)
+        {
+            // Deleted for good, so it must not linger in the start page's "resume" list either.
+            var code = Store.Session?.JoinCode;
+            await Store.LeaveAsync();
+            if (code is not null) await Store.ForgetRecentAsync(code);
+            Nav.NavigateTo("/");
+            return;
+        }
+        await Store.RefreshAsync();
+        StateHasChanged();
+    }
+
+    // Same URL the "copy invite link" button produces, so the QR works on a LAN address too.
+    private string InviteLink(string joinCode) => $"{Nav.BaseUri}join/{joinCode}";
 
     protected override void OnInitialized()
     {
@@ -127,10 +234,16 @@
         if (CopySync($"{Nav.BaseUri}join/{Store.Session!.JoinCode}")) { inviteCopied = true; codeCopied = false; }
     }
 
-    private async Task Leave()
+    private bool showExit;
+
+    /// <summary>Close the session on this device. <paramref name="giveUpSeat"/> forgets WHICH player we were
+    /// here, so the next visit asks — the session itself stays in the start page's list either way, since
+    /// that list is the only way back to it.</summary>
+    private async Task Exit(bool giveUpSeat)
     {
-        var ok = await JS.InvokeAsync<bool>("confirm", Loc["nav.leaveConfirm"]);
-        if (!ok) return;
+        showExit = false;
+        var code = Store.Session?.JoinCode;
+        if (giveUpSeat && code is not null) await Store.ForgetSeatAsync(code);
         await Store.LeaveAsync();
         Nav.NavigateTo("/");
     }
@@ -138,14 +251,17 @@
     private Task Pause() => Store.Session is null ? Task.CompletedTask : Store.Mutate(Store.Api.PauseGameAsync(Store.Session.Id));
     private Task Resume() => Store.Session is null ? Task.CompletedTask : Store.Mutate(Store.Api.ResumeGameAsync(Store.Session.Id));
 
-    // End the match: bring the statistics onto the wall display and open the host stats overlay.
-    // Non-destructive — the game can still continue; the wall switches back via the display control.
+    // End the match: bring the statistics onto the wall display and open the end-of-match dialog (the stats
+    // with the three ways out). No confirm() first — the dialog IS the question, and its own buttons say what
+    // each one does, which a yes/no box never could.
     private async Task EndGame()
     {
         if (Store.Session is null) return;
-        var ok = await JS.InvokeAsync<bool>("confirm", Loc["turn.endGameConfirm"]);
-        if (!ok) return;
+        // Keep a permanent record of the match before anything else — the session itself is wiped once
+        // its retention window passes, and this is the moment the host declares the game finished.
+        try { await Store.Api.RecordSummaryAsync(Store.Session.Id); } catch { }
         await Store.Mutate(Store.Api.SetDisplayModeAsync(Store.Session.Id, DisplayMode.Statistics));
+        endGame = true;
         showStats = true;
         StateHasChanged();
     }

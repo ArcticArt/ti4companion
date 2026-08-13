@@ -1,0 +1,40 @@
+@inherits Ti4ComponentBase
+
+@*
+    Choose a player. Buttons with faction symbol, name and player colour — never a <select>.
+
+    There are at most eight players, so a list is always short enough to show in full, and on the tablet
+    that runs the table a dropdown is the worse target: it hides the options behind a tap and shows a name
+    without the symbol everyone actually recognises the player by.
+
+    Selection semantics are the caller's: pass whichever ids should look selected and handle OnPick.
+    That way this serves single choice (tech tab) and multi choice (secondary participation) alike.
+*@
+<div class="player-picker @Class">
+    @foreach (var p in Players)
+    {
+        var pid = p.Id;
+        var on = SelectedIds.Contains(pid);
+        <button type="button" class="pp-btn @(on ? "on" : "")" style="--player-color:@p.ColorHex"
+                disabled="@Disabled" @onclick="() => OnPick.InvokeAsync(pid)" title="@p.Name">
+            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="@BadgeSize" Ring="@p.ColorHex" />
+            <span class="pp-name">@p.Name</span>
+            @if (on) { <span class="pp-check"><MaterialIcon Name="check" /></span> }
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<PlayerDto> Players { get; set; } = Array.Empty<PlayerDto>();
+
+    /// <summary>Ids that should render as selected. Empty for "nothing chosen".</summary>
+    [Parameter] public IReadOnlyCollection<Guid> SelectedIds { get; set; } = Array.Empty<Guid>();
+
+    [Parameter] public EventCallback<Guid> OnPick { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public double BadgeSize { get; set; } = 1.6;
+
+    [Parameter] public string? Class { get; set; }
+}

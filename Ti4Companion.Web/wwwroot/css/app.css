@@ -50,10 +50,17 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1:focus { outline: none; }
 
-/* ---- App bar ---- */
+/* ---- App bar ----
+   ⚠️ The safe-area padding is NOT cosmetic. `index.html` asks for `viewport-fit=cover` and an
+   `apple-mobile-web-app-status-bar-style: black-translucent`, which together put the page UNDER the notch and
+   the carrier bar — that is the point of an installed app, but it means every inset has to be paid back by
+   hand, and nothing in this stylesheet did. On an iPhone the round/phase/code and the buttons next to them sat
+   behind the clock and the battery. `env()` is 0 everywhere else, so this costs nothing on a desktop.
+   The left/right insets matter in LANDSCAPE, where the notch takes a side instead of the top. */
 .appbar {
     display: flex; align-items: center; gap: .5rem .8rem; flex-wrap: wrap;
-    padding: .5rem 1rem;
+    padding: calc(.5rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+             .5rem calc(1rem + env(safe-area-inset-left));
     background: linear-gradient(180deg, rgba(20,30,60,.9), rgba(10,16,34,.85));
     border-bottom: 1px solid var(--panel-border);
     position: sticky; top: 0; z-index: 50;
@@ -87,7 +94,10 @@ h1:focus { outline: none; }
 .pause-box .pause-title { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.6rem; color: var(--gold); }
 .btn-lg { font-size: 1.1rem; padding: .7rem 1.4rem; }
 
-.container { max-width: 1180px; margin: 0 auto; padding: 1rem; }
+/* Same reason as the app bar: with `viewport-fit=cover` the page runs edge to edge, so the sides and the
+   bottom (home indicator) have to be paid back. Zero on every device without insets. */
+.container { max-width: 1180px; margin: 0 auto;
+    padding: 1rem calc(1rem + env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left)); }
 .content { padding-top: 1rem; }
 /* Start page: vertically centre the create/join panel in the leftover height (footer stays pinned). */
 .content:has(> .home-view) { display: flex; flex-direction: column; }
@@ -143,9 +153,13 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .tabs { display: flex; flex-wrap: nowrap; gap: .25rem; border-bottom: 1px solid var(--panel-border); margin-bottom: 1rem; }
 /* Fill the full available width (each tab shares it equally); the label scales down with the viewport
    and ellipsises so all tabs fit a phone on one row. */
+/* A tab is a real <button> (keyboard-reachable, and it says what it is in the a11y tree), so the browser's
+   own button look has to be undone: background, font and the focus ring's default offset. */
 .tab { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
     padding: .5rem .45rem; border: 1px solid transparent; border-bottom: none; border-radius: 9px 9px 0 0;
-    cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: clamp(.72rem, 2.9vw, .95rem); }
+    cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: clamp(.72rem, 2.9vw, .95rem);
+    appearance: none; background: none; font-family: inherit; line-height: inherit; }
+.tab:focus-visible { outline: 2px solid var(--gold-dim); outline-offset: -2px; }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--panel); border-color: var(--panel-border); color: var(--gold); }
 
@@ -154,6 +168,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .display-ctl { display: flex; flex-direction: column; gap: .35rem; padding: .5rem .7rem; margin-bottom: .6rem;
     border: 1px solid var(--panel-border); border-radius: 10px; background: var(--panel-2); }
 .display-ctl-lbl { font-size: .64rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); font-weight: 700; }
+/* Mode segments and the QR toggle share one line (`.display-ctl` itself is a column: label over row).
+   The segments take the width, the toggle stays as narrow as its icon. */
+.display-ctl-row { display: flex; align-items: stretch; gap: .4rem; }
+.display-ctl-row .seg { flex: 1 1 auto; min-width: 0; }
+.display-ctl-qr { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; }
 .seg { display: flex; border: 1px solid var(--panel-border); border-radius: 8px; overflow: hidden; }
 .seg-btn { flex: 1 1 0; min-width: 0; border: 0; border-right: 1px solid var(--panel-border); background: var(--panel);
     color: var(--text-dim); padding: .4rem .5rem; font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer;
@@ -220,6 +239,128 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .picker-banner .pb-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); }
 .picker-banner .pb-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.3rem; }
 
+/* Host game options (setup): label, control, and a wrapping hint that never squeezes the select. */
+/* A setup option is a GRID, not a flex row: label column, control column, hint underneath. Flex let every
+   control start wherever its own label happened to end, so no two selects lined up — with a fixed label
+   column they share one edge however long the labels get. The label carries the weight (it is the question);
+   the hint is the small print below both. */
+.game-option { display: grid; grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr);
+    align-items: center; gap: .35rem .9rem; margin-bottom: 1rem; }
+.game-option:last-child { margin-bottom: 0; }
+.game-option > label { font-size: .95rem; font-weight: 600; color: var(--text); line-height: 1.25; }
+.game-option select, .game-option input[type=text] { width: 100%; max-width: 22rem; }
+/* The hint sits under the control, aligned with it rather than with the label. */
+.game-option .go-hint { grid-column: 2; font-size: .76rem; line-height: 1.4; }
+.game-option .go-fixed { color: var(--text); font-size: .9rem; }
+.game-option .go-checks { display: flex; flex-wrap: wrap; gap: .35rem .9rem; }
+/* A select with a follow-up field (the turn timer's own time): one control cell, so the select keeps the
+   shared left edge and the number sits beside it rather than under it. The select gives up its own
+   width:100% here, or the field would be pushed onto a second line at every width. */
+.game-option .go-inline { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; }
+.game-option .go-inline select { width: auto; flex: 1 1 8rem; min-width: 0; max-width: 22rem; }
+.game-option .go-num { width: 4.5rem; flex: 0 0 auto; text-align: right; }
+/* "What is this?" beside an option whose rules cannot fit in the hint line (the Red Tape variants). */
+.game-option .go-help { flex: 0 0 auto; padding: .3rem .4rem; color: var(--gold); }
+.game-option .go-help:hover { color: var(--text); }
+@media (max-width: 560px) {
+    /* One column on a phone: a 9rem label column next to a select leaves the select unusably narrow. */
+    .game-option { grid-template-columns: 1fr; }
+    .game-option .go-hint { grid-column: 1; }
+}
+
+/* Checkbox / radio that matches the rest of the app instead of the browser's own. The native input stays in
+   the DOM (it is what carries the state, the keyboard and the a11y tree) and is only visually replaced by
+   `.oc-box`, so focus and Space keep working. Expansions, the tech prompt and the Red Tape card all use it —
+   they were three different-looking controls for the same kind of choice. */
+.opt-check { position: relative; display: inline-flex; align-items: center; gap: .45rem; cursor: pointer;
+    padding: .3rem .55rem .3rem .35rem; border: 1px solid var(--panel-border); border-radius: 8px;
+    background: var(--panel-2, rgba(255,255,255,.02)); color: var(--text); font-size: .86rem; user-select: none; }
+.opt-check:hover { border-color: var(--gold-dim); }
+.opt-check input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.opt-check .oc-box { flex: 0 0 auto; width: 1.05rem; height: 1.05rem; border: 1px solid var(--text-faint);
+    border-radius: 4px; background: rgba(0,0,0,.25); position: relative; transition: background .12s, border-color .12s; }
+.opt-check .oc-box.oc-radio { border-radius: 50%; }
+/* The tick is drawn, not a glyph: a font's checkmark sits differently in every font stack. */
+.opt-check .oc-box::after { content: ""; position: absolute; opacity: 0;
+    left: 50%; top: 46%; width: .3rem; height: .58rem; margin-left: -.16rem; margin-top: -.34rem;
+    border-right: 2px solid #0b1020; border-bottom: 2px solid #0b1020; transform: rotate(40deg); }
+.opt-check .oc-box.oc-radio::after { left: 50%; top: 50%; width: .45rem; height: .45rem; margin: -.225rem 0 0 -.225rem;
+    border: none; border-radius: 50%; background: #0b1020; transform: none; }
+.opt-check input:checked ~ .oc-box { background: var(--gold); border-color: var(--gold); }
+.opt-check input:checked ~ .oc-box::after { opacity: 1; }
+.opt-check input:focus-visible ~ .oc-box { outline: 2px solid var(--gold-dim); outline-offset: 2px; }
+.opt-check.is-disabled, .opt-check input:disabled { cursor: default; }
+.opt-check.is-disabled { opacity: .5; }
+.opt-check.is-disabled:hover { border-color: var(--panel-border); }
+/* Base game: on, and not up for discussion — shown so the set reads complete. */
+.opt-check.is-fixed { opacity: .75; cursor: default; }
+.opt-check.is-fixed:hover { border-color: var(--panel-border); }
+/* Offered but not yet possible: the OPTION goes quiet and its "coming soon" chip stays lit — the chip is the
+   answer to the question the row asks, so it is the one part that has to be read. Done with `color`, not
+   `opacity`: opacity on the row would multiply into the chip, and a child can never undo it. */
+.opt-check.is-soon { cursor: default; }
+.opt-check.is-soon:hover { border-color: var(--panel-border); }
+.opt-check.is-soon .oc-box { opacity: .35; }
+.opt-check.is-soon > span { color: var(--text-faint); }
+/* "coming soon" next to an option that is deliberately offered and off (Discordant Stars, Twilight's Fall):
+   the question is visibly asked, the answer is "not yet". */
+.opt-check .soon { margin-left: .35rem; font-size: .62rem; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--gold-dim); border: 1px solid var(--gold-dim); border-radius: 999px; padding: 0 .3rem; }
+.opt-check.is-soon .soon { color: var(--gold); border-color: var(--gold); }
+
+/* (Red Tape styling lives with the objective cards further down — see `.rt-tape`. It used to be duplicated
+   here, which is exactly the same-specificity collision this file has been bitten by before.) */
+
+/* ---- Join QR ---- */
+/* Always on white with a quiet zone (the component draws both) — a scanner needs the contrast, so the
+   panel palette deliberately stops at the frame. */
+.joinqr { display: block; border-radius: 6px; background: #fff; }
+.beamer .b-qr { margin-left: 1.2vw; box-shadow: 0 0 0 .35vh rgba(255,255,255,.9); }
+.qr-box { align-items: center; gap: .7rem; text-align: center; width: auto; max-width: min(90vw, 26rem); }
+/* Same three lines as the wall's QR area (see `.beamer .qr-*`), sized for a phone in the hand. */
+.qr-box .qr-title { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); font-size: 1.05rem; }
+.qr-box .qr-url { color: var(--text-dim); font-size: .8rem; word-break: break-all; }
+.qr-box .qr-code-big { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.6rem; letter-spacing: .18em; color: var(--text); }
+
+/* ---- Status phase: scoring order + shared checklist ---- */
+.scoring-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.scoring-order { display: flex; flex-direction: column; gap: .3rem; }
+.so-row { display: flex; align-items: center; gap: .5rem; padding: .3rem .5rem; border-radius: 8px;
+    background: var(--panel-2); border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+.so-row.current { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.so-row.done .so-name, .so-row.done .so-init { opacity: .5; }
+.so-init { font-family: 'Orbitron', sans-serif; color: var(--gold); min-width: 1.4em; text-align: center; }
+.so-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.status-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .4rem; }
+.status-steps .step { display: flex; align-items: center; gap: .5rem; text-align: left; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 8px;
+    color: var(--text); font: inherit; font-size: .85rem; padding: .4rem .55rem; }
+.status-steps .step:hover { border-color: var(--gold-dim); }
+.status-steps .step.done { color: var(--text-faint); }
+.status-steps .step.done .step-box { background: var(--gold); color: #1a1405; border-color: var(--gold); }
+.status-steps .step-box { flex: 0 0 auto; width: 1.15rem; height: 1.15rem; display: inline-flex;
+    align-items: center; justify-content: center; border: 1px solid var(--panel-border); border-radius: 4px;
+    font-size: .8rem; line-height: 1; }
+/* Setup steps: the same strip as the status phase, but the segments are buttons — the host can jump straight
+   to any step, which is also what makes losing the (device-local) step on a reload a non-event. */
+/* No `font: inherit` here: this selector is more specific than `.stage-seg`, so it would override the
+   Orbitron/size that rule sets and the strip would fall back to the UA button font. */
+.setup-steps .stage-seg { background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
+.setup-steps .stage-seg:hover { color: var(--gold); }
+/* Non-host: the same list without a box — a checkbox nobody may tick is a broken control. */
+.status-steps .step.readonly { cursor: default; }
+.status-steps .step.readonly:hover { border-color: var(--panel-border); }
+.status-steps .step-mark { flex: 0 0 auto; width: 1.15rem; text-align: center; color: var(--gold);
+    font-size: .8rem; line-height: 1; }
+
+/* Face-down vote, intermediate step: totals shown, attribution still secret. */
+.beamer .agenda-elect.totals-note { color: var(--gold); font-style: italic; }
+
+/* Optional technology prompt after the Technology strategy action. */
+.tech-prompt { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; border-left: 4px solid var(--gold); }
+.tech-prompt .tp-text { font-size: .88rem; }
+
 /* phase bar */
 .phase-bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 /* In-game phases (Setup excluded) as plain labels — no button boxes; the current phase glows blue. */
@@ -233,6 +374,13 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* Setup: ready count instead of the leiste. */
 .phase-ready { font-size: .9rem; color: var(--text-dim); }
 .phase-ready strong { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: 1.05rem; }
+/* Same count, but in the setup navigation between Back and Next — it is what gates that button, so it belongs
+   beside it. Green once the table is complete, which is the only state that matters there. `align-self`
+   because the nav's items are stretched by default and the text then sat at the top of the row. */
+.setup-title-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.setup-ready { font-size: .82rem; color: var(--text-dim); white-space: nowrap; align-self: center; }
+.setup-ready strong { font-family: 'Orbitron', sans-serif; color: var(--gold); }
+.setup-ready.ok strong { color: #8fe0bd; }
 
 /* faction picker (symbol grid) */
 .faction-picker { display: flex; flex-direction: column; gap: .5rem; }
@@ -246,12 +394,26 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .fp-item.sel .fp-name { color: var(--text); }
 
 /* join identity: pick which player to take over (or create new) */
-.join-players { display: flex; flex-direction: column; gap: .4rem; margin: .3rem 0; max-height: 46vh; overflow: auto; }
+/* The 2px padding is not decoration: the rows lift by 1px on hover, and `overflow: auto` clips at the PADDING
+   box — without it the hovered row's top border was cut off. */
+.join-players { display: flex; flex-direction: column; gap: .4rem; margin: .3rem 0; padding: 2px; max-height: 46vh; overflow: auto; }
 .join-player { display: flex; align-items: center; gap: .6rem; text-align: left; width: 100%; padding: .5rem .7rem; border-radius: 10px;
     border: 1px solid var(--panel-border); background: var(--panel-2); color: var(--text); cursor: pointer; font: inherit; transition: .12s ease; }
 .join-player:hover:not(:disabled) { border-color: var(--gold-dim); transform: translateY(-1px); }
 .join-player:disabled { opacity: .55; cursor: default; }
 .join-player .jp-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Same row, used for the start page's list of sessions to pick up again: session name, code, which player
+   this device was, and when it was last active. The name takes the slack so the code, the "as <player>" chip
+   and the timestamp stay put; the timestamp is right-aligned in every row, which is what makes it read as a
+   column in a list that is really a stack of buttons. */
+.join-player .rs-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.join-player .rs-when { flex: 0 0 auto; margin-left: auto; color: var(--text-dim); font-size: .74rem;
+    text-align: right; }
+@media (max-width: 480px) {
+    /* Two lines on a narrow phone rather than an ellipsised session name. */
+    .join-player { flex-wrap: wrap; }
+    .join-player .rs-when { width: 100%; text-align: left; margin-left: 0; }
+}
 
 /* seat-order up/down buttons (setup, host) */
 .seat-btns { display: inline-flex; flex-direction: column; gap: .1rem; }
@@ -269,6 +431,101 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .obj-card.stage1 { border-top: 4px solid #d98a2b; --ovp: #d98a2b; }
 .obj-card.stage2 { border-top: 4px solid #3a6fd0; --ovp: #3a6fd0; }
 .obj-card.secret { border-top: 4px solid #b01030; --ovp: #b01030; }
+/* Status phase: scored THIS round. The card and its fresh markers glow, so the table sees what just
+   happened rather than the whole history at equal weight. */
+.obj-card.glow { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 18px rgba(217,176,74,.45); }
+.objm.fresh { border-radius: 6px; box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(217,176,74,.6); }
+/* Scoring stage: the whole card is the tap target, like taking a strategy card. */
+.obj-card.clickable { cursor: pointer; transition: .12s ease; }
+.obj-card.clickable:hover { border-color: var(--gold-dim); transform: translateY(-1px); }
+.obj-tap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .5rem; }
+
+/* Red Tape: red hazard tape across the player markers while the objective is sealed. The tape IS the
+   control — no separate "sealed" chip to read (it said the same thing twice) and nothing else to find. */
+.obj-markers.taped { position: relative; min-height: 2.4rem; }
+.obj-markers.taped .marker { opacity: .25; filter: grayscale(1); }
+.rt-tape { position: absolute; left: -2%; right: -2%; top: 50%; transform: translateY(-50%) rotate(-3deg);
+    display: flex; align-items: center; justify-content: center; padding: .18rem 0; width: auto;
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .6rem; letter-spacing: .1em;
+    color: #ffe9e6; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,.85);
+    background: repeating-linear-gradient(135deg, #c1261c 0 12px, #2c0a07 12px 24px);
+    border-top: 1px solid rgba(0,0,0,.5); border-bottom: 1px solid rgba(0,0,0,.5); }
+/* As a <span> (the wall) it is display only; as a <button> it can be pulled off. */
+span.rt-tape { pointer-events: none; }
+/* The wall's band carries no text (nobody can tap a projected screen), so it needs its own height —
+   without this the padding alone leaves a thread instead of a band. */
+.rt-tape.bare { min-height: 1.15rem; }
+.beamer .rt-tape.bare { min-height: clamp(1.15rem, 2vh, 2rem); }
+button.rt-tape { cursor: pointer; z-index: 2; }
+button.rt-tape:hover { filter: brightness(1.15); }
+/* Locked by a variant rule: darker. As a <span> (purged, and the wall) it is display only; as a <button> it
+   is tappable on purpose — it explains WHICH rule and offers to overrule it. */
+.rt-tape.locked { background: repeating-linear-gradient(135deg, #7a1c16 0 12px, #1a0605 12px 24px); color: #f3cfcb; }
+span.rt-tape.locked { pointer-events: none; }
+button.rt-tape.locked { cursor: help; }
+button.rt-tape.locked:hover { filter: brightness(1.25); }
+/* A purged objective is out of the game: dimmed, and its points stay hidden. */
+.obj-card.purged { opacity: .55; filter: grayscale(.5); }
+.obj-card.purged .obj-name { text-decoration: line-through; }
+/* Done in the sense the surrounding list is about — scored by the player who is up, or its tape pulled in Red
+   Tape's "remove a marker" — and still tappable to take that back. Dimmed rather than hidden, so the undo is
+   where the mis-tap happened. */
+.obj-card.marked { opacity: .72; border-color: color-mix(in srgb, var(--gold) 35%, var(--panel-border)); }
+.obj-card.marked .obj-undo { display: inline-flex; align-items: center; gap: .2rem; margin-left: auto;
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--gold); }
+/* Armed = one more tap removes it (status phase, where the card itself is a scoring tap target). */
+button.rt-tape.armed { background: repeating-linear-gradient(135deg, #f0453a 0 12px, #2c0a07 12px 24px);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+/* Taped = the points are covered, exactly as the marker sits on the physical card (the requirement text
+   stays readable on purpose — planning ahead is the whole point of the variant). */
+.obj-vp.taped { color: #f1a3ae; border-color: #6b2a35; box-shadow: none; }
+/* The icon that stands in for the hidden value: an eye with a slash, because a "?" reads as "we don't know"
+   and the point is that the number exists and is not to be seen yet. */
+.obj-vp .obj-vp-icon { display: block; opacity: .85; }
+/* The addition the variant prints on the carrier strategy card, above its base text. */
+.ability-label.rt { color: #f1a3ae; }
+.ability-bullets.rt-bullets li { color: var(--text-dim); }
+/* The way back once the tape is off — nothing to tap otherwise. */
+.rt-restore { font-size: .8rem; line-height: 1; padding: .1rem .35rem; border-radius: 4px; cursor: pointer;
+    background: none; border: 1px solid var(--panel-border); color: var(--text-faint); }
+.rt-restore:hover { border-color: var(--gold-dim); color: var(--gold); }
+.beamer .rt-tape { font-size: clamp(.6rem, .85vw, 1.05rem); }
+
+/* Instance badge (staging). Always on top, never in the way: both parts are pointer-events:none, so no
+   button underneath becomes untappable. The frame is what makes it readable from across the room on the
+   wall display, where a small pill alone would be missed. */
+.instance-badge { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 9999;
+    pointer-events: none; padding: .12rem 1.2rem; border-radius: 0 0 9px 9px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(.72rem, 1.1vw, 1.15rem);
+    letter-spacing: .3em; text-indent: .3em; color: #2a1400;
+    background: repeating-linear-gradient(135deg, #e8b23c 0 10px, #c8871f 10px 20px);
+    box-shadow: 0 2px 12px rgba(0,0,0,.55); }
+.instance-frame { position: fixed; inset: 0; z-index: 9998; pointer-events: none;
+    border: 3px solid #e8b23c; }
+
+/* Player choice as buttons (PlayerPicker) — replaces every <select> of players. */
+.player-picker { display: flex; flex-wrap: wrap; gap: .4rem; }
+.pp-btn { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .6rem .3rem .35rem;
+    border-radius: 999px; background: var(--panel-2); color: var(--text); font: inherit; font-weight: 600;
+    font-size: .85rem; cursor: pointer; transition: .12s ease;
+    border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+.pp-btn:hover:not(:disabled) { border-color: var(--gold-dim); }
+.pp-btn.on { background: color-mix(in srgb, var(--player-color, #888) 22%, var(--panel));
+    border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.pp-btn:disabled { opacity: .45; cursor: default; }
+.pp-name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-check { color: var(--gold); }
+
+/* Status phase stage strip (same idiom as the phase leiste, one level down). */
+.status-stagebar { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.stage-strip { display: flex; align-items: baseline; gap: 1.1rem; flex-wrap: wrap; }
+.stage-seg { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .78rem; letter-spacing: .05em;
+    white-space: nowrap; color: var(--text-faint); position: relative; }
+.stage-seg:not(:last-child)::after { content: "›"; position: absolute; right: -.75rem; color: var(--text-faint); opacity: .5; font-weight: 400; }
+.stage-seg.done { color: var(--text-dim); }
+.stage-seg.on { color: var(--accent); text-shadow: 0 0 10px rgba(79,195,247,.75), 0 0 20px rgba(79,195,247,.45); }
+.stage-nav { margin-left: auto; display: flex; align-items: center; gap: .4rem; }
+
 /* Reveal-list stage badge: centred circle. Stage I gold, Stage II blue. */
 .stage-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
     width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 1px solid; font-size: .68rem; font-weight: 700;
@@ -293,11 +550,20 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .obj-req { padding: 0 .7rem .4rem; font-size: .82rem; color: var(--text); }
 .obj-markers { display: flex; gap: .35rem; flex-wrap: wrap; padding: .3rem .7rem .6rem; }
 .marker { background: none; border: none; padding: 0; cursor: pointer; opacity: .3; filter: grayscale(.6); transition: .12s; }
-.marker.on { opacity: 1; filter: none; box-shadow: 0 0 0 1.5px var(--gold); border-radius: 7px; }
+/* The gold ring sits on the TOKEN, not on the button around it: on the button it drew a frame
+   noticeably larger than the faction symbol inside, which read as a mis-sized highlight. */
+.marker.on { opacity: 1; filter: none; }
+.marker.on .faction-badge { box-shadow: 0 0 0 2px var(--gold); border-color: var(--gold-dim); }
 .marker:hover { opacity: .85; }
-/* Hairline token outline + tighter symbol padding — the framed look was still too heavy on the markers. */
+/* Hairline token outline; the symbol fills the token almost completely so ring and symbol match. */
 .obj-markers .marker .faction-badge { border-width: 1px; border-radius: 6px; }
-.obj-markers .marker .faction-badge .fb-img { padding: 3%; }
+.obj-markers .marker .faction-badge .fb-img { padding: 1%; }
+/* The read-only markers on a display card (wall + status scoring) had never got the same treatment: they
+   kept the default 7% image padding, so the token frame was visibly larger than the symbol inside — most
+   obvious on the score screen, where the fresh-scored glow ring outlines it. */
+.obj-markers .objm { display: inline-flex; line-height: 0; }
+.obj-markers .objm .faction-badge { border-width: 1px; border-radius: 6px; }
+.obj-markers .objm .faction-badge .fb-img { padding: 1%; }
 
 /* tech rows */
 .tech-row { background: var(--panel-2); border-radius: 8px; padding: .4rem .5rem; }
@@ -507,11 +773,58 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .turn-banner .tb-big { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.5rem; }
 .turn-banner .tb-sub { font-size: .85rem; color: var(--danger); font-weight: 600; }
 
+/* ---- Turn timer (per player, per round; informational only) ---- */
+/* The action row under the player card: pass / combat / prev / next, all the same height (the plain `.btn`
+   one) because they are equally weighty things to press. `stretch` so a wrapped line keeps the height too. */
+.turn-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; }
+.turn-actions .btn { min-height: 2.5rem; }
+
+.turn-timer { display: inline-flex; align-items: baseline; gap: .3em; padding: .12em .5em; border-radius: 8px;
+    font-family: 'Orbitron', sans-serif; font-variant-numeric: tabular-nums; font-size: 1.35rem; line-height: 1.2;
+    background: var(--panel-2); border: 1px solid var(--panel-border); color: var(--text); }
+.turn-timer .tt-icon { font-size: .8em; opacity: .7; }
+/* Fixed width for the value: tabular-nums alone does not help here because Orbitron carries no tabular
+   figures, so every ticking digit changed the width — and in the wall table that resizes the whole
+   (auto-sized) timer column once a second. 5.5ch covers "10:00" and "−0:07"; an hour-long budget
+   ("1:02:03") widens it once and then stays put. */
+.turn-timer .tt-value { display: inline-block; min-width: 5.5ch; text-align: right; }
+/* Last minute: amber. Budget gone: red, counting up — but nothing is ever blocked. */
+.turn-timer.warn { color: var(--gold); border-color: var(--gold-dim); }
+.turn-timer.over { color: #f1a3ae; border-color: #6b2a35; background: rgba(224,85,106,.16);
+    animation: tt-over 1.6s ease-in-out infinite; }
+/* Over time has to be noticeable from across the room, not just a colour change — the report was that
+   running out went unnoticed. Paired with a repeating buzz and one push notification. */
+@keyframes tt-over {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(224,85,106,0); }
+    50% { box-shadow: 0 0 0 3px rgba(224,85,106,.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .turn-timer.over { animation: none; box-shadow: 0 0 0 2px rgba(224,85,106,.45); }
+}
+.turn-timer.compact { padding: 0 .3em; font-size: 1rem; background: none; border: 0; }
+
+/* Material Symbols (see MaterialIcon.razor): inline, sized in em, coloured by currentColor. The
+   baseline nudge keeps a lone icon centred inside a button that has no text beside it. */
+.micon { display: inline-block; vertical-align: -.15em; flex: 0 0 auto; }
+
 /* status chips */
 .chip { font-size: .68rem; padding: .08rem .45rem; border-radius: 999px; border: 1px solid var(--panel-border); }
 .chip-passed { background: rgba(224,85,106,.18); color: #f1a3ae; border-color: #6b2a35; }
 .chip-done { background: rgba(70,192,138,.16); color: #8fe0bd; border-color: #2c5e49; }
 .chip-active { background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
+/* The technology prompt's host list: one row per seat, the same shape as entering influence in the agenda
+   phase (`.inf-row`) — the host is looking at the whole table and filling in for whoever is not holding a
+   phone. Names are at reading size, not chip-size: this is read across the table. */
+.tp-rows { display: flex; flex-direction: column; gap: .4rem; }
+.tp-row { flex-wrap: wrap; gap: .5rem; }
+.tp-row-name { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: var(--text); }
+.tp-count { font-size: .74rem; }
+/* (`.tp-picker-layer` lives with the modal rules further down — put here it lost to `.modal-backdrop`'s own
+   z-index, which is later in the file at the same specificity. Measured: 1200, not 1300.) */
+/* What this player holds, at the foot of the picker — the Technologies tab's own list, so a card that was
+   just tapped lands somewhere visible. A staged one is marked: it has not been sent yet. */
+.tp-owned { margin-top: .8rem; border-top: 1px solid var(--panel-border); padding-top: .6rem; }
+.tp-owned .my-tech.is-new { border-style: dashed; box-shadow: 0 0 0 1px rgba(217,176,74,.35); }
 
 /* ---- code chip ---- */
 .codechip { font-family: 'Orbitron', monospace; letter-spacing: .25em; font-size: 1.1rem; color: var(--gold); background: #0a1020; border: 1px dashed var(--gold-dim); padding: .2rem .6rem; border-radius: 8px; }
@@ -526,16 +839,19 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
     height: 100vh; width: 100vw; overflow: hidden;
     padding: 1vh 1.4vw; display: flex; flex-direction: column; gap: 1vh;
 }
-.beamer .b-head { display: flex; align-items: baseline; gap: 1.2rem; flex: 0 0 auto; }
-.beamer .b-title { font-size: clamp(1.4rem, 2.4vw, 3rem); color: var(--gold); }
-.beamer .b-meta { font-size: clamp(.9rem, 1.4vw, 1.8rem); color: var(--text-dim); }
+/* The header is a caption, not content: every millimetre it takes comes off the player table and the
+   objectives below it, which are what the room is actually reading. Kept deliberately small. */
+.beamer .b-head { display: flex; align-items: baseline; gap: .9rem; flex: 0 0 auto; }
+.beamer .b-title { font-size: clamp(1rem, 1.6vw, 1.9rem); color: var(--gold); }
+.beamer .b-meta { font-size: clamp(.75rem, 1vw, 1.2rem); color: var(--text-dim); }
 .beamer .b-phase { font-family: 'Orbitron', sans-serif; color: var(--text); font-weight: 700; }
-/* Prominent join code on the wall so players can read it across the room and join. */
+/* The join code still has to carry across the room, but it is read once per guest — the QR area (and the
+   setup screen) are where a latecomer is actually pointed. */
 .beamer .b-join { display: flex; align-items: center; gap: .6vw; }
-.beamer .b-join-lbl { font-size: clamp(.7rem, 1vw, 1.3rem); color: var(--text-faint); text-transform: uppercase; letter-spacing: .18em; }
-.beamer .b-join-code { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); letter-spacing: .22em;
-    font-size: clamp(1.4rem, 2.6vw, 3.2rem); line-height: 1; background: #0a1020; border: 1px dashed var(--gold-dim);
-    padding: .12em .42em; border-radius: 10px; }
+.beamer .b-join-lbl { font-size: clamp(.6rem, .8vw, 1rem); color: var(--text-faint); text-transform: uppercase; letter-spacing: .18em; }
+.beamer .b-join-code { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold); letter-spacing: .18em;
+    font-size: clamp(1rem, 1.5vw, 1.8rem); line-height: 1; background: #0a1020; border: 1px dashed var(--gold-dim);
+    padding: .1em .38em; border-radius: 8px; }
 
 /* The two-column body fills the remaining height and clips (never scrolls). */
 .beamer-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1.15fr .85fr; gap: 1.2vw; }
@@ -562,6 +878,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .ptr.passed .ptr-badge,
 .beamer .ptr.passed .p-name,
 .beamer .ptr.passed .p-fac { opacity: .45; filter: saturate(.5); }
+/* Turn timer adds a 5th column. Higher specificity than the base rule, so order doesn't matter. */
+.beamer .ptable.with-timer { grid-template-columns: auto auto minmax(0, 14em) auto auto; }
+.beamer .ptr-timer { display: inline-flex; align-items: center; justify-content: flex-end; }
+.beamer .ptr-timer .turn-timer { font-size: clamp(.9rem, 1.5vw, 1.9rem); }
+.beamer .ptr.passed .ptr-timer { opacity: .45; }
 .beamer .ptr-init { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: clamp(1rem, 1.9vw, 2.4rem); text-align: center; min-width: 1.4em; }
 .beamer .ptr-badge { display: inline-flex; align-items: center; justify-content: center; }
 .beamer .ptr-id { min-width: 0; }
@@ -667,6 +988,35 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .beamer .obj-req { padding: .15vh 0 0; font-size: clamp(.82rem, 1.18vw, 1.5rem); color: var(--text); line-height: 1.16; }
 .beamer .obj-markers { padding: .25vh 0 0; gap: .4vw; }
 
+/* ---- Status phase on the wall: the reveal stage and the checklist take the right panel ---- */
+/* Reveal: one card, as large as the panel allows, with the rules text under it. */
+.beamer .status-reveal { align-items: center; justify-content: center; gap: 2vh; }
+.beamer .status-reveal-card { width: min(100%, 34vw); }
+.beamer .status-reveal-card .obj-card { transform: scale(1); }
+.beamer .status-reveal-card .obj-name { font-size: clamp(1.2rem, 2.2vw, 3rem); }
+.beamer .status-reveal-card .obj-req { font-size: clamp(1rem, 1.6vw, 2.1rem); }
+/* Several revealed at once: side by side and correspondingly smaller, rather than one hiding the other. */
+.beamer .status-reveal-card.multi { display: flex; gap: 1.5vw; width: min(100%, 46vw); align-items: stretch; }
+.beamer .status-reveal-card.multi > .obj-card { flex: 1 1 0; min-width: 0; }
+.beamer .status-reveal-card.multi .obj-name { font-size: clamp(1rem, 1.6vw, 2.2rem); }
+.beamer .status-reveal-card.multi .obj-req { font-size: clamp(.85rem, 1.2vw, 1.6rem); }
+.beamer .status-detail { max-width: 40vw; text-align: center; color: var(--text-dim);
+    font-size: clamp(.85rem, 1.15vw, 1.5rem); line-height: 1.35; margin: 0; }
+/* Checklist: rows stretch to fill the panel height, so it reads from across the room. */
+.beamer .status-big-list { justify-content: space-between; gap: .6vh; }
+.beamer .big-step { display: flex; align-items: flex-start; gap: 1vw; flex: 1 1 0; min-height: 0;
+    padding: .6vh 1vw; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--panel-border); }
+.beamer .big-step.done { border-color: #2c5e49; background: rgba(70,192,138,.12); }
+.beamer .big-step.done .big-step-name { color: #8fe0bd; text-decoration: line-through; }
+.beamer .big-step .step-box { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    width: 1.7em; height: 1.7em; border: 2px solid var(--panel-border); border-radius: 6px;
+    font-size: clamp(1rem, 1.5vw, 2rem); line-height: 1; color: #8fe0bd; }
+.beamer .big-step.done .step-box { border-color: #2c5e49; }
+.beamer .big-step-text { min-width: 0; }
+.beamer .big-step-name { font-family: 'Orbitron', sans-serif; font-weight: 700;
+    font-size: clamp(.9rem, 1.35vw, 1.8rem); line-height: 1.15; }
+.beamer .big-step-detail { color: var(--text-dim); font-size: clamp(.72rem, 1.02vw, 1.3rem); line-height: 1.25; }
+
 /* Tech overview (compact) */
 .beamer .tech-line { font-size: clamp(.7rem, .95vw, 1.2rem); line-height: 1.4; display: flex; flex-wrap: wrap; gap: .35vw; align-items: center; }
 .beamer .dtech { display: inline-flex; align-items: center; gap: .25em; padding: .05em .4em; border-radius: 6px;
@@ -743,7 +1093,15 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 
 /* Each player is a faction portrait, arranged in a shallow arc ("galactic council"). The middle seats
    sit highest (translateY set inline per index); a soft floor glow + faint arc sit behind them. */
-.beamer .votes-grid { flex: 1 1 auto; min-height: 0; position: relative; display: flex; justify-content: center;
+/* The portrait arc lifts the middle seats (see Display.razor). The lift is measured against THIS box
+   (`container-type: size` + cqh in the cards), NOT the viewport: the box shrinks when the header or the
+   result line takes space, and a lift in vh then pushed the middle portraits straight out of the
+   `overflow: hidden` — reported as "the portraits are cut off once a candidate is elected".
+   The headroom stays in vh on purpose: the maximum lift is 7% of THIS box, which is never taller than the
+   viewport, so 7vh always covers it. (Writing the padding in cqh would look symmetric but resolves against
+   the viewport anyway — container units on the container itself query the next container OUT.) */
+.beamer .votes-grid { flex: 1 1 auto; min-height: 0; position: relative; container-type: size;
+    display: flex; justify-content: center;
     align-items: flex-end; gap: .6vw; padding: 7vh .8vw 1vh; overflow: hidden; }
 .beamer .votes-grid::before { content: ""; position: absolute; left: 4%; right: 4%; bottom: -34%; height: 72%;
     border-radius: 50%; border: 1px solid rgba(123,160,224,.16);
@@ -764,7 +1122,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 
 /* Faction portrait with a name bar (~a fifth up from the bottom), in the player's chosen colour. */
 .fac-portrait { position: relative; width: 100%; overflow: hidden; border-radius: 8px; }
-.beamer .fac-portrait { aspect-ratio: 3 / 4; max-height: 40vh; }
+/* The portrait is capped against the VOTES ROW as well as the viewport (`cqh`, the row is the query
+   container — see .votes-grid). With only the 40vh cap the card could end up taller than the row, and since
+   the row aligns to the bottom and clips, the first thing to disappear was the line ABOVE the portrait:
+   how many votes that player cast. That number is the point of the screen, so it must never be what gives
+   way. 62cqh leaves room for the vote line, the influence line, the gaps and the arc lift. */
+.beamer .fac-portrait { aspect-ratio: 3 / 4; max-height: min(40vh, 62cqh); }
 .fac-portrait-img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
 .fac-portrait.noimg { display: flex; align-items: flex-start; justify-content: center; padding-top: 8%; background: #0d1426; }
 .fac-portrait-bar { position: absolute; left: 0; right: 0; bottom: 22%; background: var(--player-color, #444); padding: .14em .4em; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
@@ -794,13 +1157,77 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* ===================================================================
    Modal overlay (match statistics / log)
    =================================================================== */
-.modal-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(4, 8, 18, .66); display: flex; align-items: flex-start; justify-content: center; padding: 4vh 1rem; overflow: auto; }
-.modal { width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--shadow); padding: 1rem; }
-.modal-head { display: flex; align-items: center; gap: .5rem; }
+/* The insets keep a dialog's buttons off the home indicator and out from under the notch — a full-screen
+   overlay is exactly where "edge to edge" bites, because it has no parent padding to inherit. */
+.modal-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(4, 8, 18, .66); display: flex; align-items: flex-start; justify-content: center; overflow: auto;
+    padding: calc(4vh + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+             calc(4vh + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left)); }
+/* `height: auto` is NOT redundant — the same bootstrap.min.css `.modal` collision as the positioning below:
+   bootstrap sets `height: 100%`, app.css overrode width/display but never height, so with `max-height: 90vh`
+   every dialog was exactly 90vh tall no matter how little was in it (a three-row seat dialog measured 648px
+   in an 800px window). Content height, capped at 90vh. */
+.modal { width: 100%; height: auto; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--shadow); padding: 1rem; }
+.modal-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .modal-body { overflow: auto; min-height: 0; }
-/* Seat-order confirmation dialog (host, before the game starts) */
+/* The row of answers at the bottom. It only ever worked by accident before (inline-block buttons happening to
+   sit next to each other); a dialog that asks something needs its buttons laid out on purpose. On a phone they
+   go full width and stack, so neither answer is a small target next to a big one. */
+.modal-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: .9rem; }
+@media (max-width: 480px) {
+    .modal-actions { flex-direction: column; align-items: stretch; }
+    .modal-actions .btn { width: 100%; justify-content: center; }
+    .modal-actions .spacer { display: none; }
+}
+/* Centred dialog with the rest of the page blurred behind it.
+   `margin:auto` on the box rather than `align-items:center`: a flex item taller than the container gets
+   its top cut off (and becomes unscrollable) with align-items, while auto margins centre it and still
+   allow scrolling once it no longer fits. */
+.modal-backdrop.centered { align-items: flex-start; }
+/* `position: static` is NOT redundant: bootstrap.min.css also defines a `.modal` class, with
+   `position: fixed; top: 0; left: 0`, and app.css never overrode those — which is why these dialogs sat
+   in the top-left corner no matter what the backdrop's flex alignment said. Putting the box back in flow
+   is what makes centring possible at all. */
+.modal-backdrop.centered > .modal { position: static; margin: auto; }
+.modal-backdrop.blurred { backdrop-filter: blur(7px); background: rgba(4, 8, 18, .5); }
+/* Without backdrop-filter (older Safari/Firefox) the blur is simply absent — darken instead so the
+   dialog still stands out. */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .modal-backdrop.blurred { background: rgba(4, 8, 18, .86); }
+}
+
+/* Seat-order confirmation dialog (host, before the game starts) — rows are drag-to-reorder */
 .seat-confirm { max-width: 440px; }
 .seat-confirm-row .seat-no { font-family: 'Orbitron', sans-serif; color: var(--gold); min-width: 1.4em; text-align: center; flex: 0 0 auto; }
+.seat-list .seat-confirm-row { user-select: none; transition: transform .09s ease, opacity .09s ease; }
+/* touch-action:none only on the GRIP: on the whole row it also blocked scrolling the dialog on touch,
+   and a drag may only start here anyway (otherwise the row's own buttons stop working). */
+.seat-confirm-row .seat-grip { flex: 0 0 auto; touch-action: none; cursor: grab; color: var(--text-faint);
+    font-size: 1.25rem; line-height: 1; padding: .1rem .35rem; align-self: stretch; display: flex; align-items: center; }
+.seat-confirm-row.dragging { opacity: .85; transform: scale(1.02); border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), var(--shadow); cursor: grabbing; }
+.seat-confirm-row.dragging .seat-grip { cursor: grabbing; color: var(--gold); }
+.seat-arrows { display: flex; flex-direction: column; gap: .1rem; flex: 0 0 auto; }
+.seat-arrows .btn { padding: 0 .35rem; line-height: 1.15; font-size: .7rem; }
+/* Speaker per row: the same slot whether or not this player holds the token, so the rows stay aligned. The
+   button names the ACTION until the token is there — a column of dashes said nothing about what a tap does. */
+.seat-speaker { flex: 0 0 auto; min-width: 7.5rem; display: inline-flex; align-items: center; justify-content: center;
+    padding: .18rem .5rem; line-height: 1.15; }
+.seat-speaker .ss-make { font-size: .76rem; white-space: nowrap; }
+@media (max-width: 560px) { .seat-speaker { min-width: 2.6rem; } .seat-speaker .ss-make { font-size: .68rem; } }
+/* Rolling for the speaker: the row the token lands on glows for a moment, so the result is seen and not just
+   suddenly true. The pulse is the whole point, hence the reduced-motion fallback keeps the ring but drops it. */
+.seat-confirm-row.speaker-landed { border-color: var(--gold); animation: speaker-land 1.4s ease-out 1; }
+@keyframes speaker-land {
+    0%   { box-shadow: 0 0 0 0 rgba(217, 176, 74, .9), 0 0 22px 6px rgba(217, 176, 74, .55); }
+    70%  { box-shadow: 0 0 0 3px rgba(217, 176, 74, .35), 0 0 18px 4px rgba(217, 176, 74, .3); }
+    100% { box-shadow: 0 0 0 1px rgba(217, 176, 74, .5); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .seat-confirm-row.speaker-landed { animation: none; box-shadow: 0 0 0 2px var(--gold); }
+}
+/* End of the match: three equal, unmissable choices under the statistics. */
+.endgame-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .8rem; }
+.endgame-actions .btn { flex: 1 1 8rem; justify-content: center; text-align: center; }
+.endgame-note { font-size: .72rem; margin: .5rem 0 0; }
 .stats-modal .stat-block { margin: .6rem 0; }
 .stats-modal .stat-block h4 { margin: .2rem 0 .4rem; color: var(--text-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
 .stats-modal .stat-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem .25rem; border-bottom: 1px solid var(--panel-border); border-left: 3px solid var(--player-color, transparent); padding-left: .5rem; }
@@ -820,11 +1247,50 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .container { width: 100%; box-sizing: border-box; }
 
 /* Legal / IP notice footer (Asmodee/FFG community-use guidelines) */
-.legal-footer { max-width: 1180px; margin: 1.5rem auto 0; padding: .9rem 1rem 1.4rem; border-top: 1px solid var(--panel-border); color: var(--text-faint); font-size: .68rem; line-height: 1.4; }
+/* The footer sits over the start page's backdrop, so it needs its own ground and enough contrast to read
+   against it — over the dark chamber the old faint grey was barely there. */
+/* Its dark pane is shared with the title and the activity notice — see `.app-title, .activity,
+   .legal-footer` further down (that rule wins on order, so the background lives there). */
+.legal-footer { position: relative; z-index: 1; max-width: 1180px; margin: 1.5rem auto 0; padding: .9rem 1rem 1.4rem; border-top: 1px solid var(--panel-border); color: var(--text-dim); font-size: .68rem; line-height: 1.4; border-radius: 10px 10px 0 0; }
 .legal-footer p { margin: .15rem 0; }
-.legal-footer .legal-meta { margin-top: .4rem; opacity: .85; }
-.legal-footer a { color: var(--text-dim); text-decoration: underline; }
+.legal-footer .legal-meta { margin-top: .4rem; }
+.legal-footer a { color: var(--accent); text-decoration: underline; }
 .legal-footer a:hover { color: var(--gold); }
+
+/* "A new version is available" (UpdateNotice). Bottom centre, above the app bar's stacking but far below the
+   pause overlay: it must be reachable without ever covering a dialog someone is working in. */
+/* Deliberately large: as a small pill this was overlooked, and a table can then play a whole evening on the
+   old build. Still not a modal — the game stays playable and "later" stays an answer. */
+.update-bar { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 300;
+    display: flex; align-items: center; gap: 1rem; width: min(94vw, 44rem);
+    padding: 1rem 1.1rem; border-radius: 16px;
+    background: rgba(7, 11, 22, .97); border: 2px solid var(--gold);
+    box-shadow: 0 0 0 1px rgba(217, 176, 74, .25), 0 1rem 2.6rem rgba(0, 0, 0, .65), 0 0 2.2rem rgba(217, 176, 74, .18);
+    animation: ub-pulse 2.4s ease-in-out infinite; }
+.update-bar .ub-icon { flex: 0 0 auto; font-size: 2.2rem; color: var(--gold); }
+.update-bar .ub-body { flex: 1 1 auto; min-width: 0; }
+.update-bar .ub-title { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.05rem;
+    color: var(--gold); line-height: 1.25; }
+.update-bar .ub-text { color: var(--text); font-size: .84rem; line-height: 1.4; margin-top: .15rem; }
+.update-bar .ub-go { flex: 0 0 auto; }
+.update-bar .ub-close { flex: 0 0 auto; align-self: flex-start; }
+@keyframes ub-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(217, 176, 74, .25), 0 1rem 2.6rem rgba(0, 0, 0, .65), 0 0 2.2rem rgba(217, 176, 74, .18); }
+    50%      { box-shadow: 0 0 0 1px rgba(217, 176, 74, .5),  0 1rem 2.6rem rgba(0, 0, 0, .65), 0 0 3.2rem rgba(217, 176, 74, .42); }
+}
+@media (prefers-reduced-motion: reduce) { .update-bar { animation: none; } }
+@media (max-width: 560px) {
+    /* On a phone the button goes under the text rather than squeezing both. */
+    .update-bar { flex-wrap: wrap; gap: .6rem .8rem; }
+    .update-bar .ub-go { flex: 1 1 100%; }
+}
+
+/* The boot watchdog's report (see index.html): only ever rendered when the loading screen is still up after
+   eight seconds, so it may look as plain as it likes — it exists to name a cause, not to be pretty. */
+.boot-stuck { position: fixed; left: 50%; bottom: 8vh; transform: translateX(-50%); max-width: 90vw;
+    padding: .8rem 1.1rem; border-radius: 10px; background: rgba(7, 11, 22, .92); border: 1px solid #6b4f14;
+    color: #d9b04a; font-family: system-ui, sans-serif; font-size: .8rem; line-height: 1.5; text-align: center; }
+.boot-stuck a { color: #4fc3f7; }
 
 /* ===================================================================
    Blazor essentials (loading + error)
@@ -850,3 +1316,323 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .beamer-grid { grid-template-columns: 1fr; }
     .container { padding: .7rem; }
 }
+
+/* Push hint next to the bell: a chip, tappable to dismiss. Wraps rather than stretching the app bar. */
+.push-note { max-width: 22rem; white-space: normal; line-height: 1.25; cursor: pointer;
+    background: rgba(217,176,74,.16); color: var(--gold); border-color: var(--gold-dim); }
+
+/* ---- Start page: the senate chamber behind everything ----------------------------------------------- */
+/* Fixed and BEHIND the shell (z-index 0 vs. the content's own stacking), never interactive. It fades in
+   because the seats are mounted one frame AFTER the page (see SenateBackdrop): laying out and painting the
+   whole chamber before the FIRST frame is what left the boot screen sitting there on a cold visit. */
+.senate { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    perspective: 140vmin; perspective-origin: 50% 50%; opacity: 0; transition: opacity 1.4s ease; }
+/* Not fully opaque even when it is "in": the whole chamber sits a touch below full strength so it reads as
+   backdrop and the panel in front keeps the eye. One knob for the lot — dimming the pods, the portraits and
+   the lit strips separately would be three places to keep in step. */
+.senate.in { opacity: .5; }
+/* The chamber: one ring per row, each higher and a little further out. Two rules must hold.
+   (1) The WHOLE ring stays behind the perspective plane — CSS magnifies by `perspective / distance`,
+   without bound as a seat approaches the camera plane (a ring drawn AROUND the camera once produced a seat
+   15557px wide). Pushed back 40vmin, that is the closest any seat can come.
+   (2) The near half of every ring faces away from us and `backface-visibility` simply does not paint it, so
+   no portrait is ever seen from behind; what is left is the far side, arching across the screen.
+   The push-back and the tilt must be repeated in BOTH keyframes, or the animation drops them. */
+.senate-scene { position: absolute; inset: 0; transform-style: preserve-3d; will-change: transform;
+    animation: senate-spin 900s linear infinite; }
+@keyframes senate-spin {
+    from { transform: translateZ(-40vmin) rotateX(12deg) rotateY(0deg); }
+    to   { transform: translateZ(-40vmin) rotateX(12deg) rotateY(360deg); }
+}
+/* Each seat is placed by its own transform (see SenateBackdrop); this only sizes it. Note `transform-style`
+   stays FLAT: the seat's two children are coplanar, and under `preserve-3d` a 3D context sorts by depth
+   instead of DOM order — which is what decides whether the shell can cover the portrait's foot below. */
+.senate-seat { position: absolute; left: 50%; top: 50%; width: 38vmin; height: 48vmin;
+    margin: -24vmin 0 0 -19vmin; backface-visibility: hidden; }
+/* The delegate: the portrait, standing IN the pod — it IS the seat's full box, and the shell over its lowest
+   quarter (the shell is 25% of the box, anchored at the bottom) is the only thing that covers it. Its width
+   stays inside the shell's straight top edge (54% against 20%…80%), so no part of its WIDTH is ever cut. No
+   frame around it and nothing behind it; an earlier version wrapped it in the shell, read as a backrest. */
+.pod-face { position: absolute; left: 50%; top: 0; width: 54%; height: 100%; transform: translateX(-50%);
+    object-fit: cover; object-position: 50% 16%; border-radius: 6% 6% 0 0; }
+/* The pod: a very flat, wide shell — a dome cut off far below its apex, flanks curving out to a full-width
+   base with pointed lower corners. `clip-path` rather than border-radius, because only a polygon holds the
+   straight cut, the curved flank and the sharp corners at once; it also clips the lit strip to the outline,
+   which is what makes the strip read as the rim itself.
+   Every colour stop is OPAQUE: a translucent one let the delegate and the seats behind show through the
+   shell, and a senate pod is a solid object.
+   Deliberately NO filter and no inset shadow on a seat: the chamber is ~130 elements, and a per-seat filter
+   forces a separate raster for each one — that cost is what stalled the first paint. */
+.pod { position: absolute; left: 0; right: 0; bottom: 0; height: 25%;
+    background: linear-gradient(180deg, #3b4c6d 0%, #1e2844 46%, #2b3a5a 90%, #0c1322 100%);
+    clip-path: polygon(20% 0, 80% 0, 85% 8%, 89% 18%, 93% 30%, 96% 44%, 98% 60%, 99.3% 76%, 100% 88%,
+        98% 100%, 2% 100%, 0 88%, 0.7% 76%, 2% 60%, 4% 44%, 7% 30%, 11% 18%, 15% 8%); }
+/* The lit strip: over the whole width, just above the lower edge — the one bright thing on a senate pod.
+   Its glow is clipped by the pod outline (see above), so it spreads along and into the shell, not past it. */
+.pod-strip { position: absolute; left: 0; right: 0; bottom: 6%; height: 13%;
+    background: linear-gradient(90deg, rgba(255,255,255,.6) 0%, #fff 12%, #fff 88%, rgba(255,255,255,.6) 100%);
+    box-shadow: 0 0 1.4vmin rgba(205, 230, 255, .65); }
+/* A vignette so the chamber sinks into the page instead of competing with the buttons in front of it. */
+.senate::after { content: ""; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 46%, rgba(7, 11, 22, 0) 30%, rgba(7, 11, 22, .42) 70%, rgba(7, 11, 22, .8) 100%); }
+/* Anything that moves this slowly is still motion — honour the preference and just hold still. */
+@media (prefers-reduced-motion: reduce) { .senate-scene { animation: none; } }
+/* The content has to sit above the backdrop; the shell is transparent, so give it its own layer. */
+.home-view { position: relative; z-index: 1; }
+/* The three things that stand ON the chamber — the title, the activity notice and the legal footer — share
+   one treatment: a dark pane, so text stays readable over a backdrop that is all portraits and lit rims.
+   Plain opacity, deliberately: `backdrop-filter: blur()` was tried and taken out again. It is GPU work that
+   repeats whenever the backdrop changes, and the chamber turns continuously — so three panes covering ~22%
+   of the screen were being re-blurred every frame, for decoration. A slightly darker pane does the same job
+   for free. If you ever add it back, never over a large area of the moving chamber. */
+.app-title, .activity, .legal-footer { background: rgba(7, 11, 22, .82); }
+/* The application's name over the start page, hard against the top of the view. */
+.app-title { align-self: center; width: fit-content; max-width: 100%;
+    margin: 0 0 1rem; padding: .5rem 2.2rem .6rem; border-radius: 16px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(1.5rem, 4.4vw, 3rem);
+    line-height: 1.15; letter-spacing: .05em; text-align: center; color: var(--gold);
+    text-shadow: 0 0 18px rgba(217, 176, 74, .35); }
+/* THE FORM ABSORBS THE SLACK, not the things around it: the panel takes ALL the free vertical space into its
+   own two auto margins, which pins the title to the top of the view and the activity notice to the bottom.
+   Centring the whole column instead (`justify-content: center`) made both of them jump the moment the form
+   grew — switching to "create session" shoved the title up and the notice down. `margin-block` so the
+   horizontal margins stay with each panel's own rule. */
+.home-view > .panel { margin-block: auto; }
+/* The start page's own panel is a choice, not a form: only as wide as its rows need. */
+.home-panel { width: fit-content; min-width: min(100%, 26rem); max-width: min(100%, 34rem);
+    padding: 1.3rem 1.5rem; margin-left: auto; margin-right: auto; }
+/* Heading and choices are ONE stack of equal rows: same width (stretch), same type size, same padding, so
+   "Choose how to start" reads as the menu's label rather than as a title sitting above it.
+   Both selectors are spelled out rather than `.home-choice > *`: that ties with `.btn` on specificity, and a
+   tie is decided by source order, which left the buttons at their own size while the heading took the new one. */
+.home-choice { display: flex; flex-direction: column; align-items: stretch; gap: .7rem; }
+.home-choice > h2, .home-choice > .btn { margin: 0; padding: .75rem 1.4rem; font-size: 1.15rem;
+    line-height: 1.3; text-align: center; justify-content: center; }
+/* …including the border, or the heading comes out 2px shorter than the buttons. */
+.home-choice > h2 { border: 1px solid transparent; }
+/* Join + the camera beside it. The PAIR is one row of the menu, so the stack keeps its equal-row look:
+   the join button takes what is left, the camera is a square at the end. */
+.home-join-row { display: flex; gap: .5rem; align-items: stretch; }
+.home-join-row > .btn { flex: 1 1 auto; margin: 0; padding: .75rem 1.4rem; font-size: 1.15rem;
+    line-height: 1.3; text-align: center; justify-content: center; }
+.home-join-row > .home-scan { flex: 0 0 auto; width: 3.4rem; padding: .75rem 0; }
+
+/* The backdrop switch: a setting about the page, so it sits under the choices and stays quiet. */
+.home-senate-toggle { margin-top: 1rem; color: var(--text-faint); }
+.home-senate-toggle:hover { color: var(--text-dim); }
+/* Create / join, on the other hand, are forms — inputs need the room. */
+.home-form { width: 100%; max-width: 480px; margin-left: auto; margin-right: auto; }
+/* Join: player or wall display. The one choice on the page that decides what this DEVICE becomes, so both
+   options are large targets with an icon over the label rather than two small pills. */
+.join-mode { display: flex; gap: .6rem; margin: .3rem 0 1rem; }
+.join-mode .btn { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: .4rem;
+    padding: .9rem .6rem; font-size: 1rem; }
+/* Activity counters: a notice BELOW the panel, not a field inside it. Blue and glowing, so the numbers read
+   as a live signal from the instance rather than as part of the form. */
+.activity { align-self: center; display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;
+    margin: 1rem 0 0; padding: .6rem 1.8rem .7rem; border-radius: 16px; }
+.activity-item { text-align: center; }
+.activity-num { display: block; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.7rem;
+    color: var(--accent); text-shadow: 0 0 10px rgba(79, 195, 247, .75), 0 0 24px rgba(79, 195, 247, .4); }
+.activity-lbl { font-size: .7rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .08em; }
+
+/* ---- Combat ---------------------------------------------------------------------------------------- */
+/* Control view: one band while a battle is running. */
+.combat-band { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.combat-vs-inline { font-family: 'Orbitron', sans-serif; color: var(--danger); font-weight: 900; margin: 0 .3em; }
+/* Wall: the whole screen, two even halves and VS between them. */
+.beamer .combat-stage { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; gap: 1.5vh; padding: 1vh 1.5vw 2vh; }
+.beamer .combat-title { font-family: 'Orbitron', sans-serif; font-weight: 900; text-align: center;
+    font-size: clamp(1.8rem, 5vw, 5.5rem); letter-spacing: .12em; color: var(--danger);
+    text-shadow: 0 0 18px rgba(214, 83, 74, .55); }
+.beamer .combat-cols { flex: 1 1 auto; display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5vw;
+    align-items: stretch; min-height: 0; }
+.beamer .combat-side { display: flex; flex-direction: column; align-items: center; gap: 1vh; min-height: 0;
+    padding: 1vh 1vw; border-radius: 14px; background: var(--panel);
+    border: 1px solid var(--panel-border); border-top: 5px solid var(--player-color, #888); }
+.beamer .combat-side .cs-head { flex: 0 0 auto; max-height: 46%; display: flex; justify-content: center; }
+.beamer .combat-side .fac-portrait { max-height: min(38vh, 100%); }
+.beamer .cs-fac { color: var(--text-dim); font-size: clamp(.8rem, 1.2vw, 1.5rem); text-align: center; }
+.beamer .cs-techs { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-wrap: wrap;
+    align-content: flex-start; justify-content: center; gap: .5vh .6vw; }
+.beamer .cs-tech { display: inline-flex; align-items: center; gap: .35em; padding: .2em .6em; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--panel-border); border-left: 4px solid var(--tc, #888);
+    font-size: clamp(.7rem, 1.05vw, 1.25rem); }
+.beamer .cs-tech-name { white-space: nowrap; }
+.beamer .combat-vs { display: flex; align-items: center; font-family: 'Orbitron', sans-serif; font-weight: 900;
+    font-size: clamp(1.5rem, 4vw, 4.5rem); color: var(--danger); text-shadow: 0 0 16px rgba(214, 83, 74, .5); }
+
+/* Secondary round + Politics appointment, as popups (see SecondaryModal / ActionView). Both use the
+   `.modal-backdrop.centered` box, so the bootstrap `.modal` positioning trap is already handled there. */
+.secondary-modal, .politics-modal, .redtape-modal, .combat-pick-modal { max-width: 480px; }
+/* "Add to the home screen": three numbered steps, each with the glyph you are looking for on the device. */
+.install-modal { max-width: 460px; }
+.install-steps { list-style: none; counter-reset: istep; margin: .8rem 0 0; padding: 0;
+    display: flex; flex-direction: column; gap: .6rem; }
+.install-steps li { counter-increment: istep; display: flex; align-items: center; gap: .7rem;
+    padding: .55rem .7rem; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-border); }
+.install-steps li::before { content: counter(istep); flex: 0 0 1.5rem; width: 1.5rem; height: 1.5rem;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+    background: var(--gold); color: #0b1020; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .8rem; }
+.install-steps .is-icon { flex: 0 0 auto; color: var(--gold); display: inline-flex; }
+.install-steps li > span:last-child { font-size: .88rem; line-height: 1.35; }
+
+/* Editing one player: name, faction, colour and removal. Wide enough for the faction grid to breathe. */
+/* Wider than a plain dialog and with a narrower label column: the faction grid and the colour swatches want
+   the room, and 14rem of empty space next to the word "Faction" was giving it to nothing. */
+.player-edit-modal { max-width: min(94vw, 860px); }
+.player-edit-modal .modal-body { max-height: 68vh; }
+.player-edit-modal .game-option { grid-template-columns: minmax(5.5rem, 7rem) minmax(0, 1fr); gap: .35rem .7rem; }
+@media (max-width: 560px) { .player-edit-modal .game-option { grid-template-columns: 1fr; } }
+.pe-danger { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+    margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--panel-border); }
+
+/* The in-game player list: one compact row each, scannable at a glance. The faction symbol and the speaker
+   button are the two things you actually reach for, so they are the two big things. */
+.player-rows { display: flex; flex-direction: column; gap: .5rem; }
+.player-row { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.player-row .pr-id { flex: 1 1 8rem; min-width: 0; }
+.player-row .pr-name { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+    font-weight: 700; font-size: 1.05rem; }
+.player-row .pr-fac { color: var(--text-dim); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-row .pr-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.player-row .pr-speaker { display: inline-flex; align-items: center; padding: .35rem .6rem; }
+.player-row .pr-speaker-btn { display: inline-flex; align-items: center; gap: .4rem; }
+@media (max-width: 480px) {
+    /* On a phone the actions go under the identity rather than squeezing the name into two characters. */
+    .player-row .pr-id { flex: 1 1 100%; order: 1; }
+    .player-row .pr-actions { flex: 1 1 100%; order: 2; }
+}
+/* ---- QR scanner ----
+   The picture is the content, so it gets the width and a fixed 4:3 box: a video that resizes itself once the
+   stream's real dimensions arrive makes the whole dialog jump. `object-fit: cover` fills the box whatever the
+   camera hands over. */
+.qr-scan-modal { max-width: min(94vw, 30rem); }
+.qr-view { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden;
+    background: #05080f; border: 1px solid var(--panel-border); }
+.qr-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Where to aim. Corners only — a full frame reads as a border of the video, not as a target. */
+.qr-reticle { position: absolute; inset: 12%; border-radius: 8px; pointer-events: none;
+    box-shadow: 0 0 0 100vmax rgba(4,8,18,.35);
+    background:
+        linear-gradient(var(--gold), var(--gold)) left top / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) left top / 3px 1.6rem no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right top / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right top / 3px 1.6rem no-repeat,
+        linear-gradient(var(--gold), var(--gold)) left bottom / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) left bottom / 3px 1.6rem no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right bottom / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right bottom / 3px 1.6rem no-repeat; }
+.qr-hint { margin: .6rem 0 0; font-size: .82rem; }
+.qr-error { color: var(--danger); }
+
+/* What a Red Tape variant changes about the step you are standing on. It REPLACES the step's own hint rather
+   than sitting under it, and it is red: the variant is overruling the rulebook here, not commenting on it. */
+.rt-step-note { margin: 0; font-size: .84rem; color: #f0b7ad;
+    border-left: 3px solid #7a1c16; padding-left: .55rem; }
+
+/* The host is acting for somebody else — said in words under the turn banner, because the buttons below it
+   are then about a player who is not this device. */
+.takeover-note { font-size: .75rem; margin: .3rem 0 0; }
+
+/* The objective a random Red Tape removal freed, shown in the popup at card size — the same thing the wall
+   puts up large, so both devices are looking at the same card. */
+.rt-result-card { display: flex; justify-content: center; margin-top: .6rem; }
+.rt-result-card .obj-card { max-width: 20rem; width: 100%; }
+
+/* Closing the session: two answers, each with the consequence written under it. Narrow — it is a question,
+   not a screen. */
+.exit-modal { max-width: min(92vw, 26rem); }
+.exit-modal .exit-hint { font-size: .78rem; margin: .35rem 0 .9rem; }
+.exit-modal .exit-hint:last-child { margin-bottom: 0; }
+
+/* The prompt itself is a list of names and buttons, so it stays narrow; the PICKER underneath it needs room
+   for cards, not for a sentence. */
+.techprompt-modal { max-width: 560px; width: 100%; }
+/* The picker sits ON the prompt, so it needs the higher layer — and it has to be stated AFTER
+   `.modal-backdrop`, which sets z-index at the same specificity (same collision as `.rt-confirm-layer`). */
+.tp-picker-layer { z-index: 1300; }
+.techpick-modal { max-width: 900px; width: 100%; }
+.techpick-modal .modal-body { max-height: 62vh; }
+.techpick-modal .tech-cat { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+/* Red Tape Lite's two questions (see RedTapeModal). Both are irreversible, so the warning is not fine print:
+   it gets the tape's own red. */
+.rt-ask-lead { margin: 0 0 .7rem; }
+.rt-ask-list { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .7rem; }
+/* `color` is set explicitly, not inherited: the same row renders as a <div> in the "locked" question and as a
+   <button> in the "pick one" list, and a button does NOT inherit colour — it starts at the UA's `buttontext`
+   (black), which `appearance: none` does not reset. So the pick list came out black on dark panel while the
+   identical-looking locked row was white. Same family as the `.tab` reset below. */
+.rt-ask-item { display: flex; flex-direction: column; gap: .1rem; padding: .4rem .55rem; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid #c1261c;
+    color: var(--text); }
+.rt-ask-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .82rem; }
+/* In the "remove a marker of your choice" list every row IS the choice, so it is a button. */
+.rt-ask-pick { width: 100%; text-align: left; cursor: pointer; appearance: none; font-family: inherit; }
+.rt-ask-pick:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 8%, var(--panel)); }
+.rt-ask-pick:focus-visible { outline: 2px solid var(--gold-dim); outline-offset: 2px; }
+.rt-ask-req { color: var(--text-dim); font-size: .78rem; line-height: 1.25; }
+.rt-ask-warn { margin: 0; color: #f1a3ae; font-size: .8rem; line-height: 1.35; }
+/* "What is Red Tape?" — the explanation behind the setup option. Two <details> sections rather than a scripted
+   accordion: they open with the keyboard and need no state. The chevron turns with `open`. */
+.modal.redtape-help { max-width: min(94vw, 44rem); }
+.rth-lead { margin: 0 0 .9rem; font-size: .86rem; line-height: 1.5; color: var(--text); }
+.rth-sec { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel);
+    margin-bottom: .5rem; overflow: hidden; }
+.rth-sec > summary { display: flex; align-items: center; gap: .5rem; padding: .6rem .7rem; cursor: pointer;
+    list-style: none; color: var(--text); }
+.rth-sec > summary::-webkit-details-marker { display: none; }
+.rth-sec > summary:hover { background: rgba(255,255,255,.03); }
+.rth-sec > summary:focus-visible { outline: 2px solid var(--gold-dim); outline-offset: -2px; }
+.rth-sec .rth-chev { flex: 0 0 auto; display: inline-flex; color: var(--gold); }
+/* Which chevron shows is a `display` toggle, not a rotation — see the comment in RedTapeHelpModal. */
+.rth-sec[open] .rth-more, .rth-sec:not([open]) .rth-less { display: none; }
+.rth-sec .rth-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: .84rem; color: var(--gold); }
+.rth-sec .rth-by { font-size: .72rem; }
+.rth-body { padding: 0 .8rem .7rem; border-top: 1px solid var(--panel-border); }
+.rth-body h4 { margin: .7rem 0 .25rem; font-size: .74rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-dim); font-weight: 700; }
+.rth-body ul { margin: 0; padding-left: 1.1rem; }
+.rth-body li { font-size: .82rem; line-height: 1.45; margin-bottom: .2rem; }
+.rth-link { display: inline-flex; align-items: center; gap: .3rem; margin-top: .7rem; font-size: .8rem;
+    color: var(--accent); }
+
+/* "Remove a marker": the allowance the variant's SPECIAL grants, and how much of it is used. Big enough to be
+   the first thing read, because it is the number the table is working to. */
+.rt-pick-head { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .6rem; flex-wrap: wrap; }
+.rt-pick-count { font-family: 'Orbitron', sans-serif; font-size: 1.25rem; color: var(--text-dim); }
+.rt-pick-count strong { color: var(--gold); }
+.rt-pick-count.full strong { color: #8fe0bd; }
+.rt-pick-count.over strong { color: #f1a3ae; }
+/* The three questions on top of the workspace (over / under / a rule-locked tape). Above the dialog it asks
+   about, so the z-index is the point (`.modal-backdrop` is 1200). */
+.rt-confirm-layer { z-index: 1300; }
+.modal.rt-confirm { max-width: min(92vw, 26rem); }
+.rt-pick-of { font-size: .8rem; color: var(--text-dim); }
+/* The cards are the workspace, so the grid may be narrower than the status one. */
+.rt-pick-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
+.sec-rows { display: flex; flex-direction: column; gap: .4rem; }
+.sec-row { display: flex; align-items: center; gap: .55rem; padding: .35rem .5rem; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--panel-border); border-left: 4px solid var(--player-color, #888); }
+.sec-row.running { border-color: var(--gold-dim); background: color-mix(in srgb, var(--gold) 8%, var(--panel)); }
+.sec-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* Join QR as an overlay on the wall during the agenda phase. Everything behind it is blurred, so the code
+   is unmistakably the thing to look at — and unlike the header strip it costs the vote view no height. */
+.beamer .qr-overlay { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center;
+    justify-content: center; background: rgba(4, 7, 15, .72); backdrop-filter: blur(9px); }
+@supports not (backdrop-filter: blur(2px)) {
+    .beamer .qr-overlay { background: rgba(4, 7, 15, .93); }   /* no blur: darken harder instead */
+}
+.beamer .qr-card { display: flex; flex-direction: column; align-items: center; gap: 1.4vh;
+    padding: 2.4vh 3vw; border-radius: 18px; background: var(--panel); border: 1px solid var(--gold-dim);
+    box-shadow: 0 2vh 6vh rgba(0, 0, 0, .6); max-width: 84vw; }
+.beamer .qr-title { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--gold);
+    font-size: clamp(1.1rem, 2.2vw, 2.6rem); text-align: center; }
+.beamer .qr-url { color: var(--text-dim); font-size: clamp(.8rem, 1.2vw, 1.5rem); word-break: break-all;
+    text-align: center; }
+.beamer .qr-code-big { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--text);
+    font-size: clamp(2rem, 6vw, 6rem); letter-spacing: .12em; line-height: 1; }
+/* QR as a wall AREA (DisplayMode.JoinQr): same card as the agenda overlay, centred in the right panel. */
+.beamer .panel-body.qr-panel { align-items: center; justify-content: center; }
+.beamer .panel-body.qr-panel .qr-card { border: 0; background: transparent; box-shadow: none; padding: 0; }

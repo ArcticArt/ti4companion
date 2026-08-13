@@ -1,0 +1,117 @@
+@inherits Ti4ComponentBase
+@inject IJSRuntime JS
+
+@*
+    Remaining turn budget for one player in the current round. Ticks once a second off the shared
+    store ticker (never off StateHasChanged of a whole view — the wall display re-runs an expensive
+    card-fitting pass on every render).
+
+    Deliberately informational: running out is signalled, never enforced. The game stays in charge.
+*@
+@if (Remaining is { } r)
+{
+    <span class="turn-timer @Severity(r) @(Compact ? "compact" : "")" title="@Title(r)">
+        @if (!Compact)
+        {
+            <span class="tt-icon"><MaterialIcon Name="timer" SizeCss="1em" /></span>
+        }
+        <span class="tt-value">@Render(r)</span>
+    </span>
+}
+
+@code {
+    /// <summary>Whose budget to show.</summary>
+    [Parameter, EditorRequired] public Guid PlayerId { get; set; }
+
+    /// <summary>Tight variant for the wall display's player table.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    /// <summary>Buzz this device when the budget runs out, and keep reminding it (only meaningful on a
+    /// player's own row).</summary>
+    [Parameter] public bool Signal { get; set; }
+
+    /// <summary>Tell the server the budget ran out, so it can send this player a notification. Set on the
+    /// devices that reliably have the row on screen (the wall, the host); the server drops duplicates.</summary>
+    [Parameter] public bool Report { get; set; }
+
+    private TimeSpan? Remaining =>
+        Store.TurnTimerEnabled ? Store.RemainingFor(Store.TimerStats(), PlayerId) : null;
+
+    /// <summary>How long after the previous buzz the next one follows, while still over time. Once was not
+    /// enough — the buzz happens while the player is mid-thought and is simply missed.</summary>
+    private const int RepeatBuzzSeconds = 30;
+
+    // Round this device last signalled in, and how far over time it was then, so the reminder repeats
+    // instead of firing every second.
+    private int signalledRound = -1;
+    private int lastBuzzOverSeconds;
+    private int reportedRound = -1;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Store.SubscribeTick(Tick);
+    }
+
+    private void Tick() => InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        await MaybeSignalAsync();
+    });
+
+    private async Task MaybeSignalAsync()
+    {
+        if (Store.Session is not { } s) return;
+        if (Remaining is not { } r || r > TimeSpan.Zero) return;
+        var round = s.CurrentRound;
+        var over = (int)(-r).TotalSeconds;
+
+        // One notification per player per round, from whichever device is watching.
+        if (Report && reportedRound != round)
+        {
+            reportedRound = round;
+            await Store.Api.ReportTimeUpAsync(s.Id, PlayerId);
+        }
+
+        if (!Signal) return;
+        if (signalledRound != round)
+        {
+            signalledRound = round;
+            lastBuzzOverSeconds = over;
+        }
+        else if (over - lastBuzzOverSeconds < RepeatBuzzSeconds)
+        {
+            return;
+        }
+        else
+        {
+            lastBuzzOverSeconds = over;
+        }
+        // Vibration where the browser allows it; silently does nothing otherwise (iOS Safari).
+        try { await JS.InvokeVoidAsync("ti4.buzz"); } catch { }
+    }
+
+    private string Severity(TimeSpan r) =>
+        r <= TimeSpan.Zero ? "over" : r.TotalSeconds <= 60 ? "warn" : "";
+
+    /// <summary>mm:ss, and counting up with a leading minus once the budget is gone.</summary>
+    private static string Render(TimeSpan r)
+    {
+        var over = r < TimeSpan.Zero;
+        var t = over ? -r : r;
+        var text = t.TotalHours >= 1
+            ? FormattableString.Invariant($"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}")
+            : FormattableString.Invariant($"{(int)t.TotalMinutes}:{t.Seconds:00}");
+        return over ? "−" + text : text;
+    }
+
+    private string Title(TimeSpan r) => r <= TimeSpan.Zero
+        ? Loc["timer.over"]
+        : Loc["timer.remaining"];
+
+    public override void Dispose()
+    {
+        Store.UnsubscribeTick(Tick);
+        base.Dispose();
+    }
+}

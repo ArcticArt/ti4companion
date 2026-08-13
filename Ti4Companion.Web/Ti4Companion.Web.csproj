@@ -17,6 +17,12 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.9" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
+    <!-- QR codes for joining, generated in the browser. Deliberately NOT an online generator (the invite
+         URL would leak to a third party and the wall must work offline on LAN), and deliberately this
+         package rather than QRCoder: it is a dependency-free managed port of Nayuki's generator, whereas
+         QRCoder drags in System.Drawing.Common / SkiaSharp, which have no business in a WASM payload. -->
+    <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="3.1.0" />
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
   </ItemGroup>
 
   <ItemGroup>

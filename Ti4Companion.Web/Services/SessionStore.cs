@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.SignalR.Client;
 using Ti4Companion.Shared;
@@ -12,9 +13,14 @@ namespace Ti4Companion.Web.Services;
 public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, NavigationManager nav) : IAsyncDisposable
 {
     private const string KeyDevice = "ti4.device";
-    private const string KeyCode = "ti4.code";
-    private const string KeyPlayer = "ti4.player";
+    private const string KeyCode = "ti4.code";      // legacy single session; only read now, for the carry-over
+    private const string KeyPlayer = "ti4.player";  // legacy, see RecentAsync
+    private const string KeyRecent = "ti4.recent";
     private const string KeyLang = "ti4.lang";
+    private const string KeySenate = "ti4.senate";
+
+    /// <summary>How many sessions the start page offers to pick up again.</summary>
+    public const int MaxRecent = 10;
 
     private HubConnection? _hub;
     private string? _joinedCode;
@@ -29,7 +35,113 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     public event Action? OnChange;
 
+    /// <summary>
+    /// Whether the start page draws the senate chamber behind itself. Per device and remembered (localStorage
+    /// `ti4.senate`), because it is decoration: it costs about 130 elements and 24 photographs, and on a weak
+    /// phone or a slow connection someone may simply not want it. Defaults to ON.
+    /// </summary>
+    public bool SenateEnabled { get; private set; } = true;
+
+    public async Task SetSenateAsync(bool on)
+    {
+        if (SenateEnabled == on) return;
+        SenateEnabled = on;
+        await storage.SetAsync(KeySenate, on ? "1" : "0");
+        OnChange?.Invoke();
+    }
+
     public PlayerDto? Me => Session?.Players.FirstOrDefault(p => p.Id == MyPlayerId);
+
+    // --- turn timer -------------------------------------------------------------------------------
+    // The countdown is derived from the match log (which already carries every turn change and pause),
+    // so the log is cached here and refreshed with the session — but ONLY while the option is on, so a
+    // table that doesn't use the timer pays nothing.
+
+    /// <summary>Host enabled a per-player time budget per round.</summary>
+    public bool TurnTimerEnabled => (Session?.TurnTimerSeconds ?? 0) > 0;
+
+    /// <summary>Cached match log, kept fresh while <see cref="TurnTimerEnabled"/>.</summary>
+    public IReadOnlyList<SessionLogEntryDto> Log { get; private set; } = Array.Empty<SessionLogEntryDto>();
+
+    /// <summary>Fires once a second while at least one timer component is on screen.</summary>
+    private event Action? OnTick;
+    private System.Threading.Timer? _tick;
+    private int _tickSubscribers;
+
+    /// <summary>Subscribe to the 1 Hz tick. The ticker only runs while something is subscribed, and the
+    /// tick is deliberately separate from <see cref="OnChange"/> — re-rendering whole views every second
+    /// would re-run the wall display's expensive card-fitting pass.</summary>
+    public void SubscribeTick(Action handler)
+    {
+        OnTick += handler;
+        if (++_tickSubscribers == 1)
+            _tick = new System.Threading.Timer(_ => OnTick?.Invoke(), null, 1000, 1000);
+    }
+
+    public void UnsubscribeTick(Action handler)
+    {
+        OnTick -= handler;
+        if (--_tickSubscribers <= 0)
+        {
+            _tickSubscribers = 0;
+            _tick?.Dispose();
+            _tick = null;
+        }
+    }
+
+    /// <summary>Time each player has spent on turn in the current round, plus the live open segment.</summary>
+    public MatchStats TimerStats() => MatchStats.Compute(Log, DateTimeOffset.UtcNow, CurrentPickerId);
+
+    /// <summary>Remaining budget for a player this round; null when the timer is off.</summary>
+    public TimeSpan? RemainingFor(MatchStats stats, Guid playerId)
+    {
+        if (Session is not { TurnTimerSeconds: > 0 } s) return null;
+        var used = stats.PerPlayerRound.TryGetValue(playerId, out var u) ? u : TimeSpan.Zero;
+        return TimeSpan.FromSeconds(s.TurnTimerSeconds) - used;
+    }
+
+    private async Task RefreshLogAsync()
+    {
+        if (Session is null || !TurnTimerEnabled) { Log = Array.Empty<SessionLogEntryDto>(); return; }
+        Log = await api.GetLogAsync(Session.JoinCode);
+    }
+
+    /// <summary>A view asked the shell to open the technology tab (the optional prompt after playing the
+    /// Technology strategy card). An event rather than a flag, so nothing has to be reset afterwards.</summary>
+    public event Action? OnShowTechTab;
+
+    public void ShowTechTab() => OnShowTechTab?.Invoke();
+
+    // There used to be the same pair for the objectives tab, for Imperial's "you may score a public
+    // objective". That is a popup now (ImperialScoreModal), listing exactly what that player may score, so
+    // nothing has to switch tabs for it any more.
+
+    /// <summary>
+    /// The host is acting FOR the player who is up. Off by default and switched on deliberately, per device.
+    /// <para>
+    /// The server has always allowed "the active player or the host", and for a while the client simply used
+    /// that: the host's screen carried the whole turn at all times. At a table where everybody has their own
+    /// phone that is the wrong default — the host's device shows the pass and play buttons for somebody
+    /// else's turn, and it is not obvious whose taps count. So it is a mode again, with a button to enter and
+    /// leave it. Not persisted: it belongs to the moment somebody hands the host their turn, not to the
+    /// device forever.
+    /// </para></summary>
+    public bool HostTakeover
+    {
+        get => _hostTakeover;
+        set { _hostTakeover = value; OnChange?.Invoke(); }
+    }
+    private bool _hostTakeover;
+
+    /// <summary>This device asked to see the secondary-round popup although it is not addressed to it (the
+    /// host opening it from the action view). Per device and not per component, because the popup lives in
+    /// the shell while the button that opens it is in a tab.</summary>
+    public bool ShowSecondary
+    {
+        get => _showSecondary;
+        set { _showSecondary = value; OnChange?.Invoke(); }
+    }
+    private bool _showSecondary;
 
     /// <summary>This device controls the host player (the session creator).</summary>
     public bool IsHost => Me?.IsHost == true
@@ -37,7 +149,11 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         || (Session is not null && MyPlayerId is not null && !Session.Players.Any(p => p.IsHost)
             && Session.Players.OrderBy(p => p.SeatOrder).FirstOrDefault()?.Id == MyPlayerId);
 
-    /// <summary>Whose turn it is to pick a strategy card (speaker first, then clockwise by seat), or null when done.</summary>
+    /// <summary>Whose turn it is to pick a strategy card (speaker first, then clockwise by seat), or null when
+    /// done. Mirrors <c>TurnService.CurrentPicker</c> exactly — including the two things that version had to
+    /// learn: it is derived from WHO HOLDS WHAT (so a returned card goes back to its owner rather than to
+    /// whoever sits at that index), and it stops when the eight cards are gone (a five-player table playing
+    /// "two each" runs out before everyone has two).</summary>
     public Guid? CurrentPickerId
     {
         get
@@ -48,17 +164,102 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
             var start = s.SpeakerPlayerId is Guid sp ? seated.FindIndex(p => p.Id == sp) : 0;
             if (start < 0) start = 0;
             var order = Enumerable.Range(0, seated.Count).Select(i => seated[(start + i) % seated.Count]).ToList();
-            var taken = order.Sum(p => p.StrategyCards.Count);
-            return taken >= order.Count * MaxStrategyCards ? null : order[taken % order.Count].Id;
+            if (order.Sum(p => p.StrategyCards.Count) >= GameRules.StrategyCardCount) return null;
+            for (var pass = 0; pass < MaxStrategyCards; pass++)
+            {
+                var next = order.FirstOrDefault(p => p.StrategyCards.Count <= pass);
+                if (next is not null) return next.Id;
+            }
+            return null;
         }
     }
+
+    /// <summary>Every player has their allotment, or the cards have run out — the action phase may begin.
+    /// Same helper the server gates with, so the button is never offered where the server would refuse.</summary>
+    public bool StrategyPickDone => Session is { } s
+        && GameRules.StrategyPickDone(s.Players.Select(p => p.StrategyCards.Count).ToList(), s.StrategyCardsPerPlayer);
+
+    /// <summary>Status phase: whose turn it is to score (initiative order), from the server.</summary>
+    public Guid? StatusScorerId => Session?.StatusScorerId;
+
+    /// <summary>
+    /// Whether this device may score for a player right now. Outside the status phase scoring stays open
+    /// (abilities score at other times); inside it a player scores for their OWN seat and only while it is
+    /// up, while the host may act for anyone — mirrors the server gate exactly, so the UI never offers a
+    /// button the server would reject (a rejection is a silent no-op on this client).
+    /// </summary>
+    public bool CanScoreFor(Guid playerId)
+    {
+        if (Session is not { } s) return false;
+        if (s.Phase != GamePhase.Status) return true;
+        return IsHost || (s.StatusScorerId == playerId && MyPlayerId == playerId);
+    }
+
+    /// <summary>Red Tape variant: an objective whose marker is still on cannot be scored. Mirrors the
+    /// server gate exactly, so the UI disables what the server would refuse (a 403/400 is a silent no-op
+    /// on this client, which is how a player ends up tapping a dead button).</summary>
+    public bool RedTapeBlocks(SessionObjectiveDto so)
+        => RedTapeOn && (!so.MarkerRemoved || so.Purged);
+
+    /// <summary>A Red Tape variant is in play (either of them — the tape behaves the same in both).</summary>
+    public bool RedTapeOn => Session is not null && Session.RedTapeVariant != RedTapeVariant.None;
+
+    /// <summary>
+    /// The localization KEY explaining why this tape may not be pulled right now, or null when it may — the
+    /// same gates the server enforces (<c>RedTape.WhyCannotRemove</c>), so the UI never offers a tap the
+    /// server would refuse. A key rather than a sentence, so the store needs no localizer: the stage comes
+    /// from the content bundle, the wording from the component.
+    /// </summary>
+    public string? RedTapeBlockKey(SessionObjectiveDto so)
+    {
+        if (Session is not { } s || !RedTapeOn) return null;
+        if (so.Purged) return "redtape.purged";
+        if (Objective(so.ObjectiveId)?.Stage != ObjectiveStage.StageII) return null;
+        if (s.RedTapeVariant == RedTapeVariant.Bureaucracy && s.CurrentRound <= GameRules.RedTapeStageIILockedThrough)
+            return "redtape.lockedRounds";
+        if (s.RedTapeVariant == RedTapeVariant.Lite && ClearStageI < GameRules.RedTapeScorableStageI)
+            return "redtape.lockedStageI";
+        return null;
+    }
+
+    /// <summary>
+    /// Red Tape: somebody holds the card that carries the variant's ability this round. That is the whole
+    /// fork in both variants — the holder CHOOSES which marker comes off, and if nobody holds it one comes
+    /// off at random instead. Mirrors <c>RedTape.NobodyTookCarrier</c>, including reading
+    /// <c>RedTapeCardNumber</c> straight rather than through <c>GameRules.RedTapeCarrierCard</c>: the server
+    /// decides on that field, and a client that normalised it differently would answer a different question.
+    /// </summary>
+    public bool CarrierTaken => Session is { } s && RedTapeOn
+        && s.Players.Any(p => p.StrategyCards.Any(c => c.StrategyCardId == s.RedTapeCardNumber));
+
+    /// <summary>Stage I objectives whose tape is off (purged ones never score, so they don't count).</summary>
+    public int ClearStageI => Session is null ? 0
+        : Session.Objectives.Count(o => Objective(o.ObjectiveId)?.Stage == ObjectiveStage.StageI
+                                        && o.MarkerRemoved && !o.Purged);
+
+    // --- Red Tape Lite's two questions ------------------------------------------------------------------
+    // Neither the purge nor the random removal happens on its own any more: the server proposes and the HOST
+    // answers (RedTapeModal). Both are irreversible and both change who can still win, which is why they are
+    // questions and not events.
+
+    /// <summary>Objectives the app is proposing to purge, waiting for the host's answer (empty = none). Only
+    /// what was already on the table when the fifth Stage I came clear is ever in here.</summary>
+    public IReadOnlyList<SessionObjectiveDto> RedTapePurgeProposal => Session is null
+        ? Array.Empty<SessionObjectiveDto>()
+        : Session.Objectives.Where(o => o.PurgePending).ToList();
+
+    /// <summary>A random removal is being asked about (nobody took the carrier card this round).</summary>
+    public bool RedTapeRandomAsking => Session?.RedTapeRandomPendingRound > 0;
 
     /// <summary>Whether this device may edit the given player: self always, the host may edit anyone,
     /// or anyone when the session has open editing enabled.</summary>
     public bool CanEdit(Guid playerId)
         => Session is not null && (IsHost || Session.AllowEditAllPlayers || playerId == MyPlayerId);
 
-    public int MaxStrategyCards => (Session?.Players.Count ?? 0) <= 4 ? 2 : 1;
+    /// <summary>Strategy cards each player takes this round — the printed rule unless the table pinned a
+    /// count. Same helper the server enforces with, so the two can't drift.</summary>
+    public int MaxStrategyCards =>
+        GameRules.StrategyCardsPerPlayer(Session?.Players.Count ?? 0, Session?.StrategyCardsPerPlayer ?? 0);
 
     /// <summary>Argent Flight's faction slug — it always votes first in the agenda phase.</summary>
     public const string ArgentFactionId = "argent";
@@ -93,6 +294,8 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         var langStr = await storage.GetAsync(KeyLang);
         if (Enum.TryParse<Language>(langStr, out var lang)) loc.SetLanguage(lang);
 
+        SenateEnabled = await storage.GetAsync(KeySenate) != "0";   // absent = on
+
         if (!_langPersistHooked)
         {
             loc.OnChange += async () => await storage.SetAsync(KeyLang, loc.Lang.ToString());
@@ -111,7 +314,65 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         OnChange?.Invoke();
     }
 
-    public Task<string?> GetLastCodeAsync() => storage.GetAsync(KeyCode).AsTask();
+    // --- remembered sessions ----------------------------------------------------------------------
+    // A device plays more than one game over time, and a group often runs a session over several evenings,
+    // so "the last code" was too little: the start page lists the recent ones and each carries the SEAT this
+    // device held there (see RecentSession — the device token alone cannot express that).
+
+    /// <summary>Sessions this device has been in, newest first — at most <see cref="MaxRecent"/>.</summary>
+    public async Task<List<RecentSession>> RecentAsync()
+    {
+        var raw = await storage.GetAsync(KeyRecent);
+        List<RecentSession>? list = null;
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            try { list = JsonSerializer.Deserialize<List<RecentSession>>(raw); } catch { /* unreadable → start over */ }
+        }
+        list ??= new List<RecentSession>();
+        // Before this list existed, one session was remembered under two flat keys. Carry that one over, or
+        // an update mid-game would look to the table like their session had vanished.
+        if (list.Count == 0)
+        {
+            var code = await storage.GetAsync(KeyCode);
+            var player = await storage.GetAsync(KeyPlayer);
+            if (!string.IsNullOrWhiteSpace(code) && Guid.TryParse(player, out var legacy))
+                list.Add(new RecentSession(code, "", "", legacy, DateTimeOffset.UtcNow));
+        }
+        return list.OrderByDescending(r => r.LastSeen).Take(MaxRecent).ToList();
+    }
+
+    /// <summary>Record (or refresh) this device's seat in a session, and drop the oldest beyond the cap.</summary>
+    private async Task RememberAsync(SessionStateDto s, Guid playerId)
+    {
+        var list = await RecentAsync();
+        list.RemoveAll(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
+        var name = s.Players.FirstOrDefault(p => p.Id == playerId)?.Name ?? "";
+        list.Insert(0, new RecentSession(s.JoinCode, s.Name, name, playerId, DateTimeOffset.UtcNow, s.CreatedAtUtc));
+        if (list.Count > MaxRecent) list.RemoveRange(MaxRecent, list.Count - MaxRecent);
+        await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
+    }
+
+    /// <summary>Forget a session — it is gone from the server (archived, wiped) or the code was wrong.</summary>
+    public async Task ForgetRecentAsync(string code)
+    {
+        var list = await RecentAsync();
+        if (list.RemoveAll(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase)) == 0) return;
+        await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
+    }
+
+    /// <summary>
+    /// Keep the session in the list but forget WHICH seat this device held in it, so coming back asks who to
+    /// be instead of walking into a player that is no longer ours. Two things do this: leaving a session on
+    /// purpose ("leave" rather than "close"), and having the seat taken over by somebody else.
+    /// </summary>
+    public async Task ForgetSeatAsync(string code)
+    {
+        var list = await RecentAsync();
+        var idx = list.FindIndex(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0 || list[idx].PlayerId == Guid.Empty) return;
+        list[idx] = list[idx] with { PlayerId = Guid.Empty, PlayerName = "" };
+        await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
+    }
 
     public async Task<SessionStateDto?> CreateAsync(CreateSessionRequest req)
     {
@@ -143,19 +404,15 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     {
         Content ??= await api.GetContentAsync();
         var s = await api.GetSessionAsync(code);
-        if (s is null) { Session = null; OnChange?.Invoke(); return false; }
+        // Gone from the server (archived, or wiped by the retention worker): drop it from the list here, so
+        // stale entries clean themselves up instead of collecting as dead rows on the start page.
+        if (s is null) { await ForgetRecentAsync(code); Session = null; OnChange?.Invoke(); return false; }
 
         Session = s;
-
-        var storedCode = await storage.GetAsync(KeyCode);
-        var storedPlayer = await storage.GetAsync(KeyPlayer);
-        if (storedCode == s.JoinCode && Guid.TryParse(storedPlayer, out var pid) && s.Players.Any(p => p.Id == pid))
-        {
-            MyPlayerId = pid;
-        }
-
+        await AdoptSeatAsync(s);
         ApplySessionLanguageIfUnset(s);
         await EnsureHubAsync(s.JoinCode);
+        await RefreshLogAsync(); // the turn timer needs the log right away, not only after the first change
         OnChange?.Invoke();
         return true;
     }
@@ -163,18 +420,100 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public async Task Mutate(Task<SessionStateDto?> apiCall)
     {
         var s = await apiCall;
-        if (s is not null) { Session = s; OnChange?.Invoke(); }
+        if (s is not null)
+        {
+            Session = s;
+            await RefreshLogAsync();
+            OnChange?.Invoke();
+        }
         else await RefreshAsync();
     }
 
     public async Task RefreshAsync()
     {
         if (Session is null) return;
-        Session = await api.GetSessionAsync(Session.JoinCode);
+        var (fresh, gone) = await api.ReadSessionAsync(Session.JoinCode);
+        if (gone)
+        {
+            // The session was deleted while this device was in it — the host ended and closed the game, or
+            // the retention worker wiped it. Everything here now describes something that does not exist, so
+            // let go of it and let the shell take the device somewhere real. Before this, the state was
+            // simply nulled and every view sat on its loading screen forever.
+            // The HUB is deliberately not touched here: this runs inside its own message handler, and
+            // disposing a connection from within its processing loop is asking for a deadlock. The shell
+            // calls LeaveAsync when it handles the event, one dispatcher hop later.
+            var code = Session.JoinCode;
+            Session = null;
+            MyPlayerId = null;
+            _lastRemembered = null;
+            Log = Array.Empty<SessionLogEntryDto>();
+            await ForgetRecentAsync(code);
+            OnChange?.Invoke();
+            OnSessionGone?.Invoke();
+            return;
+        }
+        // A throttled read (429) says nothing about the session — keep what we have and wait for the next
+        // change. Overwriting it with null was the same infinite loading screen, one rate limit later.
+        if (fresh is null) return;
+        Session = fresh;
+        await AdoptSeatAsync(fresh);
+        await RefreshLogAsync();
         OnChange?.Invoke();
     }
 
-    /// <summary>Fully leave the current session: disconnect, forget identity, clear persistence.</summary>
+    /// <summary>The session this device was in no longer exists on the server.</summary>
+    public event Action? OnSessionGone;
+
+    /// <summary>
+    /// Somebody took this device's seat over: the session is still there, but this device is no longer that
+    /// player. Raised from the read path so the shell can send it back to the join menu.
+    /// </summary>
+    public event Action? OnSeatLost;
+
+    /// <summary>
+    /// Reconcile which seat this device holds with what the SERVER says it holds
+    /// (<see cref="SessionStateDto.CallerPlayerId"/>, filled only by the by-code read).
+    /// <para>
+    /// The remembered seat used to be taken at face value, and that is exactly what broke when a joiner
+    /// claimed it: the displaced device kept a session that looked completely alive — every button there,
+    /// nothing greyed out — while the server no longer recognised it as that player, so every tap came back
+    /// 403 and did nothing at all. The device token is the truth about who this device is, so it decides.
+    /// </para></summary>
+    private async Task AdoptSeatAsync(SessionStateDto s)
+    {
+        if (s.CallerPlayerId is Guid seat)
+        {
+            var isNew = MyPlayerId != seat;
+            MyPlayerId = seat;
+            // Refresh the remembered entry: names change, and the list is ordered by last use.
+            if (isNew || _lastRemembered != s.JoinCode)
+            {
+                _lastRemembered = s.JoinCode;
+                await RememberAsync(s, seat);
+            }
+            return;
+        }
+
+        // No seat here. Only interesting if we thought we had one — a wall display never did.
+        var remembered = (await RecentAsync())
+            .FirstOrDefault(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
+        var hadSeat = MyPlayerId is not null || (remembered is not null && remembered.PlayerId != Guid.Empty);
+        if (!hadSeat) return;
+
+        MyPlayerId = null;
+        await ForgetSeatAsync(s.JoinCode);
+        OnSeatLost?.Invoke();
+    }
+
+    /// <summary>Which session the recent list was last written for, so a refresh every few seconds doesn't
+    /// rewrite localStorage on every single change.</summary>
+    private string? _lastRemembered;
+
+    /// <summary>
+    /// Leave the current session on this device: disconnect and drop the live state. The entry in the recent
+    /// list is deliberately KEPT — leaving and coming back later is the whole point of that list (use
+    /// <see cref="ForgetRecentAsync"/> for a session that is really gone).
+    /// </summary>
     public async Task LeaveAsync()
     {
         if (_hub is not null)
@@ -186,6 +525,8 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         _joinedCode = null;
         Session = null;
         MyPlayerId = null;
+        _lastRemembered = null;
+        Log = Array.Empty<SessionLogEntryDto>();
         await storage.RemoveAsync(KeyCode);
         await storage.RemoveAsync(KeyPlayer);
         OnChange?.Invoke();
@@ -198,10 +539,11 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         DeviceToken = result.DeviceToken;
         api.SetDeviceToken(result.DeviceToken);
         await storage.SetAsync(KeyDevice, result.DeviceToken);
-        await storage.SetAsync(KeyCode, result.Session.JoinCode);
-        await storage.SetAsync(KeyPlayer, result.PlayerId.ToString());
+        _lastRemembered = result.Session.JoinCode;
+        await RememberAsync(result.Session, result.PlayerId);
         ApplySessionLanguageIfUnset(result.Session);
         await EnsureHubAsync(result.Session.JoinCode);
+        await RefreshLogAsync();
         OnChange?.Invoke();
     }
 
@@ -254,9 +596,27 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         get
         {
             var s = Session;
-            if (s is null || s.CurrentAgendaId is null) return AgendaStage.Influence;
+            // A free vote (no agenda card) counts as "something is on the table" just like an agenda.
+            if (s is null || (s.CurrentAgendaId is null && string.IsNullOrEmpty(s.CustomVoteTitle)))
+                return AgendaStage.Influence;
             if (!s.VotingStarted) return AgendaStage.AgendaRevealed;
-            return s.AgendaVotesHidden ? AgendaStage.VotingHidden : AgendaStage.VotingOpen;
+            if (!s.AgendaVotesHidden) return AgendaStage.VotingOpen;
+            return s.AgendaTotalsRevealed ? AgendaStage.VotingHiddenTotals : AgendaStage.VotingHidden;
+        }
+    }
+
+    /// <summary>True while a free vote (no agenda card) is on the table.</summary>
+    public bool CustomVoteActive => !string.IsNullOrEmpty(Session?.CustomVoteTitle);
+
+    /// <summary>What the thing on the table elects — from the agenda, or from the free vote. One place, so
+    /// the control view and the wall can never disagree about which pickers to show.</summary>
+    public ElectType AgendaElectKind
+    {
+        get
+        {
+            if (Session is not { } s) return ElectType.ForAgainst;
+            if (!string.IsNullOrEmpty(s.CustomVoteTitle)) return s.CustomVoteElect ?? ElectType.ForAgainst;
+            return Agenda(s.CurrentAgendaId) is { } a ? AgendaDisplay.ElectKind(a) : ElectType.ForAgainst;
         }
     }
 
@@ -336,5 +696,7 @@ public enum AgendaStage
     /// <summary>Open voting: drafts are locked one by one and shown as they lock.</summary>
     VotingOpen,
     /// <summary>Face-down voting: only "voted" shows until the host reveals.</summary>
-    VotingHidden
+    VotingHidden,
+    /// <summary>Face-down voting, intermediate step: the totals are public, who voted what is not.</summary>
+    VotingHiddenTotals
 }

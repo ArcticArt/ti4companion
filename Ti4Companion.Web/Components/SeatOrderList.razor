@@ -1,0 +1,198 @@
+@inherits Ti4ComponentBase
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    The table in seat order: drag a row by its grip (or use the arrows) to reorder, tap a row's token to make
+    that player speaker, or roll for one.
+
+    Used twice — as the setup's seating step and inside the "is the seating right?" dialog before the game
+    starts — which is why it is a component and not markup in both places.
+
+    Reordering uses POINTER events, never the HTML5 drag events: those don't fire on touch and the device that
+    runs the table is an iPad. `ti4.seatDrag` only reports which row the pointer is over; Blazor keeps owning
+    the DOM and re-renders the preview order, so JS never moves a node behind its diff's back.
+*@
+<div class="grid seat-list" style="gap:.35rem;" @ref="seatList">
+    @{ var seatOrdered = SeatOrdered(); }
+    @for (var i = 0; i < seatOrdered.Count; i++)
+    {
+        var p = seatOrdered[i];
+        var idx = i;
+        var pid = p.Id;
+        // During a roll the highlight follows `rollAt`, so the token visibly travels; afterwards it is simply
+        // whoever the session says the speaker is.
+        var isSpeaker = rollAt is null ? Store.Session!.SpeakerPlayerId == p.Id : rollAt == p.Id;
+        var landed = rollLanded == p.Id;
+        <div @key="p.Id" class="player-card seat-confirm-row @(dragFrom == idx ? "dragging" : "") @(landed ? "speaker-landed" : "")"
+             style="--player-color:@p.ColorHex;" data-seat-idx="@idx">
+            <span class="seat-grip" data-seat-grip title='@Loc["setup.dragSeat"]'>⠿</span>
+            <span class="seat-no">@(i + 1)</span>
+            <FactionBadge Faction="Store.Faction(p.FactionId)" Size="1.6" Ring="@p.ColorHex" />
+            <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">@p.Name</strong>
+            @* The speaker decides who picks first, so it belongs on the screen where the order is settled.
+               Same control as the Players tab: the verb while they are not the speaker, the token once they
+               are — a row of identical dashes said nothing about what tapping one would do. *@
+            <button class="btn btn-sm seat-speaker @(isSpeaker ? "btn-gold" : "")"
+                    disabled="@rolling" @onclick="() => SetSpeaker(pid)" title='@Loc["setup.makeSpeaker"]'>
+                @if (isSpeaker) { <SpeakerIcon SizeCss="1.3em" /> }
+                else { <span class="ss-make">@Loc["setup.makeSpeaker"]</span> }
+            </button>
+            @* Arrow fallback: always works, including where a drag is awkward. *@
+            <span class="seat-arrows">
+                <button class="btn btn-sm btn-ghost" disabled="@(idx == 0)" @onclick="() => Nudge(idx, -1)" title='@Loc["setup.moveUp"]'><MaterialIcon Name="arrow_upward" /></button>
+                <button class="btn btn-sm btn-ghost" disabled="@(idx == seatOrdered.Count - 1)" @onclick="() => Nudge(idx, 1)" title='@Loc["setup.moveDown"]'><MaterialIcon Name="arrow_downward" /></button>
+            </span>
+        </div>
+    }
+</div>
+@* The roll button lives with the step's navigation (see SetupView) — one place for "what do I do on this
+   screen", instead of a control buried under the list. *@
+<div class="row-wrap" style="gap:.5rem;align-items:center;margin:.5rem 0 0;">
+    <span class="faint" style="font-size:.78rem;">@Loc[Store.Session!.SpeakerPlayerId is null ? "setup.noSpeakerYet" : "setup.speakerLbl"]</span>
+</div>
+<p class="faint" style="font-size:.78rem;margin:.4rem 0 0;">@Loc["setup.confirmSeatDragHint"]</p>
+
+@code {
+    private Guid Sid => Store.Session!.Id;
+
+    // `preview` holds the order while a drag is in flight, so the rows follow the finger without a server
+    // roundtrip per pixel; it is committed on release and then dropped so the server state wins again.
+    private ElementReference seatList;
+    private DotNetObjectReference<SeatOrderList>? selfRef;
+    private IJSObjectReference? dragHandle;
+    private List<Guid>? preview;
+    private int dragFrom = -1;
+
+    private List<PlayerDto> SeatOrdered()
+    {
+        var s = Store.Session!;
+        var byId = s.Players.ToDictionary(p => p.Id);
+        if (preview is not null && preview.Count == s.Players.Count && preview.All(byId.ContainsKey))
+            return preview.Select(id => byId[id]).ToList();
+        return s.Players.OrderBy(p => p.SeatOrder).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (dragHandle is null)
+        {
+            selfRef ??= DotNetObjectReference.Create(this);
+            dragHandle = await JS.InvokeAsync<IJSObjectReference>("ti4.seatDrag", seatList, selfRef);
+        }
+    }
+
+    [JSInvokable]
+    public void DragStart(int index) => InvokeAsync(() =>
+    {
+        preview ??= Store.Session!.Players.OrderBy(p => p.SeatOrder).Select(p => p.Id).ToList();
+        dragFrom = index;
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public void DragOver(int index) => InvokeAsync(() =>
+    {
+        if (preview is null || dragFrom < 0 || index == dragFrom || index >= preview.Count) return;
+        var id = preview[dragFrom];
+        preview.RemoveAt(dragFrom);
+        preview.Insert(index, id);
+        dragFrom = index;
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task DragEnd() => InvokeAsync(async () =>
+    {
+        dragFrom = -1;
+        await CommitSeatOrder();
+    });
+
+    private async Task Nudge(int index, int delta)
+    {
+        var order = SeatOrdered().Select(p => p.Id).ToList();
+        var target = index + delta;
+        if (target < 0 || target >= order.Count) return;
+        (order[index], order[target]) = (order[target], order[index]);
+        preview = order;
+        await CommitSeatOrder();
+    }
+
+    private async Task CommitSeatOrder()
+    {
+        if (preview is null) return;
+        var order = preview;
+        await Store.Mutate(Store.Api.SetSeatOrderAsync(Sid, order));
+        preview = null; // server state takes over again
+    }
+
+    private Task SetSpeaker(Guid playerId)
+        => Store.Mutate(Store.Api.UpdateSessionAsync(Sid, new UpdateSessionRequest(null, null, null, null, null, null, null, playerId)));
+
+    // --- rolling for the speaker ------------------------------------------------------------------------
+    // `rollAt` is where the token is right now while it travels; `rollLanded` makes the winning row glow for
+    // a moment afterwards. Both are per-device display state: only this screen animates, the SPEAKER itself
+    // is set once, at the end, through the normal mutation — so nobody else sees the token flickering and no
+    // intermediate value ever reaches the server.
+    private Guid? rollAt;
+    private Guid? rollLanded;
+    private bool rolling;
+
+    /// <summary>
+    /// Roll for the speaker, visibly. The token hops from player to player and slows down before it settles,
+    /// because a name that simply changes reads as a glitch to everyone who blinked. Nobody wants to argue
+    /// about who goes first, and <see cref="Random.Shared"/> is fine for it: a seating decision, not a
+    /// shuffle anyone could gain from predicting.
+    /// </summary>
+    public async Task RollAsync()
+    {
+        var players = Store.Session!.Players.OrderBy(p => p.SeatOrder).ToList();
+        if (players.Count == 0 || rolling) return;
+
+        rolling = true;
+        rollLanded = null;
+        try
+        {
+            var winner = players[Random.Shared.Next(players.Count)];
+            // Land ON the winner: walk whole laps plus the offset to their seat, so the last hop is the win
+            // rather than an arbitrary stop that then jumps.
+            var at = Random.Shared.Next(players.Count);
+            var laps = 2 * players.Count + ((players.IndexOf(winner) - at + players.Count * 3) % players.Count);
+            for (var i = 0; i <= laps; i++)
+            {
+                rollAt = players[at].Id;
+                StateHasChanged();
+                // Ease out: quick at first, dragging at the end. Same shape as a physical spinner.
+                var progress = laps == 0 ? 1d : (double)i / laps;
+                await Task.Delay(45 + (int)(progress * progress * 260));
+                at = (at + 1) % players.Count;
+            }
+            rollAt = winner.Id;
+            rollLanded = winner.Id;
+            StateHasChanged();
+            await SetSpeaker(winner.Id);
+        }
+        finally
+        {
+            rolling = false;
+            rollAt = null;          // the session's own speaker takes over the highlight again
+            StateHasChanged();
+        }
+        // Let the glow be seen, then drop it. Failing to await here would clear it in the same frame.
+        await Task.Delay(1400);
+        rollLanded = null;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (dragHandle is not null)
+        {
+            try { await dragHandle.InvokeVoidAsync("dispose"); } catch { }
+            try { await dragHandle.DisposeAsync(); } catch { }
+            dragHandle = null;
+        }
+        selfRef?.Dispose();
+        Dispose();
+    }
+}

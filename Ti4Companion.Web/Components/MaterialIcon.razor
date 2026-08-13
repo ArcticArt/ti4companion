@@ -1,0 +1,139 @@
+@inherits Ti4ComponentBase
+
+@*
+    Google Material Symbols, inlined.
+
+    Inlined rather than loaded as a font or an <img>: the wall display has to work on a LAN with no
+    internet, and the app's CSP blocks fetched resources anyway. Paths are the unmodified 24px outlined
+    symbols from github.com/google/material-design-icons (Apache License 2.0) — hence the odd but
+    original `0 -960 960 960` viewBox. Credited in the footer.
+
+    Sized in `em` so an icon follows the surrounding text, and filled with `currentColor` so it takes
+    the button's colour (including the hover/disabled states) without extra rules.
+*@
+<svg class="micon @Class" viewBox="0 -960 960 960" style="@SizeStyle" fill="currentColor"
+     aria-hidden="true" focusable="false"><path d="@Path" /></svg>
+
+@code {
+    /// <summary>Icon name, one of the keys in <see cref="Paths"/>.</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    /// <summary>Any CSS length; defaults to 1.15em (a shade larger than the text, like Material's own guidance).</summary>
+    [Parameter] public string SizeCss { get; set; } = "1.15em";
+
+    [Parameter] public string? Class { get; set; }
+
+    private string SizeStyle => $"width:{SizeCss};height:{SizeCss};";
+
+    private string Path => Paths.TryGetValue(Name, out var d) ? d : "";
+
+    private static readonly Dictionary<string, string> Paths = new()
+    {
+        // Joining by pointing the phone at the wall (QrScanModal). Shown only where a camera can be used;
+        // `cameraswitch` only when the device reports more than one.
+        ["cameraswitch"] =
+            "M320-280q-33 0-56.5-23.5T240-360v-240q0-33 23.5-56.5T320-680h40l40-40h160l40 40h40q33 0 56.5 23.5T720-600v240" +
+            "q0 33-23.5 56.5T640-280H320Zm0-80h320v-240H320v240Zm160-40q33 0 56.5-23.5T560-480q0-33-23.5-56.5T480-560" +
+            "q-33 0-56.5 23.5T400-480q0 33 23.5 56.5T480-400ZM342-940q34-11 68.5-15.5T480-960q94 0 177.5 33.5t148 93" +
+            "Q870-774 911-693.5T960-520h-80q-7-72-38-134.5t-79.5-110Q714-812 651-842t-135-36l62 62-56 56-180-180ZM618-20" +
+            "Q584-9 549.5-4.5T480 0q-94 0-177.5-33.5t-148-93Q90-186 49-266.5T0-440h80q8 72 38.5 134.5t79 110Q246-148 309-118" +
+            "t135 36l-62-62 56-56L618-20ZM480-480Z",
+        ["photo_camera"] =
+            "M480-260q75 0 127.5-52.5T660-440q0-75-52.5-127.5T480-620q-75 0-127.5 52.5T300-440q0 75 52.5 127.5T480-260Z" +
+            "m0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.5-23.5T80-200" +
+            "v-480q0-33 23.5-56.5T160-760h126l74-80h240l74 80h126q33 0 56.5 23.5T880-680v480q0 33-23.5 56.5T800-120H160Z" +
+            "m0-80h640v-480H638l-73-80H395l-73 80H160v480Zm320-240Z",
+        ["qr_code"] =
+            "M120-520v-320h320v320H120Zm80-80h160v-160H200v160Zm-80 480v-320h320v320H120Zm80-80h160v-160H200v160Z" +
+            "m320-320v-320h320v320H520Zm80-80h160v-160H600v160Zm160 480v-80h80v80h-80ZM520-360v-80h80v80h-80Zm80 80v-80h80v80h-80Z" +
+            "m-80 80v-80h80v80h-80Zm80 80v-80h80v80h-80Zm80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80 80v-80h80v80h-80Z",
+        ["notifications"] =
+            "M160-200v-80h80v-280q0-83 50-147.5T420-792v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 20 130 84.5T720-560v280h80v80H160Z" +
+            "m320-300Zm0 420q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM320-280h320v-280q0-66-47-113t-113-47q-66 0-113 47t-47 113v280Z",
+        ["notifications_off"] =
+            "M160-200v-80h80v-280q0-33 8.5-65t25.5-61l60 60q-7 16-10.5 32.5T320-560v280h248L56-792l56-56 736 736-56 56-146-144H160Z" +
+            "m560-154-80-80v-126q0-66-47-113t-113-47q-26 0-50 8t-44 24l-58-58q20-16 43-28t49-18v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 20 130 84.5T720-560v206Z" +
+            "m-276-50Zm36 324q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80Zm33-481Z",
+        ["open_in_new"] =
+            "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Z" +
+            "m188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z",
+        ["person"] =
+            "M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-160v-112q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v112H160Z" +
+            "m80-80h480v-32q0-11-5.5-20T700-306q-54-27-109-40.5T480-360q-56 0-111 13.5T260-306q-9 5-14.5 14t-5.5 20v32Zm240-320q33 0 56.5-23.5T560-640q0-33-23.5-56.5T480-720q-33 0-56.5 23.5T400-640q0 33 23.5 56.5T480-560Zm0-80Zm0 400Z",
+        ["tv"] =
+            "M320-120v-80H160q-33 0-56.5-23.5T80-280v-480q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v480q0 33-23.5 56.5T800-200H640v80H320Z" +
+            "M160-280h640v-480H160v480Zm0 0v-480 480Z",
+        // The ◂ ▸ glyphs the buttons used to carry were a font's idea of an arrow; these are the real thing.
+        ["chevron_left"] =
+            "M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z",
+        ["chevron_right"] =
+            "M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z",
+        // Rolling for the speaker.
+        ["casino"] =
+            "M300-240q25 0 42.5-17.5T360-300q0-25-17.5-42.5T300-360q-25 0-42.5 17.5T240-300q0 25 17.5 42.5T300-240Z" +
+            "m0-360q25 0 42.5-17.5T360-660q0-25-17.5-42.5T300-720q-25 0-42.5 17.5T240-660q0 25 17.5 42.5T300-600Z" +
+            "m180 180q25 0 42.5-17.5T540-480q0-25-17.5-42.5T480-540q-25 0-42.5 17.5T420-480q0 25 17.5 42.5T480-420Z" +
+            "m180 180q25 0 42.5-17.5T720-300q0-25-17.5-42.5T660-360q-25 0-42.5 17.5T600-300q0 25 17.5 42.5T660-240Z" +
+            "m0-360q25 0 42.5-17.5T720-660q0-25-17.5-42.5T660-720q-25 0-42.5 17.5T600-660q0 25 17.5 42.5T660-600Z" +
+            "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z" +
+            "m0-80h560v-560H200v560Zm0-560v560-560Z",
+        // Red Tape: putting a marker back on ("Seal").
+        ["lock"] =
+            "M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Z" +
+            "m0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280Z" +
+            "M360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80ZM240-160v-400 400Z",
+        // Red Tape: the victory points a marker is covering — a "?" read as "we don't know", which is not what
+        // a sealed objective means: the value exists, you are just not allowed to see it yet.
+        ["visibility_off"] =
+            "m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Z" +
+            "m128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Z" +
+            "m20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56Z" +
+            "M222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Z" +
+            "m319 93Zm-151 75Z",
+        // The iOS "add to the home screen" walk-through: Safari's share glyph, then the entry in that sheet.
+        ["ios_share"] =
+            "M240-40q-33 0-56.5-23.5T160-120v-440q0-33 23.5-56.5T240-640h120v80H240v440h480v-440H600v-80h120q33 0 56.5 23.5T800-560v440q0 33-23.5 56.5T720-40H240Z" +
+            "m200-280v-447l-64 64-56-57 160-160 160 160-56 57-64-64v447h-80Z",
+        ["add_to_home_screen"] =
+            "M320-40q-33 0-56.5-23.5T240-120v-160h80v40h400v-480H320v40h-80v-160q0-33 23.5-56.5T320-920h400q33 0 56.5 23.5T800-840v720q0 33-23.5 56.5T720-40H320Z" +
+            "m0-120v40h400v-40H320ZM176-280l-56-56 224-224H200v-80h280v280h-80v-144L176-280Z" +
+            "m144-520h400v-40H320v40Zm0 0v-40 40Zm0 640v40-40Z",
+        // The rest of what used to be emoji or a typographic stand-in: ⏱ ⏸ 🔗 ✕ ✓ ↺ ⟳ ▶. An emoji is a
+        // picture the FONT chooses (colourful on one platform, a hollow outline on the next, and it never
+        // takes the button's colour); these do, because they are `currentColor` paths like every other icon
+        // here.
+        ["timer"] =
+            "M360-840v-80h240v80H360Zm80 440h80v-240h-80v240Zm40 320q-74 0-139.5-28.5T226-186q-49-49-77.5-114.5T120-440q0-74 28.5-139.5T226-694q49-49 114.5-77.5T480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80Z" +
+            "m0-80q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Zm0-280Z",
+        ["link"] =
+            "M440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Z" +
+            "m200 160v-80h160q50 0 85-35t35-85q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480q0 83-58.5 141.5T680-280H520Z",
+        ["pause"] =
+            "M520-200v-560h240v560H520Zm-320 0v-560h240v560H200Zm400-80h80v-400h-80v400Zm-320 0h80v-400h-80v400Zm0-400v400-400Zm320 0v400-400Z",
+        ["close"] =
+            "m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z",
+        ["check"] =
+            "M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z",
+        ["undo"] =
+            "M280-200v-80h284q63 0 109.5-40T720-420q0-60-46.5-100T564-560H312l104 104-56 56-200-200 200-200 56 56-104 104h252q97 0 166.5 63T800-420q0 94-69.5 157T564-200H280Z",
+        ["refresh"] =
+            "M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z",
+        ["play_arrow"] =
+            "M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z",
+        // Moving a seat up or down in the order (was ▲ ▼).
+        ["arrow_upward"] =
+            "M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z",
+        ["arrow_downward"] =
+            "M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z",
+        // "What is this?" next to the Red Tape variant, and the chevron on a collapsible section.
+        ["help"] =
+            "M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Z" +
+            "m-36-154h74q0-33 7.5-52t42.5-52q26-26 41-49.5t15-56.5q0-56-41-86t-97-30q-57 0-92.5 30T342-618l66 26q5-18 22.5-39t53.5-21q32 0 48 17.5t16 38.5q0 20-12 37.5T506-526q-44 39-54 59t-10 73Z" +
+            "m38 314q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z" +
+            "m0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z",
+        ["expand_more"] =
+            "M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z",
+        ["expand_less"] =
+            "m296-345-56-56 240-240 240 240-56 56-184-184-184 184Z",
+    };
+}

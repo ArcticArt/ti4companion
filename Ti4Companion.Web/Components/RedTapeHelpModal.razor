@@ -1,0 +1,94 @@
+@inherits Ti4ComponentBase
+
+@*
+    "What is Red Tape?" — the explanation behind the setup option, so a table can decide without leaving the
+    app to go and read a forum thread.
+
+    A short lead, then one collapsible section per published variant. `<details>`/`<summary>` rather than a
+    scripted accordion: it opens with the keyboard, survives without JS and needs no state of its own.
+
+    The text is our own summary of the two variants' mechanics plus what the app does about them — deliberately
+    NOT a copy of the posts, which are the authors' writing. Both are linked.
+*@
+@if (Show)
+{
+    <div class="modal-backdrop centered blurred" @onclick="Close">
+        <div class="modal redtape-help" @onclick:stopPropagation>
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["redtape.helpTitle"]</h3>
+            </div>
+            <div class="modal-body">
+                <p class="rth-lead">@Loc["redtape.helpLead"]</p>
+
+                <details class="rth-sec">
+                    <summary>
+                        @* Two chevrons, one hidden by CSS, rather than one rotated by a transform: the
+                           transform simply did not take on this element (an inline `rotate(45deg)` computed to
+                           the identity matrix, while the same class on a probe span next to it rotated fine),
+                           and toggling `display` off `[open]` is both robust and measurable. *@
+                        <span class="rth-chev rth-more"><MaterialIcon Name="expand_more" /></span>
+                        <span class="rth-chev rth-less"><MaterialIcon Name="expand_less" /></span>
+                        <span class="rth-name">@Loc["redtape.bureaucracy"]</span>
+                        <span class="faint rth-by">@string.Format(Loc["redtape.helpBy"], "WildFalkon")</span>
+                    </summary>
+                    <div class="rth-body">
+                        <h4>@Loc["redtape.helpSetup"]</h4>
+                        <ul>@foreach (var l in Lines("redtape.helpBurSetup")) { <li>@l</li> }</ul>
+                        <h4>@Loc["redtape.helpDuring"]</h4>
+                        <ul>@foreach (var l in Lines("redtape.helpBurPlay")) { <li>@l</li> }</ul>
+                        <h4>@Loc["redtape.helpInApp"]</h4>
+                        <ul>@foreach (var l in Lines("redtape.helpBurApp")) { <li>@l</li> }</ul>
+                        <a class="rth-link" href="https://www.reddit.com/r/twilightimperium/s/PLsWh9SJIg"
+                           target="_blank" rel="noopener">
+                            @Loc["redtape.helpPost"] <MaterialIcon Name="open_in_new" />
+                        </a>
+                    </div>
+                </details>
+
+                <details class="rth-sec">
+                    <summary>
+                        @* Two chevrons, one hidden by CSS, rather than one rotated by a transform: the
+                           transform simply did not take on this element (an inline `rotate(45deg)` computed to
+                           the identity matrix, while the same class on a probe span next to it rotated fine),
+                           and toggling `display` off `[open]` is both robust and measurable. *@
+                        <span class="rth-chev rth-more"><MaterialIcon Name="expand_more" /></span>
+                        <span class="rth-chev rth-less"><MaterialIcon Name="expand_less" /></span>
+                        <span class="rth-name">@Loc["redtape.lite"]</span>
+                        <span class="faint rth-by">@string.Format(Loc["redtape.helpBy"], "van nguyen")</span>
+                    </summary>
+                    <div class="rth-body">
+                        <h4>@Loc["redtape.helpSetup"]</h4>
+                        <ul>@foreach (var l in Lines("redtape.helpLiteSetup")) { <li>@l</li> }</ul>
+                        <h4>@Loc["redtape.helpLimits"]</h4>
+                        <ul>@foreach (var l in Lines("redtape.helpLiteLimits")) { <li>@l</li> }</ul>
+                        <h4>@Loc["redtape.helpDuring"]</h4>
+                        <ul>@foreach (var l in Lines("redtape.helpLitePlay")) { <li>@l</li> }</ul>
+                        <h4>@Loc["redtape.helpInApp"]</h4>
+                        <ul>@foreach (var l in Lines("redtape.helpLiteApp")) { <li>@l</li> }</ul>
+                        <a class="rth-link" href="https://www.reddit.com/r/twilightimperium/s/nWVCD7V3GD"
+                           target="_blank" rel="noopener">
+                            @Loc["redtape.helpPost"] <MaterialIcon Name="open_in_new" />
+                        </a>
+                    </div>
+                </details>
+            </div>
+            <div class="modal-actions">
+                <div class="spacer" style="flex:1"></div>
+                <button class="btn" @onclick="Close">@Loc["common.close"]</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    /// <summary>One loc string, `\n`-separated, as list items — the same idiom the strategy cards use for
+    /// their ★ bullets, so a translation stays one string per section.</summary>
+    private IEnumerable<string> Lines(string key)
+        => Loc[key].Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}

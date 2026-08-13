@@ -1,11 +1,12 @@
 @* A strategy card, colour-coded. Names only by default; ability text renders as ★ bullet points
    (one per line, like the physical cards). Pass OnClick to make the whole card clickable. *@
+@inject SessionStore Store
 
 <div class="strat @(Used ? "used" : "") @(Highlight ? "highlight" : "") @(Big ? "big-strat" : "") @(Clickable ? "clickable" : "")"
      style="--c:@Card.ColorHex" @onclick="HandleClick">
     <div class="strat-head">
         <span class="num">@Card.Initiative</span>
-        <span class="sname">@Loc.Pick(Card.Name, Card.NameDe)</span>
+        <span class="sname">@CardDisplay.Name(Loc, Store.Session, Card)</span>
         @if (TradeGoods > 0)
         {
             <span class="tg" title="@TgTitle"><img src="symbols/trade-good-1.png" class="tg-icon" alt="" /> @TradeGoods</span>
@@ -17,6 +18,28 @@
     </div>
     @if (ShowText)
     {
+        @* Red Tape variant: the addition the variant prints on top of the card, before the original steps.
+           The base text below is untouched (it comes from the master DB and stays the real card).
+           ⚠️ The two BUREAUCRACY lines are transcribed from that variant's printed card — the SPECIAL (one
+           marker per trade good) and its Stage II rule are ITS text. Red Tape Lite replaces no card at all:
+           it has no SPECIAL, its Stage II rule is a different one, and there is nothing to transcribe. So it
+           gets the app's own one-line summary instead of invented card text (same reason the objectives are
+           never paraphrased — see the content rule). *@
+        @if (RedTapeVariantHere == RedTapeVariant.Bureaucracy)
+        {
+            <div class="ability-label rt"><b>@Loc["redtape.cardLabel"]</b></div>
+            <ul class="ability-bullets rt-bullets">
+                <li>@Loc["redtape.cardSpecial"]</li>
+                <li>@Loc["redtape.cardPrimary"]</li>
+            </ul>
+        }
+        else if (RedTapeVariantHere == RedTapeVariant.Lite)
+        {
+            <div class="ability-label rt"><b>@Loc["redtape.cardLabel"]</b></div>
+            <ul class="ability-bullets rt-bullets">
+                <li>@Loc["redtape.actionLite"]</li>
+            </ul>
+        }
         <div class="ability-label"><b>@Loc["turn.primary"]</b></div>
         @Bullets(Loc.Pick(Card.PrimaryText, Card.PrimaryTextDe))
         <div class="ability-label"><b>@Loc["turn.secondary"]</b></div>
@@ -42,6 +65,14 @@
     [Inject] private Loc Loc { get; set; } = default!;
 
     private string TgTitle => $"{TradeGoods} {Loc["strategy.tradeGoods"]}";
+
+    /// <summary>This is the card the Red Tape variant replaced (Diplomacy or Imperial).</summary>
+    /// <summary>Which Red Tape variant's addition belongs on THIS card — <c>None</c> unless a variant is on
+    /// and this is the card carrying it.</summary>
+    private RedTapeVariant RedTapeVariantHere =>
+        Store.Session is { } s && Store.RedTapeOn && s.RedTapeCardNumber == Card.Id
+            ? s.RedTapeVariant
+            : RedTapeVariant.None;
 
     private Task HandleClick() => Clickable && OnClick.HasDelegate ? OnClick.InvokeAsync() : Task.CompletedTask;
 

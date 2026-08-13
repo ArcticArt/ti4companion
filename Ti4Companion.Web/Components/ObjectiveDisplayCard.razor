@@ -1,26 +1,145 @@
-@* One objective card for the wall display (used in both Stage I / Stage II columns). *@
+@* One objective card. Built for the wall display (both Stage I / Stage II columns) and reused in the
+   status phase's scoring stage, where the whole card is the tap target — like taking a strategy card. *@
 @inherits Ti4ComponentBase
 
-<div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1")">
+@* role/tabindex only when it really is a tap target: a bare div with @onclick is invisible to the keyboard
+   and to the accessibility tree (noticed while verifying — the card didn't show up as an element at all). *@
+<div class="obj-card @(So.CustomName is not null ? "secret" : Stage2 ? "stage2" : "stage1") @(Glow ? "glow" : "") @(Clickable ? "clickable" : "") @(So.Purged ? "purged" : "") @(Undo ? "marked" : "")"
+     role="@(Clickable ? "button" : null)" tabindex="@(Clickable ? "0" : null)"
+     title="@(Clickable && Undo ? (UndoTitle ?? Loc["status.tapToUnscore"]) : null)"
+     @onclick="OnCardClick" @onkeydown="OnCardKey">
     <div class="obj-head">
         <span class="obj-name">@Name</span>
-        <span class="obj-vp">@Pts</span>
+        @* Done in the way this list is about — scored by the player who is up, or its tape pulled in the Red
+           Tape dialog. The card STAYS either way, so a mis-tap can be taken back where it happened; it just
+           reads as done rather than as a choice. *@
+        @if (Undo)
+        {
+            <span class="obj-undo"><MaterialIcon Name="undo" SizeCss="1em" /> @(UndoText ?? Loc["status.scoredTapToUndo"])</span>
+        }
+        @* The physical variant lays the marker over the VICTORY POINT VALUE, deliberately not over the text —
+           the whole point is that everyone can read what is coming. Same here: the points are hidden while
+           the tape is on, the requirement stays legible. *@
+        <span class="obj-vp @(Taped ? "taped" : "")">
+            @if (Taped)
+            {
+                @* An icon, not a "?": a question mark reads as "we don't know", and that is not what a sealed
+                   objective means — the value exists, you are simply not allowed to see it yet. *@
+                <MaterialIcon Name="visibility_off" SizeCss="1em" Class="obj-vp-icon" />
+            }
+            else
+            {
+                @Pts?.ToString()
+            }
+        </span>
     </div>
     @if (Def is not null)
     {
         <div class="obj-req">@Loc.Pick(Def.Requirement, Def.RequirementDe)</div>
     }
-    <div class="obj-markers">
+    <div class="obj-markers @(Taped ? "taped" : "")">
+        @* Red Tape: the tape IS the control — no separate "sealed" label to read and no second button to
+           find. On the wall it stays a plain span (a display can't be tapped); where it can be removed it
+           takes two taps, because pulling the tape is exactly the kind of thing a stray touch shouldn't do. *@
+        @if (Taped)
+        {
+            var lockKey = Store.RedTapeBlockKey(So);
+            @if (!TapeClickable)
+            {
+                @* The wall says the STATE and nothing else — "SEALED", for a rule-locked Stage II just the
+                   same. It used to carry the control's own "tap the tape" string, which asked a projected
+                   screen full of people to tap a pointer-events:none span; and printing the whole rule there
+                   ("STAGE II — LOCKED FOR THE FIRST 3 ROUNDS") was reference text on a screen nobody reads
+                   from. The reason belongs where somebody can act on it. *@
+                <span class="rt-tape @(lockKey is not null ? "locked" : "")">@Loc["redtape.sealed"]</span>
+            }
+            else if (lockKey is null)
+            {
+                @* Free to pull: two taps, because the whole card is a scoring target here and a stray touch
+                   must not take a tape off. *@
+                <button class="rt-tape @(armed ? "armed" : "")" @onclick="TapeTap" @onclick:stopPropagation="true">
+                    @(armed ? Loc["redtape.confirmRemove"] : Loc["redtape.tapToRemove"])
+                </button>
+            }
+            else if (So.Purged)
+            {
+                @* Purged is not a lock, it is gone — nothing to ask about. *@
+                <span class="rt-tape locked">@Loc[lockKey]</span>
+            }
+            else
+            {
+                @* Locked by one of the variant's timing rules. Tappable on purpose: the table may have a
+                   reason the app cannot know, so it asks instead of refusing (see OnLockedTap). *@
+                <button class="rt-tape locked" @onclick="() => OnLockedTap.InvokeAsync(So)" @onclick:stopPropagation="true">
+                    @Loc[lockKey]
+                </button>
+            }
+        }
         @foreach (var pid in So.ScoredByPlayerIds)
         {
             var pl = Store.Session?.Players.FirstOrDefault(x => x.Id == pid);
-            if (pl is not null) { <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.4rem,3vh,3rem)" Ring="@pl.ColorHex" /> }
+            @* Scored in THIS round: the marker glows along with the card, so the table sees at a glance
+               what just happened rather than what happened four rounds ago. *@
+            var fresh = So.ScoredThisRoundPlayerIds?.Contains(pid) == true;
+            if (pl is not null)
+            {
+                <span class="objm @(fresh ? "fresh" : "")">
+                    <FactionBadge Faction="Store.Faction(pl.FactionId)" SizeCss="clamp(1.4rem,3vh,3rem)" Ring="@pl.ColorHex" />
+                </span>
+            }
         }
     </div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public SessionObjectiveDto So { get; set; } = default!;
+
+    /// <summary>Highlight the card (scored this round).</summary>
+    [Parameter] public bool Glow { get; set; }
+
+    /// <summary>Make the whole card a tap target. An explicit gate rather than a null check on
+    /// <see cref="OnClick"/> — an EventCallback is a struct and a `cond ? lambda : default` ternary
+    /// doesn't survive Razor's parameter binding.</summary>
+    [Parameter] public bool Clickable { get; set; }
+
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    /// <summary>This card is already done in whatever sense the list is about (scored by the player it is for,
+    /// or its tape pulled), so a tap takes that back.</summary>
+    [Parameter] public bool Undo { get; set; }
+
+    /// <summary>What "done" says on the card, and its tooltip. Defaults to the status phase's "scored".</summary>
+    [Parameter] public string? UndoText { get; set; }
+
+    /// <inheritdoc cref="UndoText"/>
+    [Parameter] public string? UndoTitle { get; set; }
+
+    /// <summary>Let the tape be pulled off here (two taps). Off on the wall, on in the status phase.</summary>
+    [Parameter] public bool TapeClickable { get; set; }
+
+    [Parameter] public EventCallback OnRemoveTape { get; set; }
+
+    /// <summary>A tape held shut by one of the variant's timing rules was tapped — the host is asking about
+    /// it. Only reachable where <see cref="TapeClickable"/> is on, and never for a purged objective.</summary>
+    [Parameter] public EventCallback<SessionObjectiveDto> OnLockedTap { get; set; }
+
+    private bool armed;
+
+    // First tap arms, second removes. Kept local: a confirm that lived in the session would show up on
+    // everyone's device, which is the opposite of what a confirmation is for.
+    private async Task TapeTap()
+    {
+        if (!armed) { armed = true; return; }
+        armed = false;
+        await OnRemoveTape.InvokeAsync();
+    }
+
+    private Task OnCardClick() => Clickable ? OnClick.InvokeAsync() : Task.CompletedTask;
+
+    private Task OnCardKey(KeyboardEventArgs e)
+        => Clickable && (e.Key == "Enter" || e.Key == " ") ? OnClick.InvokeAsync() : Task.CompletedTask;
+
+    private bool Taped => Store.RedTapeBlocks(So);
 
     private ObjectiveDto? Def => So.CustomName is null ? Store.Objective(So.ObjectiveId) : null;
     private bool Stage2 => Def?.Stage == ObjectiveStage.StageII;

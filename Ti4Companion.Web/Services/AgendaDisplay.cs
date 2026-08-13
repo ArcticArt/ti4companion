@@ -35,8 +35,11 @@ public static class AgendaDisplay
 
     /// <summary>The candidates a vote may back for this agenda (empty for For/Against and pure free-text).</summary>
     public static IReadOnlyList<Candidate> Candidates(SessionStore store, Loc loc, AgendaDto a)
+        => Candidates(store, loc, ElectKind(a));
+
+    /// <summary>Same by elect KIND, so a free vote with no agenda card uses the identical pickers.</summary>
+    public static IReadOnlyList<Candidate> Candidates(SessionStore store, Loc loc, ElectType kind)
     {
-        var kind = ElectKind(a);
         switch (kind)
         {
             case ElectType.Player:
@@ -68,9 +71,13 @@ public static class AgendaDisplay
 
     /// <summary>Resolve a stored choice key into a display label (falls back to the raw key for free text).</summary>
     public static string ChoiceLabel(SessionStore store, Loc loc, AgendaDto agenda, string? choice)
+        => ChoiceLabel(store, loc, ElectKind(agenda), choice);
+
+    /// <summary>Same by elect KIND (free vote with no agenda card).</summary>
+    public static string ChoiceLabel(SessionStore store, Loc loc, ElectType kind, string? choice)
     {
         if (string.IsNullOrEmpty(choice)) return "—";
-        switch (ElectKind(agenda))
+        switch (kind)
         {
             case ElectType.Player:
                 return store.Session?.Players.FirstOrDefault(p => p.Id.ToString() == choice)?.Name ?? choice;
