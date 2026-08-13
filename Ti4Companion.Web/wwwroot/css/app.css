@@ -399,7 +399,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
     box-shadow: 0 0 0 1px var(--sel, var(--gold)),
                 0 0 12px 1px color-mix(in srgb, var(--sel, var(--gold)) 60%, transparent);
     background: color-mix(in srgb, var(--sel, var(--gold)) 14%, var(--panel-2)); }
-/* A dark highlight (Obsidian, the Firmament, the L1Z1X, the player colour Black …) has nothing to tint the
+/* A grey-to-black highlight (Obsidian, the Firmament, the L1Z1X, the player colour Black) has nothing to tint the
    panel with: 14% of near-black over #16223f is still #16223f, so the tile looked unselected. Those drop to
    a dark neutral instead, which makes the ring and the halo the brightest thing on the tile. */
 .fp-item.sel.on-dark { background: #1c222a; }
