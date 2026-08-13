@@ -16,7 +16,8 @@
         {
             var sel = f.Id == Current;
             var hl = sel ? Highlight(f) : null;
-            <button type="button" class="fp-item @(sel ? "sel" : "")" title="@Loc.Pick(f.Name, f.NameDe)"
+            var dark = sel && IsDark(hl);
+            <button type="button" class="fp-item @(sel ? "sel" : "") @(dark ? "on-dark" : "")" title="@Loc.Pick(f.Name, f.NameDe)"
                     style="@(sel ? $"--sel:{hl}" : null)" @onclick="() => Pick(f.Id)">
                 <FactionBadge Faction="f" Size="2.8" Ring="@(sel ? hl : f.ColorHex)" />
                 <span class="fp-name">@Loc.Pick(f.Name, f.NameDe)</span>
@@ -43,6 +44,22 @@
         Ti4Colors.IsChosen(PlayerColor) ? PlayerColor!
         : !string.IsNullOrWhiteSpace(f.ColorHex) ? f.ColorHex
         : "#d9b04a";
+
+    /// <summary>A highlight colour too dark to read against the panel it sits on, so the tile drops to a
+    /// near-black background instead of tinting the panel with 14% of something almost invisible. Perceived
+    /// brightness (0.299/0.587/0.114 over 0..255), threshold 90: it takes in Obsidian (35), Nekro (49), the
+    /// Cabal (52), the Barony (60), the Firmament (61), the player colour Black (62), Crimson (67),
+    /// Sardakk (76), Deepwrought (78) and the L1Z1X (84), and stops short of the player colours Red (96) and
+    /// Blue (98), which read perfectly well as they are.</summary>
+    private static bool IsDark(string? hex)
+    {
+        var h = (hex ?? "").TrimStart('#');
+        if (h.Length != 6 || !int.TryParse(h, System.Globalization.NumberStyles.HexNumber,
+                                           System.Globalization.CultureInfo.InvariantCulture, out var rgb))
+            return false;
+        var (r, g, b) = ((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+        return 0.299 * r + 0.587 * g + 0.114 * b < 90;
+    }
 
     private string search = "";
     private string SearchPlaceholder => Loc["setup.searchFaction"];
