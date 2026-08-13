@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using System.Reflection
 @inject Loc Loc
 @inject SessionStore Store
 @inject NavigationManager Nav
@@ -78,6 +79,9 @@
            MaterialIcon.razor and QrScanModal.razor). *@
         <a href="https://boardgamegeek.com/filepage/180049/ti4-race-and-tech-symbols-vectorized" target="_blank" rel="noopener noreferrer">TI4 Race &amp; Tech Symbols (BGG)</a>
     </p>
+    @* The word is the same in both languages, so this needs no loc key. It is read off the assembly rather
+       than written here, so it can only ever say what was actually deployed. *@
+    <p class="legal-meta">Version @AppVersion</p>
 </footer>
 </div>
 
@@ -161,6 +165,15 @@
 }
 
 @code {
+    /// <summary>The product version from <c>Directory.Build.props</c>, shown in the footer. The informational
+    /// version carries a <c>+&lt;commit&gt;</c> suffix once a build stamps one, which is for a bug report,
+    /// not for a footer — so it is cut off here.</summary>
+    private static readonly string AppVersion =
+        (typeof(MainLayout).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+         ?? typeof(MainLayout).Assembly.GetName().Version?.ToString()
+         ?? "").Split('+')[0];
+
     private bool showStats;
     private bool showQr;
     private bool endGame;
