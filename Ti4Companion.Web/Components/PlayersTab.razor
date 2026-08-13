@@ -90,7 +90,10 @@
                     <label>@Loc["players.faction"]</label>
                     <div>
                         @* Other players' factions are filtered out, this player's own stays selectable. *@
+                        @* The STAGED colour, not the saved one: the popup asks for the colour first, so
+                           picking one there re-tints the selected symbol straight away. *@
                         <FactionPicker Factions="Store.ActiveFactions()" Current="@draftFaction"
+                                       PlayerColor="@draftColor"
                                        Taken="@TakenFactions(ed.Id)" OnPick="id => draftFaction = id" />
                     </div>
                 </div>

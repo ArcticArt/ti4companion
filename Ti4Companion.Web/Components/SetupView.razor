@@ -334,7 +334,8 @@
                 {
                     <div>
                         <label>@Loc["setup.chooseFaction"]</label>
-                        <FactionPicker Factions="Store.ActiveFactions()" Current="@p.FactionId" Taken="@TakenFactions(p.Id)" OnPick="id => SetFactionId(p.Id, id)" />
+                        <FactionPicker Factions="Store.ActiveFactions()" Current="@p.FactionId" PlayerColor="@p.ColorHex"
+                                       Taken="@TakenFactions(p.Id)" OnPick="id => SetFactionId(p.Id, id)" />
                     </div>
                     <div>
                         <label>@Loc["setup.chooseColor"]</label>

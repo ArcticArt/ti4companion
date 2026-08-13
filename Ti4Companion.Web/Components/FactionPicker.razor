@@ -1,5 +1,10 @@
 @* Faction picker that shows the faction symbols (reuses FactionBadge) instead of a plain <select>.
-   Optional search filters the grid; the selected faction is ringed in gold. *@
+   Optional search filters the grid.
+
+   The SELECTED faction is highlighted in the colour that says whose it is (2026-08-13, on request): the
+   player's own colour once they have picked one, and the faction's own colour while they have not. It used
+   to be gold for everybody, which told you which faction was selected but not who had it — and at setup,
+   where several rows are open at once, that is the more useful of the two. *@
 
 <div class="faction-picker">
     @if (Factions.Count() > 12)
@@ -10,9 +15,10 @@
         @foreach (var f in Filtered())
         {
             var sel = f.Id == Current;
+            var hl = sel ? Highlight(f) : null;
             <button type="button" class="fp-item @(sel ? "sel" : "")" title="@Loc.Pick(f.Name, f.NameDe)"
-                    @onclick="() => Pick(f.Id)">
-                <FactionBadge Faction="f" Size="2.8" Ring="@(sel ? "#d9b04a" : f.ColorHex)" />
+                    style="@(sel ? $"--sel:{hl}" : null)" @onclick="() => Pick(f.Id)">
+                <FactionBadge Faction="f" Size="2.8" Ring="@(sel ? hl : f.ColorHex)" />
                 <span class="fp-name">@Loc.Pick(f.Name, f.NameDe)</span>
             </button>
         }
@@ -26,7 +32,17 @@
     /// <summary>Faction ids already chosen by OTHER players — filtered out of the grid (your own stays
     /// visible so you can re-click to deselect it; a freed faction reappears for everyone).</summary>
     [Parameter] public IReadOnlySet<string>? Taken { get; set; }
+    /// <summary>The colour of the player this picker belongs to. Only a real palette colour counts —
+    /// <see cref="Ti4Colors.IsChosen"/>, because an unpicked seat carries a placeholder hex, not "nothing".</summary>
+    [Parameter] public string? PlayerColor { get; set; }
     [Inject] private Loc Loc { get; set; } = default!;
+
+    /// <summary>What the selected symbol is highlighted in: the player's colour once they have one, else the
+    /// faction's own. Gold only remains as the fallback for a faction with no colour of its own.</summary>
+    private string Highlight(FactionDto f) =>
+        Ti4Colors.IsChosen(PlayerColor) ? PlayerColor!
+        : !string.IsNullOrWhiteSpace(f.ColorHex) ? f.ColorHex
+        : "#d9b04a";
 
     private string search = "";
     private string SearchPlaceholder => Loc["setup.searchFaction"];

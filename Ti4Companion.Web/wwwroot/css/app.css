@@ -385,11 +385,20 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 /* faction picker (symbol grid) */
 .faction-picker { display: flex; flex-direction: column; gap: .5rem; }
 .fp-search { max-width: 260px; }
-.fp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: .5rem; max-height: 42vh; overflow: auto; padding: .15rem; }
+/* `overflow: auto` clips at the PADDING box, so the padding here is what the selected item's halo needs to
+   stay round (same trap as .join-players, where the hover lift was being cut off). */
+.fp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: .5rem; max-height: 42vh; overflow: auto; padding: .75rem; }
 .fp-item { display: flex; flex-direction: column; align-items: center; gap: .3rem; padding: .5rem .3rem; cursor: pointer;
     background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 10px; color: var(--text); font: inherit; transition: .12s ease; }
 .fp-item:hover { border-color: var(--gold-dim); transform: translateY(-1px); }
-.fp-item.sel { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--panel-2)); }
+/* The selected faction is highlighted in --sel, set per item: the player's colour once they have picked one,
+   otherwise the faction's own (FactionPicker.Highlight). Gold stays as the fallback.
+   Two shadow layers: the crisp 1px ring that was always there, plus a soft halo so the picked symbol carries
+   across a grid of thirty. The grid's padding below is what keeps that halo from being clipped. */
+.fp-item.sel { border-color: var(--sel, var(--gold));
+    box-shadow: 0 0 0 1px var(--sel, var(--gold)),
+                0 0 12px 1px color-mix(in srgb, var(--sel, var(--gold)) 60%, transparent);
+    background: color-mix(in srgb, var(--sel, var(--gold)) 14%, var(--panel-2)); }
 .fp-name { font-size: .68rem; line-height: 1.05; text-align: center; color: var(--text-dim); }
 .fp-item.sel .fp-name { color: var(--text); }
 
