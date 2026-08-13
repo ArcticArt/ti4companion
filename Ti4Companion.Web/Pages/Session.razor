@@ -95,7 +95,16 @@ else
         base.OnInitialized();
         Store.OnShowTechTab += ShowTechs;
         Store.OnSeatLost += SeatLost;
+        Store.OnSessionGone += SessionGone;
     }
+
+    // The session was ended and closed (or wiped) while this device was still in it. There is nothing left
+    // to show — staying here is the loading screen, forever — so go back to the start page.
+    private void SessionGone() => InvokeAsync(async () =>
+    {
+        await Store.LeaveAsync();
+        Nav.NavigateTo("/");
+    });
 
     // The action view's optional "record your technology" prompt asks the shell to switch tabs.
     private void ShowTechs() => InvokeAsync(() =>
@@ -113,6 +122,7 @@ else
     {
         Store.OnShowTechTab -= ShowTechs;
         Store.OnSeatLost -= SeatLost;
+        Store.OnSessionGone -= SessionGone;
         base.Dispose();
     }
 

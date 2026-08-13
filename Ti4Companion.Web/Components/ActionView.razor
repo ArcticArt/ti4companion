@@ -62,11 +62,14 @@
 @* Card-specific actions. Only three of the eight have one worth offering; the other five are resolved on
    the table and the app would only be in the way. Technology and Imperial are offers; Politics is the one
    exception — see the modal below. *@
-@if (s.SpeakerPending && canControl)
+@if (s.SpeakerPending && canControl && !speakerDismissed)
 {
     @* Politics: the appointment IS the card, and it comes first. A modal rather than a panel further down
        the page, because the turn cannot be ended until it is done (server-side too) and a blocked button
-       with the reason off-screen is how a table gets stuck. *@
+       with the reason off-screen is how a table gets stuck.
+       It CAN be dismissed, though (on request): a player may want to look something up first, and a dialog
+       with no way out is its own kind of stuck. The block itself stays — the band below then carries the way
+       back, and the server still refuses to end the turn. *@
     <div class="modal-backdrop centered blurred">
         <div class="modal politics-modal">
             <div class="modal-head">
@@ -82,7 +85,23 @@
                     <p class="faint" style="margin:.6rem 0 0;">—</p>
                 }
             </div>
+            <div class="modal-actions">
+                <button class="btn" @onclick="() => speakerDismissed = true">@Loc["common.cancel"]</button>
+                <div class="spacer" style="flex:1"></div>
+                <span class="faint" style="font-size:.75rem;">@Loc["politics.cancelHint"]</span>
+            </div>
         </div>
+    </div>
+}
+else if (s.SpeakerPending && canControl)
+{
+    @* Dismissed, but still owed: the way back in, where the turn buttons are. *@
+    <div class="panel tech-prompt" style="margin-top:.6rem;">
+        <span class="tp-text"><strong>@Loc["politics.speaker"]</strong> — @Loc["politics.stillOwed"]</span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-gold btn-sm" @onclick="() => speakerDismissed = false">
+            @Loc["politics.reopen"] <MaterialIcon Name="chevron_right" />
+        </button>
     </div>
 }
 else if (s.SpeakerPending)
@@ -290,6 +309,11 @@ else
     /// <summary>Choosing a combat opponent, as a popup rather than a permanent row of buttons.</summary>
     private bool showCombatPick;
 
+    /// <summary>The Politics dialog was closed without appointing anybody. Per device and per appointment —
+    /// <see cref="AppointSpeaker"/> resets it, and so does a fresh <c>SpeakerPending</c> (see below), so the
+    /// next Politics action opens the dialog again rather than starting hidden behind a band.</summary>
+    private bool speakerDismissed;
+
     /// <summary>Red Tape's "which tape comes off" popup (the carrier card's own ability).</summary>
     private RedTapeSealModal.SealMode? sealMode;
 
@@ -333,7 +357,18 @@ else
     private static IEnumerable<PlayerDto> Appointable(SessionStateDto s)
         => s.Players.Where(p => p.Id != s.SpeakerPlayerId).OrderBy(p => p.SeatOrder);
 
-    private Task AppointSpeaker(Guid playerId) => Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
+    private async Task AppointSpeaker(Guid playerId)
+    {
+        speakerDismissed = false;   // the next Politics action opens the dialog, not the band
+        await Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
+    }
+
+    // A dismissal belongs to ONE pending appointment. The flag is cleared as soon as none is pending, so
+    // playing Politics again (or the next round's) puts the dialog back up rather than the band.
+    protected override void OnParametersSet()
+    {
+        if (Store.Session is { SpeakerPending: false }) speakerDismissed = false;
+    }
 
     private async Task StartCombat(Guid opponentId)
     {

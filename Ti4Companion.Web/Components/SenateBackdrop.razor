@@ -94,6 +94,9 @@
     /// <para>
     /// Seat counts follow the circumference (a wider ring holds more pods, as in a real chamber) and stay
     /// deliberately modest: every seat is a DOM element on the start page, so ~150 total is the budget.
+    /// They are also what decides the PITCH — <c>2π·Radius / Cols</c>, in vmin — i.e. how far apart the pods
+    /// stand. Lowering a count spreads that ring out (14 on the 168 ring is a 75vmin pitch where 17 was 62),
+    /// which is the price paid here for runs that divide the ring exactly. Raising one crowds it instead.
     /// </para>
     /// <para>
     /// <c>Shift</c> is how far this ring stands round from the one below it, as a fraction of its OWN seat
@@ -104,26 +107,27 @@
     /// <para>
     /// <c>Shown</c> false drops the ring entirely — but the entry STAYS in this array, because the shifts
     /// accumulate through it and deleting it would turn every ring above it. <c>Faces</c> is how many
-    /// portraits the ring carries, 0 meaning pods with nobody in them; see <see cref="BuildFaces"/>.
+    /// portraits the ring carries, 0 meaning pods with nobody in them; <c>Gaps</c> is how many of its seats
+    /// stay empty. See <see cref="BuildFaces"/> — and read the note on the array below before changing
+    /// either number.
     /// </para>
     /// </summary>
-    private sealed record Ring(double Radius, double Lift, int Cols, double Shift, int Faces, bool Shown = true);
+    private sealed record Ring(double Radius, double Lift, int Cols, double Shift, int Faces, int Gaps, bool Shown = true);
 
     private static readonly Ring[] Rings =
     {
-        new(150, 95.2, 16, 0, 0, Shown: false),  // only portrait TIPS ever reached the frame — dropped whole
-        // Seat counts are ≡ 2 (mod Faces), so that exactly TWO gaps let the run close on itself — see
-        // BuildFaces. That leaves 17, 22, 27 … to choose from, and per ring the one closest to the ~59vmin
-        // seat pitch the other rings have (17 → 62, 22 → 54…68 depending on radius).
-        new(168, 47.4, 17, 0.18, 5),
-        new(188, -6.6, 22, 0.26, 5),
-        new(208, -64.1, 22, 0.34, 5),
-        new(226, -121.4, 27, 0.42, 5),
-        new(240, -174.6, 27, 0.48, 4),  // 24 portraits exist, not 25, so the highest manned row runs one
-                                        // short. 27 is ≡ 2 for a run of FIVE but not of four, so BuildFaces
-                                        // gives this one ring a third gap to make its run close. Moving the
-                                        // short run to a 22-seat ring would get two gaps everywhere instead.
-        new(252, -223.9, 26, 0.33, 0),  // cut by the top edge, so pods without delegates: a face sliced in
+        new(150, 95.2, 16, 0, 0, 0, Shown: false),  // only portrait TIPS ever reached the frame — dropped whole
+        // ⚠️ Seats, faces and gaps are the TABLE'S CHOICE (set by the user on 2026-08-13) and they are stated
+        // rather than derived. The SEAT counts are what makes this work: each one is an exact multiple of its
+        // ring's face count, so every run comes full circle — no gaps needed, and no seam where the sequence
+        // wraps. (Getting there cost seats: 17→14, 22→21, 27→24, which spreads the pods a little further
+        // apart on every ring. See the pitch note under Cols before changing any of these.)
+        new(168, 47.4, 14, 0.18, 7, 0),     // 14 = 2×7
+        new(188, -6.6, 21, 0.26, 7, 0),     // 21 = 3×7
+        new(208, -64.1, 21, 0.34, 7, 0),
+        new(226, -121.4, 24, 0.42, 6, 0),   // 24 = 4×6
+        new(240, -174.6, 24, 0.48, 4, 0),   // 24 = 6×4
+        new(252, -223.9, 26, 0.33, 0, 26),  // cut by the top edge, so pods without delegates: a face sliced in
                                      // half by the screen edge reads as another copy of itself.
                                      // 0.33 of ITS pitch is what lands half a seat off
                                      // the ring below, because it holds 26 seats against that ring's 24 —
@@ -161,38 +165,44 @@
     /// The portrait files used for the seats — file NAMES, not all of them faction slugs (barony/cabal/ghosts).
     /// Hard-coded because the client cannot stat files, and a missing image would leave a hole in the chamber.
     /// <para>
-    /// ALL of them, ~1.2 MB together. A subset of twelve was cheaper, but with about fifty seats on screen at
+    /// ALL of them, ~1.4 MB together. A subset of twelve was cheaper, but with about fifty seats on screen at
     /// once twelve faces means each one shows up four times and the repetition is the first thing you notice.
     /// They are the same files the agenda wall uses (so a returning visitor has them cached) and they are
     /// fetched at low priority AFTER the first paint, so nothing waits on them.
     /// </para>
+    /// <para>
+    /// ALPHABETICAL on purpose. The rings take their portraits as consecutive slices of this list, so the
+    /// order decides which ring gets which faces — and alphabetical scatters the seven that arrived last
+    /// (bastion, crimson, deepwrought, firmament, keleres, lizards, obsidian) across four different rings
+    /// instead of parking them all in the top one.
+    /// </para>
     /// </summary>
     private static readonly List<string> Slugs = new()
     {
-        "arborec", "argent", "barony", "cabal", "empyrean", "ghosts", "hacan", "jolnar",
-        "lizix", "mahact", "mentak", "muaat", "naalu", "nekro", "nomad", "nra",
-        "saar", "sardakk", "sol", "titans", "winnu", "xxcha", "yin", "yssaril",
+        "arborec", "argent", "barony", "bastion", "cabal", "crimson", "deepwrought", "empyrean",
+        "firmament", "ghosts", "hacan", "jolnar", "keleres", "lizards", "lizix", "mahact",
+        "mentak", "muaat", "naalu", "nekro", "nomad", "nra", "obsidian", "saar",
+        "sardakk", "sol", "titans", "winnu", "xxcha", "yin", "yssaril",
     };
 
     /// <summary>
     /// Which delegate sits in which pod — <c>null</c> is an empty pod.
     /// <para>
-    /// A full chamber and 24 portraits cannot both be had: the earlier version kept every face unique on
-    /// screen and paid for it by leaving two thirds of the pods empty. So the trade is made the other way
-    /// round now, and deliberately: each ring gets its OWN handful of portraits (the counts across the rings
-    /// sum to <c>Slugs.Count</c>, so no face ever appears in two rings) and simply REPEATS that run all the
-    /// way round. Repetition within one row reads as a pattern of seats; the same face twice in different
-    /// rows read as a mistake, which is why the rows stay disjoint.
+    /// A full chamber and one portrait per pod cannot both be had — there are 31 faces against about a
+    /// hundred manned seats. The earlier version kept every face unique on screen and paid for it by leaving
+    /// two thirds of the pods empty. So the trade is made the other way round now, and deliberately: each
+    /// ring gets its OWN handful of portraits (the counts across the rings sum to <c>Slugs.Count</c>, so no
+    /// face ever appears in two rings) and simply REPEATS that run all the way round. Repetition within one
+    /// row reads as a pattern of seats; the same face twice in different rows reads as a mistake, which is
+    /// why the rows stay disjoint.
     /// </para>
     /// <para>
-    /// Two seats per ring are left empty at random to break the run — a gap, not a removal: the sequence
-    /// continues after it (face, face, gap, face, face …), so a gap costs no portrait.
+    /// Gaps are per ring (see <c>Ring.Gaps</c>) and are placed at random within it — a gap is an empty seat,
+    /// not a removed portrait: the sequence continues after it (face, face, gap, face, face …), so a gap
+    /// costs no portrait. The three lower rings have none at all.
     /// </para>
     /// </summary>
     private static readonly string?[][] Faces = BuildFaces();
-
-    /// <summary>Empty seats per ring, breaking up the repeating run of portraits.</summary>
-    private const int GapsPerRing = 2;
 
     private static string?[][] BuildFaces()
     {
@@ -208,15 +218,17 @@
             var mine = Slugs.GetRange(next, count);         // this ring's own portraits
             next += count;
 
-            // ⚠️ A ring is a CIRCLE, so the run has to close on itself. With `p` portraits placed over a run
-            // of `count`, the sequence only comes full circle when p is a whole number of runs; anything else
-            // and the last seat is followed by face A out of order — read from the screen that is not a
-            // rhythm any more, it is noise, and it was reported as "you randomised the order". So the number
-            // of GAPS is not free: take the smallest one that makes the run divide the ring.
-            // (An earlier version only ruled out p % count == 1, the case of two identical NEIGHBOURS, which
-            // left three of the five rings jumping at the seam.)
-            var gaps = GapsPerRing;
-            while ((n - gaps) % count != 0) gaps++;
+            // ⚠️ A ring is a CIRCLE, so a run of portraits only comes FULL CIRCLE when it divides the manned
+            // seats; otherwise the last seat before the wrap is followed by face A out of order — one visible
+            // jump per ring, and with 7 faces on 22 seats (22 = 3×7 + 1) that jump puts the same face on two
+            // neighbouring seats.
+            // This used to be forced by raising the gap count until `(n - gaps) % count == 0`. It is not any
+            // more, because it no longer has to be: the seat counts in `Rings` are exact multiples of their
+            // face counts, so every run closes with ZERO gaps. Change a seat count or a face count and that
+            // guarantee goes with it — the assert below is what says so out loud.
+            var gaps = Math.Clamp(Rings[r].Gaps, 0, n);
+            System.Diagnostics.Debug.Assert((n - gaps) % count == 0,
+                $"Senate ring {r}: {n - gaps} manned seats do not divide by {count} faces — the run will jump at the seam.");
 
             var empty = new HashSet<int>();
             while (empty.Count < gaps) empty.Add(rnd.Next(n));

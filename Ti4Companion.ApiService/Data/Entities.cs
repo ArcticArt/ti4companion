@@ -97,6 +97,14 @@ public class GameSession
     /// answering it afterwards must settle THAT round, not the new one.</summary>
     public int RedTapeRandomPendingRound { get; set; }
 
+    /// <summary>
+    /// Which objective a random removal just cleared (null = nothing to show). SESSION state, not per device,
+    /// because the wall has to put that card up large — the same treatment a normally revealed objective
+    /// gets. The host clears it by closing the popup (<c>POST /redtape/random/seen</c>), and the round change
+    /// clears it too so it can never outlive the moment it belongs to.
+    /// </summary>
+    public Guid? RedTapeRandomRevealedId { get; set; }
+
     /// <summary>Status phase: which of the post-scoring steps the table has ticked off. Reset when the
     /// status phase begins.</summary>
     public StatusStep StatusStepsDone { get; set; }

@@ -1,0 +1,241 @@
+@inherits Ti4ComponentBase
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@using ZXing
+@using ZXing.Common
+@using System.Text.RegularExpressions
+
+@*
+    Join by pointing the phone at the wall.
+
+    Why this exists at all, when every phone has a camera app: on iOS a QR scanned there opens SAFARI, and a
+    home-screen web app is a different storage jar with different permissions — so the player who installed
+    the app for notifications lands in the browser, logged into nothing. iOS offers no way to hand a scanned
+    link to an installed web app (no link capturing, and universal links need a native app), so the only way
+    to stay inside it is to scan from inside it.
+
+    The CAMERA is JavaScript's (ti4.qr), the DECODING is ZXing.Net compiled into the app — no fetched script,
+    so the offline/LAN rule and the CSP are untouched. Frames arrive as 8-bit luminance, which is what the
+    decoder reads anyway.
+*@
+@if (Open)
+{
+    <div class="modal-backdrop centered blurred qr-scan-layer">
+        <div class="modal qr-scan-modal">
+            <div class="modal-head">
+                <h3 style="margin:0;">@Loc["scan.title"]</h3>
+            </div>
+            <div class="modal-body">
+                <div class="qr-view">
+                    @* `playsinline` is set in the markup AND in JS: without it iOS plays fullscreen and the
+                       dialog vanishes behind the video. *@
+                    <video @ref="video" class="qr-video" playsinline muted autoplay></video>
+                    <div class="qr-reticle"></div>
+                </div>
+                <canvas @ref="canvas" style="display:none"></canvas>
+                <p class="faint qr-hint">
+                    @if (error is null)
+                    {
+                        @Loc["scan.hint"]
+                    }
+                    else
+                    {
+                        <span class="qr-error">@Loc[error]</span>
+                    }
+                </p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" @onclick="CancelAsync">@Loc["common.cancel"]</button>
+                <div class="spacer" style="flex:1"></div>
+                @* Only where there is actually a choice. A phone with three rear cameras hands the browser's
+                   pick to us, and it is not always the one that focuses close enough to read a code. *@
+                @if (cams.Count > 1)
+                {
+                    <button class="btn" disabled="@switching" @onclick="SwitchAsync" title='@Loc["scan.switch"]'>
+                        <MaterialIcon Name="cameraswitch" /> @Loc["scan.switch"]
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Whether the scanner is up. Owned by the caller, so the camera starts and stops with it.</summary>
+    [Parameter] public bool Open { get; set; }
+
+    /// <summary>A join code was read. The scanner has already stopped the camera by then.</summary>
+    [Parameter] public EventCallback<string> OnCode { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference video;
+    private ElementReference canvas;
+    private bool running;
+    private bool switching;
+    private string? error;
+    private CancellationTokenSource? cts;
+
+    /// <summary>The device's cameras, known only once permission has been given.</summary>
+    private List<Cam> cams = new();
+    private int camIndex;
+
+    private sealed class Cam
+    {
+        public string Id { get; set; } = "";
+        public string Label { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Long side of the frame handed to the decoder — this is the RANGE knob. A code across the room covers
+    /// few pixels, and once one QR module falls below about two of them nothing can read it. 320 only worked
+    /// at arm's length (reported); 640 is four times the pixels, and the loop below still runs several
+    /// frames a second.
+    /// </summary>
+    private const int FrameSize = 640;
+
+    /// <summary>Pause between frames. The loop is sequential — grab, decode, wait — so the real cadence is
+    /// this plus the decode, and a FAILED decode is the expensive one: it searches the whole frame. Kept
+    /// short because the pause is the part that is pure waiting.</summary>
+    private const int IntervalMs = 120;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (Open && !running) await StartAsync();
+        else if (!Open && running) await StopAsync();
+    }
+
+    private async Task StartAsync()
+    {
+        running = true;
+        cams.Clear();
+        camIndex = 0;
+        if (!await OpenCameraAsync(null)) return;
+        // Now that permission has been given, the browser will name what it has — see ti4.qr.cameras.
+        try { cams = await JS.InvokeAsync<List<Cam>>("ti4.qr.cameras"); } catch { /* nothing to switch to */ }
+        StateHasChanged();
+    }
+
+    /// <summary>Open a stream (a specific camera, or the browser's own choice) and start reading frames from
+    /// it. Returns false when the camera was refused — <see cref="error"/> then says which refusal.</summary>
+    private async Task<bool> OpenCameraAsync(string? deviceId)
+    {
+        error = null;
+        var name = await JS.InvokeAsync<string>("ti4.qr.start", video, deviceId);
+        if (!string.IsNullOrEmpty(name))
+        {
+            // Say WHICH refusal it was: "no" and "there is no camera" need different answers from the user.
+            error = name switch
+            {
+                "NotAllowedError" or "SecurityError" => "scan.denied",
+                "NotFoundError" or "OverconstrainedError" => "scan.noCamera",
+                _ => "scan.failed",
+            };
+            StateHasChanged();
+            return false;
+        }
+        cts = new CancellationTokenSource();
+        _ = LoopAsync(cts.Token);
+        return true;
+    }
+
+    /// <summary>Next camera in the list. `running` deliberately stays true throughout, or the render that
+    /// happens in between would see a closed scanner and start a second one.</summary>
+    private async Task SwitchAsync()
+    {
+        if (cams.Count < 2 || switching) return;
+        switching = true;
+        try
+        {
+            camIndex = (camIndex + 1) % cams.Count;
+            cts?.Cancel();
+            cts?.Dispose();
+            cts = null;
+            await OpenCameraAsync(cams[camIndex].Id);
+        }
+        finally { switching = false; }
+    }
+
+    private async Task LoopAsync(CancellationToken ct)
+    {
+        var reader = new BarcodeReaderGeneric
+        {
+            Options = new DecodingOptions
+            {
+                PossibleFormats = new[] { BarcodeFormat.QR_CODE },
+                TryHarder = true,
+            }
+        };
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var frame = await JS.InvokeAsync<Frame?>("ti4.qr.grab", ct, video, canvas, FrameSize);
+                if (frame is { Gray.Length: > 0 })
+                {
+                    var gray = Convert.FromBase64String(frame.Gray);
+                    var source = new RGBLuminanceSource(gray, frame.Width, frame.Height,
+                                                        RGBLuminanceSource.BitmapFormat.Gray8);
+                    var result = reader.Decode(source);
+                    if (CodeFrom(result?.Text) is { } code)
+                    {
+                        await StopAsync();
+                        await OnCode.InvokeAsync(code);
+                        return;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // A frame that cannot be read is not an error worth showing — the next one usually can.
+                // (A cancelled interop call lands here too, on the way out.)
+                if (ct.IsCancellationRequested) return;
+            }
+            try { await Task.Delay(IntervalMs, ct); } catch (TaskCanceledException) { return; }
+        }
+    }
+
+    private async Task StopAsync()
+    {
+        running = false;
+        cts?.Cancel();
+        cts?.Dispose();
+        cts = null;
+        try { await JS.InvokeVoidAsync("ti4.qr.stop"); } catch { /* page going away */ }
+    }
+
+    private async Task CancelAsync()
+    {
+        await StopAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    /// <summary>
+    /// The join code out of whatever the code carried: our own invite link (<c>…/join/ABCDE</c>), a link to
+    /// the session or the wall, or a bare code somebody generated elsewhere.
+    /// <para>
+    /// Only the CODE is ever taken, never the URL — the caller navigates to this app's own join page with it.
+    /// So a QR that happens to be something else can at worst produce a code that no session has; it can
+    /// never send anybody to a strange website.
+    /// </para></summary>
+    private static string? CodeFrom(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var t = text.Trim();
+        var m = Regex.Match(t, @"/(?:join|s|display)/([A-Za-z0-9]{5})(?:[/?#]|$)");
+        if (m.Success) return m.Groups[1].Value.ToUpperInvariant();
+        return Regex.IsMatch(t, "^[A-Za-z0-9]{5}$") ? t.ToUpperInvariant() : null;
+    }
+
+    /// <summary>One camera frame: 8-bit luminance, one byte per pixel, base64-encoded — see the note in
+    /// <c>ti4.qr.grab</c>. The interop boundary is JSON, and that is the one shape both sides agree on.</summary>
+    private sealed class Frame
+    {
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public string Gray { get; set; } = "";
+    }
+
+    public async ValueTask DisposeAsync() => await StopAsync();
+}

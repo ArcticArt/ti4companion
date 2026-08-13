@@ -2,6 +2,7 @@
 @page "/join/{Code}"
 @inherits Ti4ComponentBase
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @using System.Globalization
 
 <PageTitle>Twilight Imperium Companion</PageTitle>
@@ -27,7 +28,18 @@
             <div class="home-choice">
                 <h2>@Loc["home.welcome"]</h2>
                 <button class="btn btn-primary" @onclick="() => view = View.Create">@Loc["home.createSession"]</button>
-                <button class="btn btn-gold" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
+                @* Join, with the camera beside it where there is one to use. The pair keeps the row exactly as
+                   wide as the others — the stack reading as one menu is the point of `.home-choice`. *@
+                <div class="home-join-row">
+                    <button class="btn btn-gold" @onclick="() => view = View.Join">@Loc["home.joinSession"]</button>
+                    @if (canScan)
+                    {
+                        <button class="btn btn-gold home-scan" title='@Loc["scan.title"]' aria-label='@Loc["scan.title"]'
+                                @onclick="() => scanning = true">
+                            <MaterialIcon Name="photo_camera" SizeCss="1.5em" />
+                        </button>
+                    }
+                </div>
                 @* A fixed third entry, shown even with nothing to resume: the menu should not change shape
                    between devices, and the list says for itself when it is empty. *@
                 <button class="btn" @onclick="() => view = View.Recent">@Loc["home.recent"]</button>
@@ -167,6 +179,10 @@
         </div>
     }
 
+    @* Scanning a wall QR from INSIDE the app — the only way that keeps an installed iPhone app from being
+       thrown out into Safari. Rendered at the page level so the camera fills the screen, not the panel. *@
+    <QrScanModal Open="scanning" OnCode="Scanned" OnClose="() => scanning = false" />
+
     @* How busy it is tonight: a notice about the instance between the form and the footer, never a field
        inside the form. Counts only, see ActivityDto; absent when the server didn't answer. *@
     @if (activity is { } act)
@@ -201,6 +217,8 @@
     private SessionStateDto? peek;   // the loaded session whose players you choose an identity from
     private ActivityDto? activity;   // counts for the landing view; null = the server didn't say
     private List<RecentSession> recent = new();   // sessions this device can pick up again
+    private bool canScan;            // this device has a camera we may use (see ti4.qr.available)
+    private bool scanning;
 
     private string NamePlaceholder => Loc["players.you"];
 
@@ -221,16 +239,52 @@
         await Store.InitAsync();
         recent = await Store.RecentAsync();
         activity = await Store.Api.GetActivityAsync();
-        // Arrived via an invite link (/join/{code}), or sent here because this device's seat was taken over.
-        // The code is known either way, so go straight to the list of players rather than making them press
-        // "continue" first — for the displaced device that step would ask a question it has already answered.
-        if (!string.IsNullOrWhiteSpace(Code))
-        {
-            joinCode = Code.Trim().ToUpperInvariant();
-            view = View.Join;
-            await LoadIdentities();
-        }
     }
+
+    /// <summary>
+    /// Is there a camera worth offering? Asked once, and asked HERE: JS interop belongs after the first
+    /// render.
+    /// <para>
+    /// ⚠️ It used to be asked in <c>OnInitializedAsync</c>, and the value never reached the screen — the
+    /// field was set (proven by logging it) while the menu kept rendering without the button until something
+    /// else forced a redraw. Hence the explicit <c>StateHasChanged</c> as well: a value fetched outside the
+    /// render loop has to say so.
+    /// </para></summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        bool ok;
+        try { ok = await JS.InvokeAsync<bool>("ti4.qr.available"); } catch { ok = false; }
+        if (ok == canScan) return;
+        canScan = ok;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Arrived with a code: an invite link, the redirect after this device's seat was taken over, or the
+    /// scanner. The code is known either way, so go straight to the list of players rather than asking for a
+    /// "continue" first.
+    /// <para>
+    /// ⚠️ This belongs in <c>OnParametersSet</c>, not in <c>OnInitialized</c>. Scanning navigates <c>/</c> →
+    /// <c>/join/CODE</c>, which is the SAME component: Blazor reuses the instance and never initialises it
+    /// again, so the URL changed and the view did not — the camera closed and nothing else happened. (My own
+    /// check asserted on <c>location.href</c> and therefore passed. It proved the navigation, not the join.)
+    /// </para></summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        var code = (Code ?? "").Trim().ToUpperInvariant();
+        if (code.Length == 0 || code == handledCode) return;
+        handledCode = code;
+        joinCode = code;
+        joinAs = JoinMode.Player;
+        view = View.Join;
+        peek = null;
+        await LoadIdentities();
+    }
+
+    /// <summary>The code this component has already opened the player list for, so a re-render doesn't
+    /// re-fetch it.</summary>
+    private string? handledCode;
 
     private async Task Create()
     {
@@ -292,8 +346,42 @@
         finally { busy = false; }
     }
 
+    /// <summary>
+    /// A code was read off the wall: go to the join step for it, which is where the invite link lands too, so
+    /// the only question left is "who are you".
+    /// <para>
+    /// ⚠️ The work is done HERE rather than left to the router. Going through <c>NavigateTo</c> alone has a
+    /// trap: after a scan the address already IS <c>/join/CODE</c>, and pressing "back" only changes the
+    /// view, not the URL — so scanning the same code again navigated to where the browser already was,
+    /// which changes nothing at all. Reported as "the second scan doesn't join". The navigation is still
+    /// issued, but only to keep the address honest for a reload or a share.
+    /// </para></summary>
+    private async Task Scanned(string code)
+    {
+        scanning = false;
+        handledCode = code;          // the navigation below must not redo this
+        joinCode = code;
+        joinAs = JoinMode.Player;
+        view = View.Join;
+        peek = null;
+        error = null;
+        Nav.NavigateTo($"/join/{code}");
+        await LoadIdentities();
+    }
+
     private void SetJoinAs(JoinMode m) { joinAs = m; peek = null; error = null; }
-    private void BackToLanding() { view = View.Landing; peek = null; error = null; }
+
+    // Back to the menu — and the ADDRESS follows the view. Leaving it at /join/CODE meant a reload landed
+    // somewhere the user had just left, and it left `handledCode` standing so the same code could not be
+    // scanned a second time.
+    private void BackToLanding()
+    {
+        view = View.Landing;
+        peek = null;
+        error = null;
+        handledCode = null;
+        if (!string.IsNullOrWhiteSpace(Code)) Nav.NavigateTo("/");
+    }
 
     // Open the entered code on this device as the shared wall display (no player join).
     private void OpenDisplay()

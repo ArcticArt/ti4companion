@@ -106,8 +106,11 @@ The session creator is the **host** (`Player.IsHost`, stable across seat changes
 - Active player or host: playing a strategy action, passing, advancing the turn.
 - Current picker or host: picking a strategy card.
 - Self or host: profile edits, technologies, agenda influence, casting/locking a vote.
-- Any joined device: scoring objectives (validated to be a real session member) and switching the wall
-  display mode. A device with no token is a read-only spectator (that's how the wall display works).
+- Own seat while it is up, or host: scoring an objective in the status phase (and taking that score back).
+  Scoring stays open to any joined device *outside* that phase, because abilities score at other times;
+  either way the player scored for must be a real member of the session.
+- Any joined device: switching the wall display mode. A device with no token is a read-only spectator
+  (that's how the wall display works).
 
 Rejected calls return 403/400; the client treats both as "refresh to authoritative state", never as an
 exception.
@@ -168,11 +171,13 @@ exception.
   own clock, and it closes when the last one is done. A secondary happens **between two turns**, so while the
   round is open the next player's turn clock does not run — the same subtraction as a combat, from a logged
   open/close interval — and the round is closed at the next turn advance whether or not anybody said so.
-- **Status:** walked through in three stages — score, reveal the next objective, remaining steps. The
-  scoring list holds only what the player who is up can act on (a sealed or purged objective cannot be
-  scored, so it is not offered), and what they have already scored stays in it as an "undo" so a mis-tap can
-  be taken back where it happened. Both ways out of the phase ("agenda phase", "next round") appear only on
-  the last stage. Custom / secret-made-public objectives can be added by hand in the Objectives tab.
+- **Status:** walked through in three stages — score, reveal the next objective, remaining steps. Scoring
+  runs in initiative order and is **the player's own decision**: their device scores for their seat while it
+  is up, every other phone watches, and the host can act for anyone (so a table sharing one device still
+  works). The list holds only what that player can act on (a sealed or purged objective cannot be scored, so
+  it is not offered), and what they have already scored stays in it as an "undo" so a mis-tap can be taken
+  back where it happened. Both ways out of the phase ("agenda phase", "next round") appear only on the last
+  stage. Custom / secret-made-public objectives can be added by hand in the Objectives tab.
 - **Optional table variants** (all off by default — the app never forces a rule). The **Red Tape**
   community variants are the one deliberate exception to "the app tracks, it does not enforce": a table
   that chose one gets its rules applied server-side in `Services/RedTape.cs`, so a taped objective simply

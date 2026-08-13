@@ -47,6 +47,30 @@
             </div>
         </div>
     }
+    else if (s.RedTapeRandomRevealedId is Guid shown
+             && s.Objectives.FirstOrDefault(o => o.Id == shown) is { } revealed)
+    {
+        @* The RESULT: which objective the draw cleared. The app performing a removal is the one game action it
+           takes on its own, so the table has to see what it did — as the card itself, not as a line of text.
+           The wall puts the same card up large until this is closed. *@
+        <div class="modal-backdrop centered blurred">
+            <div class="modal redtape-modal">
+                <div class="modal-head">
+                    <h3 style="margin:0;">@Loc["redtape.randomResult"]</h3>
+                </div>
+                <div class="modal-body">
+                    <p class="rt-ask-lead">@Loc["redtape.randomResultBody"]</p>
+                    <div class="rt-result-card">
+                        <ObjectiveDisplayCard So="revealed" Glow="true" />
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <div class="spacer" style="flex:1"></div>
+                    <button class="btn btn-gold" @onclick="AckRandom">@Loc["common.continue"] <MaterialIcon Name="chevron_right" /></button>
+                </div>
+            </div>
+        </div>
+    }
     else if (Store.RedTapeRandomAsking)
     {
         var carrier = Store.Card(s.RedTapeCardNumber);
@@ -75,4 +99,6 @@
 
     private Task AnswerRandom(bool confirm)
         => Store.Mutate(Store.Api.AnswerRedTapeRandomAsync(Store.Session!.Id, confirm));
+
+    private Task AckRandom() => Store.Mutate(Store.Api.AckRedTapeRandomAsync(Store.Session!.Id));
 }

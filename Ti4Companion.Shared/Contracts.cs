@@ -259,6 +259,9 @@ public record SessionStateDto(
     /// <summary>Red Tape Lite: the round a random removal is currently being asked about (0 = nothing
     /// pending). Non-zero means the host has an open question — nothing has been removed yet.</summary>
     int RedTapeRandomPendingRound = 0,
+    /// <summary>Red Tape Lite: the objective a random removal just cleared, until the host closes the result
+    /// (null = nothing to show). The wall puts it up large, like any other freshly revealed objective.</summary>
+    Guid? RedTapeRandomRevealedId = null,
     /// <summary>A combat is running between these two players (null = none). The wall shows them facing each
     /// other and the turn clock stops.</summary>
     Guid? CombatAId = null,

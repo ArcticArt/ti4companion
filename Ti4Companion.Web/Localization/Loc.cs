@@ -59,6 +59,16 @@ public class Loc
         ["home.recentTitle"] = ("Sessions on this device", "Sessions auf diesem Gerät"),
         ["home.recentAs"] = ("as", "als"),
         ["home.recentPick"] = ("choose a player", "Spieler wählen"),
+        // Scanning the wall's QR from inside the app (QrScanModal). The reason it exists is iOS: a code
+        // scanned with the camera app opens Safari, not the app you installed for notifications.
+        ["scan.title"] = ("Scan the join code", "Beitritts-Code scannen"),
+        ["scan.hint"] = ("Point the camera at the code on the screen.",
+                         "Die Kamera auf den Code auf dem Bildschirm richten."),
+        ["scan.denied"] = ("No camera access. Allow it for this site in your browser settings, then try again.",
+                           "Kein Kamerazugriff. In den Browser-Einstellungen für diese Seite erlauben und erneut versuchen."),
+        ["scan.noCamera"] = ("No camera found on this device.", "Auf diesem Gerät wurde keine Kamera gefunden."),
+        ["scan.switch"] = ("Switch camera", "Kamera wechseln"),
+        ["scan.failed"] = ("The camera could not be started.", "Die Kamera konnte nicht gestartet werden."),
         ["home.recentUnnamed"] = ("Session", "Session"),
         // The timestamp on each row: when the session was CREATED. The list is still ordered by this device's
         // last visit, but the date shown is the game's own — that is what identifies an evening.
@@ -244,6 +254,15 @@ public class Loc
         ["redtape.stepReplacedHint"] = (
             "Red Tape replaces \"reveal public objective\": nothing is revealed — the game ends if there are no unrevealed public objectives at the start of this step.",
             "Red Tape ersetzt „Öffentlichen Auftrag aufdecken“: Es wird nichts aufgedeckt — das Spiel endet, wenn zu Beginn dieses Schritts kein nicht aufgedeckter öffentlicher Auftrag mehr liegt."),
+        // Lite keeps the step but nothing is revealed IN it: the objective for this round either came clear
+        // through the carrier card, or one is drawn at random when the phase ends. {0} = that card. Our own
+        // summary of the variant, not the author's text.
+        ["redtape.stepLiteTaken"] = (
+            "Red Tape Lite: {0} was played this round, so the objective for it is already clear — nothing is revealed here.",
+            "Red Tape Lite: In dieser Runde wurde {0} gespielt, der Auftrag dafür ist also schon aufgedeckt — hier wird nichts aufgedeckt."),
+        ["redtape.stepLiteRandom"] = (
+            "Red Tape Lite: nobody took {0} this round, so a marker comes off at random when the status phase ends — the app will ask.",
+            "Red Tape Lite: Niemand hat in dieser Runde {0} genommen — beim Ende der Statusphase kommt ein zufälliger Marker herunter, die App fragt danach."),
         // The card action itself (shown while that strategy action is on the table).
         ["redtape.action"] = ("Red Tape: remove tape", "Red Tape: Band entfernen"),
         ["redtape.actionHint"] = (
@@ -255,9 +274,8 @@ public class Loc
         ["redtape.actionLite"] = (
             "Remove one tape of your choice — no Stage II until the five scorable Stage I are clear. No random removal this round.",
             "Entferne ein Band nach Wahl — kein Stufe II, solange die fünf wertbaren Stufe-I-Aufträge nicht frei sind. Diese Runde fällt die Zufallsentnahme weg."),
-        ["redtape.randomHint"] = (
-            "Nobody took the card this round, so one tape comes off at random — the app asks the host about it right after the strategy phase in round 1, and when the status phase ends after that.",
-            "Diese Runde hat niemand die Karte genommen, also geht ein zufälliges Band ab — die App fragt den Host in Runde 1 direkt nach der Strategiephase danach, später jeweils am Ende der Statusphase."),
+        // ("redtape.randomHint" lived here — the band in the objectives tab announcing the coming random
+        //  removal. Both are gone: the status phase's reveal step says it at the moment it matters.)
         // Red Tape Lite's two questions. The app proposes, the host answers — see RedTapeModal for why
         // neither of them happens on its own any more.
         ["redtape.randomAsk"] = ("Remove a tape at random?", "Band zufällig entfernen?"),
@@ -269,6 +287,10 @@ public class Loc
             "Die App wählt eines der Bänder, die sie abnehmen darf. Bis du zustimmst, passiert nichts."),
         ["redtape.randomYes"] = ("Remove one at random", "Zufällig entfernen"),
         ["redtape.randomNo"] = ("Not this round", "Diese Runde nicht"),
+        // …and what the draw produced. The wall shows the same card large until this is closed.
+        ["redtape.randomResult"] = ("This one came clear", "Dieser wurde freigegeben"),
+        ["redtape.randomResultBody"] = ("The tape came off this objective — it can be scored from now on.",
+                                        "Bei diesem Auftrag ist das Band abgegangen — er kann ab jetzt gewertet werden."),
         ["redtape.purgeAsk"] = ("Take the rest out of the game?", "Die übrigen aus dem Spiel nehmen?"),
         ["redtape.purgeAskBody"] = (
             "{0} Stage I objectives are clear, so under Red Tape Lite only those can ever score. These are still taped:",
@@ -489,6 +511,10 @@ public class Loc
         ["status.finishStages"] = ("Walk through the steps first", "Erst die Schritte durchgehen"),
         ["status.scoreFor"] = ("{0} may score", "{0} darf werten"),
         ["status.tapToScore"] = ("Tap an objective card to score it.", "Auftragskarte antippen, um sie zu werten."),
+        // Shown instead on a device that is not the one scoring: scoring is the player's own decision now,
+        // so every other phone watches. Without it the cards just look broken.
+        ["status.watchOnly"] = ("{0} is scoring — you can act when it is your turn.",
+                                "{0} wertet gerade — du bist dran, wenn du an der Reihe bist."),
         ["status.nothingLeft"] = ("This player has already scored every revealed objective.",
                                  "Dieser Spieler hat schon alle aufgedeckten Aufträge gewertet."),
         // The scoring list only holds what can be acted on, so it can legitimately be empty (everything on
@@ -746,7 +772,14 @@ public class Loc
         ["common.close"] = ("Close", "Schließen"),
         ["common.comingSoon"] = ("coming soon", "kommt noch"),
         ["common.back"] = ("Back", "Zurück"),
+        ["common.continue"] = ("Carry on", "Weiter geht's"),
         // Secondary abilities of a strategy action (only with the turn timer in use).
+        // The dialog can be closed without answering — the block stays, so these say how to get back to it.
+        ["politics.cancelHint"] = ("The turn cannot be ended until this is done.",
+                                   "Der Zug lässt sich erst beenden, wenn das erledigt ist."),
+        ["politics.stillOwed"] = ("The speaker has not been appointed yet.",
+                                  "Der Sprecher ist noch nicht ernannt."),
+        ["politics.reopen"] = ("Appoint now", "Jetzt ernennen"),
         ["politics.speaker"] = ("Appoint the speaker", "Sprecher bestimmen"),
         ["politics.modalHint"] = (
             "Politics: choose the new speaker first — the turn can't be ended until you have. Anyone but the current speaker, yourself included.",

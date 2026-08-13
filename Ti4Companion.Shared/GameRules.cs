@@ -105,9 +105,18 @@ public static class GameRules
     /// <summary>Bureaucracy: "you may not choose a Stage II objective in the first 3 rounds".</summary>
     public const int RedTapeStageIILockedThrough = 3;
 
-    /// <summary>How many markers the carrier card's holder may take off this round: one for the primary
-    /// ability, plus the variant's SPECIAL — "remove Red Tape counters equal to the number of trade goods on
-    /// this card". A reminder the app shows and counts, not a rule it enforces: which markers come off is the
-    /// table's decision, and so is miscounting it.</summary>
-    public static int RedTapeAllowedRemovals(int carrierGoods) => 1 + (carrierGoods < 0 ? 0 : carrierGoods);
+    /// <summary>
+    /// How many markers the carrier card's holder may take off this round.
+    /// <para>
+    /// **Bureaucracy** only: one for the primary ability, plus that variant's SPECIAL — "remove Red Tape
+    /// counters equal to the number of trade goods on this card". **Red Tape Lite does NOT have that
+    /// addition** (corrected 2026-08-13): Diplomacy takes off exactly one marker there, whatever was lying
+    /// on the card. Passing the variant in is what keeps the two apart — the goods are captured for every
+    /// table, and reading them without asking which variant it is gave Lite an allowance it never had.
+    /// </para>
+    /// A reminder the app shows and counts, not a rule it enforces: which markers come off is the table's
+    /// decision, and so is miscounting it.
+    /// </summary>
+    public static int RedTapeAllowedRemovals(RedTapeVariant variant, int carrierGoods)
+        => variant == RedTapeVariant.Bureaucracy ? 1 + (carrierGoods < 0 ? 0 : carrierGoods) : 1;
 }

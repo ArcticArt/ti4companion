@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ti4Companion.ApiService.Data;
 
@@ -10,9 +11,11 @@ using Ti4Companion.ApiService.Data;
 namespace Ti4Companion.ApiService.Data.Migrations
 {
     [DbContext(typeof(Ti4DbContext))]
-    partial class Ti4DbContextModelSnapshot : ModelSnapshot
+    [Migration("20260812232051_RedTapeRandomRevealed")]
+    partial class RedTapeRandomRevealed
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");

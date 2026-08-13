@@ -356,7 +356,22 @@ else
                 @* ===== Bereich 2 — right content panel: objectives list / all researched techs as cards /
                    all available strategy-card secondaries. Deduplicated, independent of the player table. ===== *@
                 <div class="panel content-panel">
-                    @if (mode == DisplayMode.JoinQr)
+                    @* Red Tape Lite just pulled a tape at random. That is the one game action the app performs
+                       itself, so the table sees WHICH objective it freed, in the same big-card treatment a
+                       normally revealed one gets — and before anything else, whatever mode the wall is on. It
+                       clears when the host closes the result (RedTapeRandomRevealedId). *@
+                    @if (s.RedTapeRandomRevealedId is Guid rtShown
+                         && s.Objectives.FirstOrDefault(o => o.Id == rtShown) is { } rtRevealed)
+                    {
+                        <h3 style="color:var(--gold);">@Loc["redtape.randomResult"]</h3>
+                        <div class="panel-body status-reveal">
+                            <div class="status-reveal-card">
+                                <ObjectiveDisplayCard So="rtRevealed" Glow="true" />
+                            </div>
+                            <p class="status-detail">@Loc["redtape.randomResultBody"]</p>
+                        </div>
+                    }
+                    else if (mode == DisplayMode.JoinQr)
                     {
                         @* The QR as a wall area: same card as the agenda-phase overlay, just in the panel. *@
                         <div class="panel-body qr-panel">
@@ -538,6 +553,26 @@ else
         if (Store.Session?.JoinCode == Code.ToUpperInvariant()) return;
         await Store.InitAsync();
         _notFound = !await Store.ConnectAsync(Code.ToUpperInvariant());
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Store.OnSessionGone += Gone;
+    }
+
+    // The game was ended and closed while the wall was showing it. A projector has nowhere to navigate TO,
+    // so it says the session is gone instead of sitting on the loading screen for the rest of the evening.
+    private void Gone() => InvokeAsync(() =>
+    {
+        _notFound = true;
+        StateHasChanged();
+    });
+
+    public override void Dispose()
+    {
+        Store.OnSessionGone -= Gone;
+        base.Dispose();
     }
 
     /// <summary>The objectives already on the table when the status-phase reveal stage began. Anything that

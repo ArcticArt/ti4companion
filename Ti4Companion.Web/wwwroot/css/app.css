@@ -1410,6 +1410,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
     line-height: 1.3; text-align: center; justify-content: center; }
 /* …including the border, or the heading comes out 2px shorter than the buttons. */
 .home-choice > h2 { border: 1px solid transparent; }
+/* Join + the camera beside it. The PAIR is one row of the menu, so the stack keeps its equal-row look:
+   the join button takes what is left, the camera is a square at the end. */
+.home-join-row { display: flex; gap: .5rem; align-items: stretch; }
+.home-join-row > .btn { flex: 1 1 auto; margin: 0; padding: .75rem 1.4rem; font-size: 1.15rem;
+    line-height: 1.3; text-align: center; justify-content: center; }
+.home-join-row > .home-scan { flex: 0 0 auto; width: 3.4rem; padding: .75rem 0; }
+
 /* The backdrop switch: a setting about the page, so it sits under the choices and stays quiet. */
 .home-senate-toggle { margin-top: 1rem; color: var(--text-faint); }
 .home-senate-toggle:hover { color: var(--text-dim); }
@@ -1496,9 +1503,42 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .player-row .pr-id { flex: 1 1 100%; order: 1; }
     .player-row .pr-actions { flex: 1 1 100%; order: 2; }
 }
+/* ---- QR scanner ----
+   The picture is the content, so it gets the width and a fixed 4:3 box: a video that resizes itself once the
+   stream's real dimensions arrive makes the whole dialog jump. `object-fit: cover` fills the box whatever the
+   camera hands over. */
+.qr-scan-modal { max-width: min(94vw, 30rem); }
+.qr-view { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden;
+    background: #05080f; border: 1px solid var(--panel-border); }
+.qr-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Where to aim. Corners only — a full frame reads as a border of the video, not as a target. */
+.qr-reticle { position: absolute; inset: 12%; border-radius: 8px; pointer-events: none;
+    box-shadow: 0 0 0 100vmax rgba(4,8,18,.35);
+    background:
+        linear-gradient(var(--gold), var(--gold)) left top / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) left top / 3px 1.6rem no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right top / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right top / 3px 1.6rem no-repeat,
+        linear-gradient(var(--gold), var(--gold)) left bottom / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) left bottom / 3px 1.6rem no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right bottom / 1.6rem 3px no-repeat,
+        linear-gradient(var(--gold), var(--gold)) right bottom / 3px 1.6rem no-repeat; }
+.qr-hint { margin: .6rem 0 0; font-size: .82rem; }
+.qr-error { color: var(--danger); }
+
+/* What a Red Tape variant changes about the step you are standing on. It REPLACES the step's own hint rather
+   than sitting under it, and it is red: the variant is overruling the rulebook here, not commenting on it. */
+.rt-step-note { margin: 0; font-size: .84rem; color: #f0b7ad;
+    border-left: 3px solid #7a1c16; padding-left: .55rem; }
+
 /* The host is acting for somebody else — said in words under the turn banner, because the buttons below it
    are then about a player who is not this device. */
 .takeover-note { font-size: .75rem; margin: .3rem 0 0; }
+
+/* The objective a random Red Tape removal freed, shown in the popup at card size — the same thing the wall
+   puts up large, so both devices are looking at the same card. */
+.rt-result-card { display: flex; justify-content: center; margin-top: .6rem; }
+.rt-result-card .obj-card { max-width: 20rem; width: 100%; }
 
 /* Closing the session: two answers, each with the consequence written under it. Narrow — it is a question,
    not a screen. */

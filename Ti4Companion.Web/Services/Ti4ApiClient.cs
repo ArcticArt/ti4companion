@@ -31,15 +31,25 @@ public class Ti4ApiClient(HttpClient http)
     public Task UnsubscribePushAsync(Guid id, string endpoint)
         => http.PostAsJsonAsync($"api/sessions/{id}/push/remove", new PushSubscribeRequest(endpoint, "", ""));
 
-    public async Task<SessionStateDto?> GetSessionAsync(string code)
+    public async Task<SessionStateDto?> GetSessionAsync(string code) => (await ReadSessionAsync(code)).Session;
+
+    /// <summary>
+    /// The session — and, when there is none, WHY. <c>Gone</c> means the server says it does not exist
+    /// (404): permanent, so a caller holding that session must let go of it. A rate-limited read (429)
+    /// returns <c>(null, false)</c> instead, because the session is presumably still there and the next
+    /// SignalR event will retry.
+    /// <para>
+    /// The two used to be indistinguishable, and the caller treated both as "no session": a single
+    /// throttled read then blanked a running game into the loading screen.
+    /// </para></summary>
+    public async Task<(SessionStateDto? Session, bool Gone)> ReadSessionAsync(string code)
     {
         var resp = await http.GetAsync($"api/sessions/{code}");
-        if (resp.StatusCode == HttpStatusCode.NotFound) return null;
-        // 429 (per-IP read rate limit): degrade gracefully — keep the current state, the next
-        // SignalR event retries. Never throw into the hub callback / UI event handler.
-        if (resp.StatusCode == HttpStatusCode.TooManyRequests) return null;
+        if (resp.StatusCode == HttpStatusCode.NotFound) return (null, true);
+        // Never throw into the hub callback / UI event handler.
+        if (resp.StatusCode == HttpStatusCode.TooManyRequests) return (null, false);
         resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadFromJsonAsync<SessionStateDto>();
+        return (await resp.Content.ReadFromJsonAsync<SessionStateDto>(), false);
     }
 
     public Task<JoinResultDto?> CreateSessionAsync(CreateSessionRequest req)
@@ -148,6 +158,9 @@ public class Ti4ApiClient(HttpClient http)
         => PostFor($"api/sessions/{id}/redtape/purge", new RedTapeAnswerRequest(confirm));
     public Task<SessionStateDto?> AnswerRedTapeRandomAsync(Guid id, bool confirm)
         => PostFor($"api/sessions/{id}/redtape/random", new RedTapeAnswerRequest(confirm));
+    /// <summary>The host closed the "this is what came off" result — takes it off the popup and the wall.</summary>
+    public Task<SessionStateDto?> AckRedTapeRandomAsync(Guid id)
+        => PostFor<SessionStateDto>($"api/sessions/{id}/redtape/random/seen", null);
     public Task<SessionStateDto?> ScoreObjectiveAsync(Guid id, Guid sessionObjectiveId, Guid playerId)
         => PostFor($"api/sessions/{id}/objectives/{sessionObjectiveId}/scores", new ScoreObjectiveRequest(playerId));
     public Task UnscoreObjectiveAsync(Guid id, Guid sessionObjectiveId, Guid playerId)

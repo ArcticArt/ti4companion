@@ -124,15 +124,42 @@ app.MapGet("/api/push/key", (PushService push) => Results.Ok(new PushKeyDto(push
 // public reads because it is trivially pollable.
 app.MapGet("/api/activity", async (Ti4DbContext db, CancellationToken ct) =>
 {
-    // Counted in MEMORY over one column: the SQLite provider cannot translate a DateTimeOffset comparison
-    // (the same limitation as "no ORDER BY on a DateTimeOffset" — it is stored as TEXT), so a WHERE on
-    // LastActivityUtc throws. One timestamp per session is a handful of rows; the retention worker reads them
-    // the same way.
+    // A GAME, not a session row. Two corrections to the first version, which simply counted sessions with
+    // recent activity (2026-08-12):
+    //   * a session that never got past SETUP is somebody who opened the app and walked away, not a game.
+    //     On the live box that was the majority of rows.
+    //   * a game the host ENDED and closed is deleted, so it dropped straight out of "played today" — the one
+    //     kind of game we are most sure really happened. Its permanent SessionSummary survives the delete (no
+    //     FK, on purpose), so it is counted from there.
+    // The two sources overlap — "back to setup" leaves a session row AND a summary — so they are unioned by
+    // session id rather than added up. A session is only ever counted once, which is also why a table that
+    // plays two games under one code counts once: the summary is keyed by session and updated in place.
+    //
+    // Counted in MEMORY: the SQLite provider cannot translate a DateTimeOffset comparison (the same limitation
+    // as "no ORDER BY on a DateTimeOffset" — it is stored as TEXT), so a WHERE on LastActivityUtc throws. Both
+    // tables hold one row per session; the retention worker reads them the same way.
     var now = DateTimeOffset.UtcNow;
-    var stamps = await db.Sessions.AsNoTracking().Select(s => s.LastActivityUtc).ToListAsync(ct);
-    var day = stamps.Count(t => t >= now.AddHours(-24));
-    var live = stamps.Count(t => t >= now.AddHours(-1));
-    return Results.Ok(new ActivityDto(day, live));
+    var sessions = await db.Sessions.AsNoTracking()
+        .Select(s => new { s.Id, s.Phase, s.LastActivityUtc }).ToListAsync(ct);
+    // StartedAtUtc is the first phase change, i.e. exactly "this one got past setup" for a session that no
+    // longer exists — the same line `Phase != Setup` draws for one that does. It matters because the host's
+    // "end game" records a summary unconditionally, so a session abandoned during setup and then closed
+    // would otherwise arrive here as a game.
+    var finished = await db.SessionSummaries.AsNoTracking()
+        .Select(s => new { s.SessionId, s.StartedAtUtc, s.LastActivityUtc }).ToListAsync(ct);
+
+    int Games(int hours)
+    {
+        var since = now.AddHours(-hours);
+        var ids = new HashSet<Guid>();
+        foreach (var s in sessions)
+            if (s.Phase != GamePhase.Setup && s.LastActivityUtc >= since) ids.Add(s.Id);
+        foreach (var s in finished)
+            if (s.StartedAtUtc is not null && s.LastActivityUtc >= since) ids.Add(s.SessionId);
+        return ids.Count;
+    }
+
+    return Results.Ok(new ActivityDto(Games(24), Games(1)));
 }).RequireRateLimiting("session-read");
 
 app.MapContentEndpoints();

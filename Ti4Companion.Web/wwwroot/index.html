@@ -206,6 +206,97 @@
         window.ti4.buzz = function () {
             try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { }
         };
+        // ---- QR scanner (join by pointing the phone at the wall) --------------------------------
+        // This side owns the CAMERA only; the decoding happens in .NET (ZXing.Net, compiled in), so no
+        // third-party script is fetched and the wall's offline rule is untouched. Frames are handed over as
+        // 8-bit luminance: it is exactly what the decoder wants, and a quarter of the bytes of RGBA.
+        window.ti4.qr = {
+            // Offered only where it can actually work AND where it makes sense. getUserMedia exists only in a
+            // SECURE CONTEXT — on a plain-HTTP LAN address `navigator.mediaDevices` is undefined, the same
+            // browser rule that gates the service worker — and a QR on the wall is scanned with a phone, not
+            // with a laptop webcam, hence the coarse-pointer check.
+            available: function () {
+                try {
+                    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+                        && window.matchMedia('(pointer: coarse)').matches;
+                } catch (e) { return false; }
+            },
+            _stream: null,
+            // Which cameras this device has. Deliberately asked AFTER a stream is open: before permission is
+            // granted the browser hands out entries with an empty id and no label, so there is nothing to
+            // choose between and nothing to name.
+            cameras: async function () {
+                try {
+                    const list = await navigator.mediaDevices.enumerateDevices();
+                    return list.filter(function (d) { return d.kind === 'videoinput' && d.deviceId; })
+                               .map(function (d, i) { return { id: d.deviceId, label: d.label || ('Camera ' + (i + 1)) }; });
+                } catch (e) { return []; }
+            },
+            // Returns '' on success, otherwise the browser's error NAME ('NotAllowedError' when the user says
+            // no, 'NotFoundError' with no camera) so the UI can say which it was.
+            // With no `deviceId` the choice is left to the browser via `facingMode: environment` — a HINT, not
+            // an instruction: it picks a rear camera where there is one, but on a phone with three of them
+            // which one is its business. Hence the switch button, which passes an explicit id.
+            start: async function (video, deviceId) {
+                try {
+                    window.ti4.qr.stop();
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        // Ask for as much resolution as the camera will give: a code read across a table is
+                        // only a few dozen pixels wide, and what the sensor doesn't capture the decoder
+                        // cannot recover. `ideal`, so a camera that cannot do it simply gives what it has.
+                        video: deviceId
+                            ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                            : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                        audio: false
+                    });
+                    window.ti4.qr._stream = stream;
+                    video.srcObject = stream;
+                    // Without `playsinline` iOS takes the video fullscreen and the dialog disappears behind it.
+                    video.setAttribute('playsinline', '');
+                    video.muted = true;
+                    await video.play();
+                    return '';
+                } catch (e) {
+                    window.ti4.qr.stop();
+                    return (e && (e.name || e.message)) || 'error';
+                }
+            },
+            // One frame as grayscale, scaled so the long side is at most `max`. Null while the stream has no
+            // picture yet (readyState < HAVE_CURRENT_DATA) — asking early just yields a black frame.
+            grab: function (video, canvas, max) {
+                try {
+                    if (!video || video.readyState < 2 || !video.videoWidth) return null;
+                    const scale = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight));
+                    const w = Math.max(1, Math.round(video.videoWidth * scale));
+                    const h = Math.max(1, Math.round(video.videoHeight * scale));
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(video, 0, 0, w, h);
+                    const rgba = ctx.getImageData(0, 0, w, h).data;
+                    const gray = new Uint8Array(w * h);
+                    for (let i = 0, p = 0; p < gray.length; i += 4, p++) {
+                        // Rec. 601 luma, the same weighting the decoder would apply itself.
+                        gray[p] = (rgba[i] * 77 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
+                    }
+                    // BASE64, not the array itself: this boundary is JSON, where a Uint8Array stringifies to
+                    // an object with numeric keys — while .NET reads a byte[] as base64. Handing the array
+                    // over directly decodes nothing, silently. Chunked because fromCharCode takes arguments,
+                    // and a whole frame overflows the argument list.
+                    let bin = '';
+                    for (let i = 0; i < gray.length; i += 0x8000) {
+                        bin += String.fromCharCode.apply(null, gray.subarray(i, i + 0x8000));
+                    }
+                    return { width: w, height: h, gray: btoa(bin) };
+                } catch (e) { return null; }
+            },
+            stop: function () {
+                try {
+                    const s = window.ti4.qr._stream;
+                    if (s) { s.getTracks().forEach(function (t) { t.stop(); }); }
+                } catch (e) { }
+                window.ti4.qr._stream = null;
+            }
+        };
         // ---- Web Push ("you're up") -------------------------------------------------------------
         // The notification itself is shown by the service worker (see service-worker*.js); this part only
         // deals with the browser's subscription. Every call answers rather than throws, so the UI can

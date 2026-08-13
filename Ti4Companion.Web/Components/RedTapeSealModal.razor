@@ -40,9 +40,10 @@
                     @* The tape workspace: every objective that was sealed when this was opened, as its own card
                        WITH its tape. Tapping a card pulls the tape; tapping it again puts it back, so a mis-tap
                        costs nothing and the card never disappears from under the finger. The counter at the top
-                       is the variant's allowance — one for the primary plus one per trade good that was on the
-                       card (see GameRules.RedTapeAllowedRemovals). Counted, not enforced. *@
-                    var allowed = GameRules.RedTapeAllowedRemovals(s.RedTapeCarrierGoods);
+                       is the variant's allowance: one for the primary, and under BUREAUCRACY one more per trade
+                       good that was on the card — Red Tape Lite has no such addition, it is always exactly one
+                       (see GameRules.RedTapeAllowedRemovals). Counted, not enforced. *@
+                    var allowed = GameRules.RedTapeAllowedRemovals(s.RedTapeVariant, s.RedTapeCarrierGoods);
                     var taken = Removed(s);
                     var cards = Workspace(s);
                     <div class="rt-pick-head">
@@ -53,7 +54,8 @@
                         </span>
                         <span class="rt-pick-of">
                             @Loc["redtape.pickCounted"]
-                            @if (s.RedTapeCarrierGoods > 0)
+                            @* Where the extra ones come from — only Bureaucracy has any. *@
+                            @if (s.RedTapeVariant == RedTapeVariant.Bureaucracy && s.RedTapeCarrierGoods > 0)
                             {
                                 <span class="faint"> · @string.Format(Loc["redtape.pickGoods"], s.RedTapeCarrierGoods)</span>
                             }
@@ -163,7 +165,7 @@
 
     /// <summary>How far off the allowance the table is: positive = more tape off than the card allows.</summary>
     private int Off(SessionStateDto s)
-        => Removed(s) - GameRules.RedTapeAllowedRemovals(s.RedTapeCarrierGoods);
+        => Removed(s) - GameRules.RedTapeAllowedRemovals(s.RedTapeVariant, s.RedTapeCarrierGoods);
 
     /// <summary>An open question on top of the workspace (null = none). One record for all three, because they
     /// differ only in wording and in what "yes" does.</summary>

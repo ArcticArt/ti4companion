@@ -184,14 +184,15 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     /// <summary>
     /// Whether this device may score for a player right now. Outside the status phase scoring stays open
-    /// (abilities score at other times); inside it, it follows initiative order — mirrors the server gate
-    /// so the UI never offers a button the server would reject.
+    /// (abilities score at other times); inside it a player scores for their OWN seat and only while it is
+    /// up, while the host may act for anyone — mirrors the server gate exactly, so the UI never offers a
+    /// button the server would reject (a rejection is a silent no-op on this client).
     /// </summary>
     public bool CanScoreFor(Guid playerId)
     {
         if (Session is not { } s) return false;
         if (s.Phase != GamePhase.Status) return true;
-        return IsHost || s.StatusScorerId == playerId;
+        return IsHost || (s.StatusScorerId == playerId && MyPlayerId == playerId);
     }
 
     /// <summary>Red Tape variant: an objective whose marker is still on cannot be scored. Mirrors the
@@ -220,6 +221,16 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
             return "redtape.lockedStageI";
         return null;
     }
+
+    /// <summary>
+    /// Red Tape: somebody holds the card that carries the variant's ability this round. That is the whole
+    /// fork in both variants — the holder CHOOSES which marker comes off, and if nobody holds it one comes
+    /// off at random instead. Mirrors <c>RedTape.NobodyTookCarrier</c>, including reading
+    /// <c>RedTapeCardNumber</c> straight rather than through <c>GameRules.RedTapeCarrierCard</c>: the server
+    /// decides on that field, and a client that normalised it differently would answer a different question.
+    /// </summary>
+    public bool CarrierTaken => Session is { } s && RedTapeOn
+        && s.Players.Any(p => p.StrategyCards.Any(c => c.StrategyCardId == s.RedTapeCardNumber));
 
     /// <summary>Stage I objectives whose tape is off (purged ones never score, so they don't count).</summary>
     public int ClearStageI => Session is null ? 0
@@ -421,11 +432,37 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public async Task RefreshAsync()
     {
         if (Session is null) return;
-        Session = await api.GetSessionAsync(Session.JoinCode);
-        if (Session is not null) await AdoptSeatAsync(Session);
+        var (fresh, gone) = await api.ReadSessionAsync(Session.JoinCode);
+        if (gone)
+        {
+            // The session was deleted while this device was in it — the host ended and closed the game, or
+            // the retention worker wiped it. Everything here now describes something that does not exist, so
+            // let go of it and let the shell take the device somewhere real. Before this, the state was
+            // simply nulled and every view sat on its loading screen forever.
+            // The HUB is deliberately not touched here: this runs inside its own message handler, and
+            // disposing a connection from within its processing loop is asking for a deadlock. The shell
+            // calls LeaveAsync when it handles the event, one dispatcher hop later.
+            var code = Session.JoinCode;
+            Session = null;
+            MyPlayerId = null;
+            _lastRemembered = null;
+            Log = Array.Empty<SessionLogEntryDto>();
+            await ForgetRecentAsync(code);
+            OnChange?.Invoke();
+            OnSessionGone?.Invoke();
+            return;
+        }
+        // A throttled read (429) says nothing about the session — keep what we have and wait for the next
+        // change. Overwriting it with null was the same infinite loading screen, one rate limit later.
+        if (fresh is null) return;
+        Session = fresh;
+        await AdoptSeatAsync(fresh);
         await RefreshLogAsync();
         OnChange?.Invoke();
     }
+
+    /// <summary>The session this device was in no longer exists on the server.</summary>
+    public event Action? OnSessionGone;
 
     /// <summary>
     /// Somebody took this device's seat over: the session is still there, but this device is no longer that

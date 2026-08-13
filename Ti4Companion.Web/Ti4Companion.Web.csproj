@@ -22,6 +22,7 @@
          package rather than QRCoder: it is a dependency-free managed port of Nayuki's generator, whereas
          QRCoder drags in System.Drawing.Common / SkiaSharp, which have no business in a WASM payload. -->
     <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="3.1.0" />
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
   </ItemGroup>
 
   <ItemGroup>

@@ -98,6 +98,7 @@ public static class SessionEndpoints
         g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/marker", SetObjectiveMarker); // Red Tape variant
         g.MapPost("/{id:guid}/redtape/purge", AnswerRedTapePurge);   // Lite: confirm/decline the purge the app proposed
         g.MapPost("/{id:guid}/redtape/random", AnswerRedTapeRandom); // Lite: confirm/decline the random removal
+        g.MapPost("/{id:guid}/redtape/random/seen", AckRedTapeRandom); // Lite: the table has seen which one it was
         g.MapPost("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores", ScoreObjective);
         g.MapDelete("/{id:guid}/objectives/{sessionObjectiveId:guid}/scores/{playerId:guid}", UnscoreObjective);
 
@@ -352,9 +353,11 @@ public static class SessionEndpoints
         // goods accumulated on the card they picked, and every card no one picked gains 1 more.
         // Keeping them on the card through the whole strategy phase means a pick→unpick doesn't lose them.
         var picked = session.Players.SelectMany(p => p.StrategyCards.Select(c => c.StrategyCardId)).ToHashSet();
-        // Red Tape's SPECIAL: "remove Red Tape counters equal to the number of trade goods on this card" — the
-        // count is read HERE, in the one moment it still exists, and remembered for the round. The goods are
-        // wiped in the same breath (the player collected them), so the action phase could not work it out.
+        // BUREAUCRACY's SPECIAL: "remove Red Tape counters equal to the number of trade goods on this card" —
+        // the count is read HERE, in the one moment it still exists, and remembered for the round. The goods
+        // are wiped in the same breath (the player collected them), so the action phase could not work it out.
+        // Captured for every table because it costs nothing; whether it MEANS anything is the variant's
+        // business, and Red Tape Lite has no such addition (GameRules.RedTapeAllowedRemovals).
         session.RedTapeCarrierGoods = picked.Contains(session.RedTapeCardNumber)
             ? session.StrategyCardStates.FirstOrDefault(x => x.StrategyCardId == session.RedTapeCardNumber)?.TradeGoods ?? 0
             : 0;
@@ -458,6 +461,9 @@ public static class SessionEndpoints
         // answers it during the next strategy phase, which is exactly the normal case.
         if (session.RedTapeRandomPendingRound != 0 && session.RedTapeRandomPendingRound < session.CurrentRound)
             RedTape.DeclineRandom(session);
+        // A result the host never closed belongs to the round that is ending — clear it before the next one
+        // raises its own, or the wall would show last round's card over this round's question.
+        session.RedTapeRandomRevealedId = null;
         // Same as in StartAgendaPhase — whichever way the table leaves the status phase, the removal is due
         // once. Still in the OLD round here, which is what the per-round guard keys on.
         RedTapeRandom(session);
@@ -890,6 +896,7 @@ public static class SessionEndpoints
         session.RedTapeCarrierGoods = 0;
         session.RedTapeRandomRound = 0;
         session.RedTapeRandomPendingRound = 0;      // no open question carries into the next match
+        session.RedTapeRandomRevealedId = null;
         session.DisplayMode = DisplayMode.JoinQr;   // a fresh table starts on the join code again
         foreach (var p in session.Players)
         {
@@ -1422,12 +1429,28 @@ public static class SessionEndpoints
             {
                 Log(db, session, http, SessionLogKind.RedTapeRandom, round: round, phase: session.Phase,
                     detail: string.IsNullOrEmpty(picked.ObjectiveId) ? picked.CustomName : picked.ObjectiveId);
+                // Which one it was, until the host closes the result: the table has to SEE what the app just
+                // did to their game, and the wall shows it the way it shows any other reveal.
+                session.RedTapeRandomRevealedId = picked.Id;
                 // That tape may have been the fifth Stage I — then the purge question follows this one.
                 RedTape.ProposePurge(session);
             }
         }
         else RedTape.DeclineRandom(session);
 
+        return await SaveAndReturn(db, hub, session, ct);
+    }
+
+    /// <summary>The host has seen which objective the random removal cleared: take the result off the popup
+    /// and off the wall, and the game goes on. Host only, and a no-op when there is nothing showing, so a
+    /// double tap is harmless.</summary>
+    private static async Task<IResult> AckRedTapeRandom(Guid id, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
+    {
+        var session = await LoadGraphAsync(db, id, ct);
+        if (session is null) return Results.NotFound();
+        if (!CallerIsHost(session, http)) return Forbidden();
+        if (session.RedTapeRandomRevealedId is null) return Results.Ok(session.ToDto(FactionInitiative.Overrides));
+        session.RedTapeRandomRevealedId = null;
         return await SaveAndReturn(db, hub, session, ct);
     }
 
@@ -1439,11 +1462,14 @@ public static class SessionEndpoints
         // Scoring is open to any device, but the scorer must be a real player in THIS session —
         // otherwise an anonymous caller could insert unbounded score rows with random GUIDs.
         if (session.Players.All(p => p.Id != req.PlayerId)) return Results.NotFound();
-        // In the STATUS phase scoring runs in initiative order: only the player whose turn it is may
-        // score (the host may act for anyone). Outside that phase — during the action phase, or an
-        // ability that scores at another time — it stays open as before.
+        // In the STATUS phase scoring runs in initiative order, and it is the PLAYER's own decision: a device
+        // may only score for the seat it holds, and only while that seat is the one up (the host may act for
+        // anyone, which is how a table sharing one device still works). It used to check the turn but not the
+        // device, so any phone could score for whoever was up — including the six players who are not.
+        // Outside that phase — during the action phase, or an ability that scores at another time — it stays
+        // open as before.
         if (session.Phase == GamePhase.Status && !CallerIsHost(session, http)
-            && TurnService.CurrentScorer(session, FactionInitiative.Overrides) != req.PlayerId)
+            && !CallerScoringFor(session, http, req.PlayerId))
         {
             return Forbidden();
         }
@@ -1467,14 +1493,27 @@ public static class SessionEndpoints
         return await SaveAndReturn(db, hub, session, ct);
     }
 
-    private static async Task<IResult> UnscoreObjective(Guid id, Guid sessionObjectiveId, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, CancellationToken ct)
+    private static async Task<IResult> UnscoreObjective(Guid id, Guid sessionObjectiveId, Guid playerId, Ti4DbContext db, IHubContext<SessionHub> hub, HttpContext http, CancellationToken ct)
     {
         var session = await LoadGraphAsync(db, id, ct);
         var obj = session?.Objectives.FirstOrDefault(o => o.Id == sessionObjectiveId);
         if (session is null || obj is null) return Results.NotFound();
+        // The same gate as scoring, or tightening one of them would be pointless: taking a score back and
+        // putting it on again is the same power. (This route had no gate at all.)
+        if (session.Phase == GamePhase.Status && !CallerIsHost(session, http)
+            && !CallerScoringFor(session, http, playerId))
+        {
+            return Forbidden();
+        }
         obj.Scores.RemoveAll(s => s.PlayerId == playerId);
         return await SaveAndReturn(db, hub, session, ct);
     }
+
+    /// <summary>The calling device holds <paramref name="playerId"/>'s seat AND that seat is the one whose
+    /// turn it is to score. Host callers are checked separately — they may act for anyone.</summary>
+    private static bool CallerScoringFor(GameSession session, HttpContext http, Guid playerId)
+        => GetCaller(session, http)?.Id == playerId
+           && TurnService.CurrentScorer(session, FactionInitiative.Overrides) == playerId;
 
     // -----------------------------------------------------------------------
     // Technologies

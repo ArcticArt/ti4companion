@@ -95,7 +95,14 @@
             @if (scorer is not null)
             {
                 <h3 style="margin:0 0 .2rem;">@string.Format(Loc["status.scoreFor"], scorer.Name)</h3>
-                <p class="faint" style="margin:0 0 .5rem;">@Loc["status.tapToScore"]</p>
+                @* Say which it is: your decision to make, or somebody else's to watch. The cards below are
+                   only tappable in the first case (and the server refuses the second), so without this line
+                   the screen would read as a list that has stopped working. *@
+                <p class="faint" style="margin:0 0 .5rem;">
+                    @(Store.CanScoreFor(scorer.Id)
+                        ? Loc["status.tapToScore"]
+                        : string.Format(Loc["status.watchOnly"], scorer.Name))
+                </p>
             }
             else
             {
@@ -132,10 +139,30 @@
         @* Bureaucracy replaces this step outright: everything is already face-up, so nothing is revealed and
            the step becomes a game-end check ("the game ends if there are no unrevealed public objectives at
            the start of this step" — rulebook insert). Red Tape Lite keeps revealing, so it keeps the box. *@
-        var bureaucracy = s.RedTapeVariant == RedTapeVariant.Bureaucracy;
+        @* A Red Tape variant REPLACES what this step is, so it replaces the text as well — the ordinary
+           "the speaker reveals the next objective" line is wrong at both of these tables and printing it
+           above the variant's own note only invited the table to do both. Red, because it is the variant
+           overruling the rulebook and not a hint about it. *@
+        var rtVariant = s.RedTapeVariant;
         <div class="panel" style="margin-top:.6rem;">
-            <h3 style="margin:0 0 .2rem;">@Loc[bureaucracy ? "redtape.stepReplaced" : "status.stage.reveal"]</h3>
-            <p class="faint" style="margin:0;">@Loc[bureaucracy ? "redtape.stepReplacedHint" : "status.revealHint"]</p>
+            <h3 style="margin:0 0 .2rem;">@Loc[rtVariant == RedTapeVariant.Bureaucracy ? "redtape.stepReplaced" : "status.stage.reveal"]</h3>
+            @if (rtVariant == RedTapeVariant.None)
+            {
+                <p class="faint" style="margin:0;">@Loc["status.revealHint"]</p>
+            }
+            else if (rtVariant == RedTapeVariant.Bureaucracy)
+            {
+                <p class="rt-step-note">@Loc["redtape.stepReplacedHint"]</p>
+            }
+            else
+            {
+                @* Lite: nothing is revealed HERE either. Either the card was taken this round and its holder
+                   already chose which marker came off, or nobody took it and one comes off at random when
+                   the phase ends (the app asks the host — see RedTapeModal). *@
+                <p class="rt-step-note">
+                    @string.Format(Loc[Store.CarrierTaken ? "redtape.stepLiteTaken" : "redtape.stepLiteRandom"], CarrierName(s))
+                </p>
+            }
         </div>
         <ObjectivesTab RevealOnTop="true" Scoreable="false" />
         break;
@@ -190,6 +217,15 @@
     {
         sealMode = null;
         lockedAsk = null;
+    }
+
+    /// <summary>The card that carries the Red Tape ability, by the name the table sees (Bureaucracy renames
+    /// Imperial). Via <c>GameRules</c>, which normalises Lite back to Diplomacy — a stored Imperial from a
+    /// table that switched variants must not make the note point at the wrong card.</summary>
+    private string CarrierName(SessionStateDto s)
+    {
+        var card = Store.Card(GameRules.RedTapeCarrierCard(s.RedTapeVariant, s.RedTapeCardNumber));
+        return card is null ? "—" : CardDisplay.Name(Loc, s, card);
     }
 
     private static readonly (StatusStage Stage, string Key)[] Stages =

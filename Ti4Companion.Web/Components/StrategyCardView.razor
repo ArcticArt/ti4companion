@@ -18,15 +18,26 @@
     </div>
     @if (ShowText)
     {
-        @* Red Tape variant: the card the table replaced with its Bureaucracy version. The printed base text
-           below is untouched (it comes from the master DB and stays the real card) — this is the addition the
-           variant prints on top of it, and the variant puts it BEFORE the original steps. *@
-        @if (IsRedTapeCarrier)
+        @* Red Tape variant: the addition the variant prints on top of the card, before the original steps.
+           The base text below is untouched (it comes from the master DB and stays the real card).
+           ⚠️ The two BUREAUCRACY lines are transcribed from that variant's printed card — the SPECIAL (one
+           marker per trade good) and its Stage II rule are ITS text. Red Tape Lite replaces no card at all:
+           it has no SPECIAL, its Stage II rule is a different one, and there is nothing to transcribe. So it
+           gets the app's own one-line summary instead of invented card text (same reason the objectives are
+           never paraphrased — see the content rule). *@
+        @if (RedTapeVariantHere == RedTapeVariant.Bureaucracy)
         {
             <div class="ability-label rt"><b>@Loc["redtape.cardLabel"]</b></div>
             <ul class="ability-bullets rt-bullets">
                 <li>@Loc["redtape.cardSpecial"]</li>
                 <li>@Loc["redtape.cardPrimary"]</li>
+            </ul>
+        }
+        else if (RedTapeVariantHere == RedTapeVariant.Lite)
+        {
+            <div class="ability-label rt"><b>@Loc["redtape.cardLabel"]</b></div>
+            <ul class="ability-bullets rt-bullets">
+                <li>@Loc["redtape.actionLite"]</li>
             </ul>
         }
         <div class="ability-label"><b>@Loc["turn.primary"]</b></div>
@@ -56,7 +67,12 @@
     private string TgTitle => $"{TradeGoods} {Loc["strategy.tradeGoods"]}";
 
     /// <summary>This is the card the Red Tape variant replaced (Diplomacy or Imperial).</summary>
-    private bool IsRedTapeCarrier => Store.RedTapeOn && Store.Session?.RedTapeCardNumber == Card.Id;
+    /// <summary>Which Red Tape variant's addition belongs on THIS card — <c>None</c> unless a variant is on
+    /// and this is the card carrying it.</summary>
+    private RedTapeVariant RedTapeVariantHere =>
+        Store.Session is { } s && Store.RedTapeOn && s.RedTapeCardNumber == Card.Id
+            ? s.RedTapeVariant
+            : RedTapeVariant.None;
 
     private Task HandleClick() => Clickable && OnClick.HasDelegate ? OnClick.InvokeAsync() : Task.CompletedTask;
 
