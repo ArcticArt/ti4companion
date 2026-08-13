@@ -14,6 +14,15 @@
     // clear whose taps count. So it is a mode, off by default, with a button to enter and leave it.
     var takeover = host && Store.HostTakeover;
     var canControl = active is not null && (mine || takeover);
+    // A card's OWN step (Politics' appointment, Imperial's scoring, Red Tape's marker) is offered to the
+    // player who is up AND to the host, whether or not the takeover mode is on. The server has always
+    // allowed "the active player or the host" here; the client did not, and that was a dead end reported
+    // from a real game: the step is only answerable on the acting player's own device, so a table whose
+    // active seat has no live device — one shared tablet, a player who joined a second seat, a phone that
+    // lost its seat to a take-over — had nobody who could answer at all. For Politics that stops the game,
+    // because the turn cannot be ended until the token has moved (400 for everyone, host included).
+    // The pass / play / turn buttons stay behind the takeover mode: that is what the mode is for.
+    var canResolveCard = active is not null && (mine || host);
 }
 
 @if (allPassed)
@@ -62,7 +71,7 @@
 @* Card-specific actions. Only three of the eight have one worth offering; the other five are resolved on
    the table and the app would only be in the way. Technology and Imperial are offers; Politics is the one
    exception — see the modal below. *@
-@if (s.SpeakerPending && canControl && !speakerDismissed)
+@if (s.SpeakerPending && canResolveCard && !speakerDismissed)
 {
     @* Politics: the appointment IS the card, and it comes first. A modal rather than a panel further down
        the page, because the turn cannot be ended until it is done (server-side too) and a blocked button
@@ -93,9 +102,11 @@
         </div>
     </div>
 }
-else if (s.SpeakerPending && canControl)
+else if (s.SpeakerPending && canResolveCard)
 {
-    @* Dismissed, but still owed: the way back in, where the turn buttons are. *@
+    @* Closed, but still owed: the way back in, where the turn buttons are. This is also where the HOST's
+       device starts when somebody else is up (see SpeakerStarts below) — a band with a button rather than a
+       modal, so the table's device is not interrupted by a dialog it usually does not have to answer. *@
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text"><strong>@Loc["politics.speaker"]</strong> — @Loc["politics.stillOwed"]</span>
         <div class="spacer" style="flex:1"></div>
@@ -166,7 +177,7 @@ else if (s.SpeakerPending)
 @* Red Tape variant: the carrier card's own step, which the variant puts BEFORE everything else on the card.
    An offer like the others — the app tapes the objectives and refuses to score a taped one, but which tape
    comes off is the table's decision (and the rest of the variant's rules stay with them). *@
-@if (Store.RedTapeOn && PlayedNow(s, active, s.RedTapeCardNumber) && canControl)
+@if (Store.RedTapeOn && PlayedNow(s, active, s.RedTapeCardNumber) && canResolveCard)
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">
@@ -184,7 +195,7 @@ else if (s.SpeakerPending)
 @* Imperial: offer to score an objective (scoring outside the status phase is open, so no new permission). The
    choice is a popup listing what this player may score, like the technology picker and the Red Tape one —
    sending them to the objectives tab meant finding the card and the right marker two screens away. *@
-@if (PlayedNow(s, active, GameRules.ImperialStrategyCard) && canControl && active is not null)
+@if (PlayedNow(s, active, GameRules.ImperialStrategyCard) && canResolveCard && active is not null)
 {
     <div class="panel tech-prompt" style="margin-top:.6rem;">
         <span class="tp-text">@Loc["imperial.promptText"]</span>
@@ -363,11 +374,29 @@ else
         await Store.Mutate(Store.Api.AppointSpeakerAsync(Sid, playerId));
     }
 
+    /// <summary>Which appointment <see cref="speakerDismissed"/> belongs to, so "starts open or starts
+    /// collapsed" is decided once per appointment and not on every render.</summary>
+    private Guid? speakerArmedFor;
+
     // A dismissal belongs to ONE pending appointment. The flag is cleared as soon as none is pending, so
     // playing Politics again (or the next round's) puts the dialog back up rather than the band.
     protected override void OnParametersSet()
     {
-        if (Store.Session is { SpeakerPending: false }) speakerDismissed = false;
+        var s = Store.Session;
+        if (s is null) return;
+        if (!s.SpeakerPending)
+        {
+            speakerDismissed = false;
+            speakerArmedFor = null;
+            return;
+        }
+        if (speakerArmedFor == s.ActivePlayerId) return;
+        speakerArmedFor = s.ActivePlayerId;
+        // The dialog opens BY ITSELF on the device that is playing this turn. The host's device starts on the
+        // band instead when somebody else is up: it can always answer (that is the fix for the stuck table),
+        // but it should not be interrupted by a modal for a step that usually belongs to another phone.
+        var acting = Store.MyPlayerId == s.ActivePlayerId || (Store.IsHost && Store.HostTakeover);
+        speakerDismissed = !acting;
     }
 
     private async Task StartCombat(Guid opponentId)

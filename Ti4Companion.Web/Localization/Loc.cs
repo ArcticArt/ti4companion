@@ -774,16 +774,17 @@ public class Loc
         ["common.back"] = ("Back", "Zurück"),
         ["common.continue"] = ("Carry on", "Weiter geht's"),
         // Secondary abilities of a strategy action (only with the turn timer in use).
-        // The dialog can be closed without answering — the block stays, so these say how to get back to it.
-        ["politics.cancelHint"] = ("The turn cannot be ended until this is done.",
-                                   "Der Zug lässt sich erst beenden, wenn das erledigt ist."),
+        // The dialog can be closed without answering, and since 2026-08-13 nothing is blocked by it either —
+        // it is a reminder, so these say how to get back to it rather than what it prevents.
+        ["politics.cancelHint"] = ("You can come back to it from the bar below.",
+                                   "Über die Leiste unten kommst du wieder hierher."),
         ["politics.stillOwed"] = ("The speaker has not been appointed yet.",
                                   "Der Sprecher ist noch nicht ernannt."),
         ["politics.reopen"] = ("Appoint now", "Jetzt ernennen"),
         ["politics.speaker"] = ("Appoint the speaker", "Sprecher bestimmen"),
         ["politics.modalHint"] = (
-            "Politics: choose the new speaker first — the turn can't be ended until you have. Anyone but the current speaker, yourself included.",
-            "Politik: zuerst den neuen Sprecher wählen — vorher lässt sich der Zug nicht beenden. Jeder außer dem bisherigen Sprecher, du selbst eingeschlossen."),
+            "Politics: choose the new speaker. Anyone but the current speaker, yourself included.",
+            "Politik: den neuen Sprecher wählen. Jeder außer dem bisherigen Sprecher, du selbst eingeschlossen."),
         ["politics.waitingFor"] = ("{0} is appointing the new speaker.", "{0} bestimmt den neuen Sprecher."),
         ["imperial.promptText"] = ("Imperial: you may score a public objective.", "Imperium: du darfst einen öffentlichen Auftrag werten."),
         ["imperial.promptOpen"] = ("Score an objective", "Auftrag werten"),

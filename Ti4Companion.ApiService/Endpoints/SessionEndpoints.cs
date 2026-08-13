@@ -534,8 +534,11 @@ public static class SessionEndpoints
         var session = await LoadGraphAsync(db, id, ct);
         if (session is null) return Results.NotFound();
         if (!CallerCanActFor(session, http, session.ActivePlayerId ?? Guid.Empty)) return Forbidden();
-        if (session.SpeakerPending) return SpeakerFirst();
         var overrides = FactionInitiative.Overrides;
+        // Politics used to REFUSE the turn end until the speaker had been appointed. It no longer does (on
+        // request, 2026-08-13): the app tracks a game, it does not referee one, and a table that could not
+        // get past this had no way forward at all. The prompt stays, the block is gone — see SpeakerPending.
+        session.SpeakerPending = false;
         // A new turn begins: a combat from the last one is over whether or not anybody said so, and so is a
         // technology prompt nobody finished — both stop the clock, so neither may outlive the turn. Closed
         // BEFORE the two calls below, which may raise a fresh prompt for the turn that is ending.
@@ -691,7 +694,9 @@ public static class SessionEndpoints
             // A player may only pass once they have performed all of their strategy actions.
             if (player.StrategyCards.Count > 0 && player.StrategyCards.Any(c => !c.IsExhausted))
                 return Results.BadRequest(new { error = "Play all strategy actions before passing." });
-            if (session.SpeakerPending && playerId == session.ActivePlayerId) return SpeakerFirst();
+            // The turn ends here too, so a Politics appointment nobody made stops being pending (it is a
+            // reminder, not a gate — see AdvanceTurn).
+            if (playerId == session.ActivePlayerId) session.SpeakerPending = false;
 
             player.HasPassed = true;
             Log(db, session, http, SessionLogKind.Pass, target: playerId);
@@ -1723,10 +1728,6 @@ public static class SessionEndpoints
 
     private static IResult Forbidden() =>
         Results.Json(new { error = "Not allowed — host only." }, statusCode: StatusCodes.Status403Forbidden);
-
-    /// <summary>Politics is on the table and the speaker has not been appointed — the turn can't end yet.</summary>
-    private static IResult SpeakerFirst() =>
-        Results.BadRequest(new { error = "Appoint the new speaker before ending the turn." });
 
     /// <summary>Red Tape Lite: a round in which nobody took the carrier card takes one tape off at random.
     /// Called at the two moments the variant names — right after the strategy phase in round 1, and when the
