@@ -343,8 +343,10 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
 
     public async Task InitAsync()
     {
+        // EnsureDeviceTokenAsync always leaves a token behind, stored or not — hence the ?? "", which is the
+        // "no identity at all" case the server reads as a spectator rather than a broken request.
         await EnsureDeviceTokenAsync();
-        api.SetDeviceToken(DeviceToken); // identify this device so the server can enforce host rights
+        api.SetDeviceToken(DeviceToken ?? ""); // identify this device so the server can enforce host rights
 
         var langStr = await storage.GetAsync(KeyLang);
         if (Enum.TryParse<Language>(langStr, out var lang)) loc.SetLanguage(lang);
