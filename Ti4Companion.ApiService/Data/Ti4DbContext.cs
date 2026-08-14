@@ -20,6 +20,9 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
     public DbSet<SessionSummary> SessionSummaries => Set<SessionSummary>();
     public DbSet<SessionSummaryPlayer> SessionSummaryPlayers => Set<SessionSummaryPlayer>();
 
+    // Typed by a player in the app, read by the Ops tool over SSH. No relation to a session on purpose.
+    public DbSet<BugReport> BugReports => Set<BugReport>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -91,6 +94,11 @@ public class Ti4DbContext(DbContextOptions<Ti4DbContext> options) : DbContext(op
         b.Entity<StrategyCardState>().HasIndex(x => new { x.SessionId, x.StrategyCardId }).IsUnique();
         b.Entity<AgendaVote>().HasIndex(x => new { x.SessionId, x.PlayerId }).IsUnique();
         b.Entity<SessionLogEntry>().HasIndex(x => new { x.SessionId, x.TimestampUtc });
+
+        // ---- Bug reports (same reasoning: no relationship to Sessions, so they outlive them) ----
+        // Indexed on "unread first, newest first", which is the only way the Ops tool ever reads them.
+        b.Entity<BugReport>().Property(x => x.Id).ValueGeneratedNever();
+        b.Entity<BugReport>().HasIndex(x => new { x.IsRead, x.CreatedAtUtc });
 
         // ---- Session summaries (survive the session's auto-wipe: no relationship to Sessions) ----
         b.Entity<SessionSummary>().HasIndex(x => x.SessionId).IsUnique();  // re-recording updates in place

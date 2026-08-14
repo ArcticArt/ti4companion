@@ -383,6 +383,19 @@ public record SetStatusStageRequest(StatusStage Stage);
 /// LAN address, a renamed subdomain and a second staging box.</summary>
 public record InstanceDto(string Label);
 
+/// <summary>A bug report typed in the app. Everything but the text is context the reporter never has to
+/// think about: where they were, which build, which browser. Nothing here identifies a person, and no IP is
+/// stored with it.</summary>
+public record BugReportRequest(
+    string Text,
+    string? JoinCode = null,
+    string? PlayerName = null,
+    string? Context = null,
+    string? Version = null,
+    string? UserAgent = null,
+    /// <summary>Optional: how the reporter would like to be reached about this report.</summary>
+    string? Contact = null);
+
 /// <summary>An announcement from whoever runs the instance, shown at the top of every screen until the
 /// reader clicks it away. <paramref name="Text"/> empty means there is nothing to say.
 /// <para>

@@ -45,6 +45,23 @@ public class Loc
         ["home.openDisplay"] = ("Open display", "Display öffnen"),
         // The start page's list of sessions THIS DEVICE has played (max SessionStore.MaxRecent).
         // A deploy landed while the app was open; see UpdateNotice.razor.
+        // Bug reports. The reporter is told exactly what travels with the text — nobody should have to guess
+        // what leaves their device — and the contact field says plainly what it is used for.
+        ["bug.title"] = ("Report a problem", "Fehler melden"),
+        ["bug.hint"] = ("What happened, and what did you expect instead? The more precise, the better the chance of a fix.",
+                        "Was ist passiert, und was hättest du stattdessen erwartet? Je genauer, desto größer die Chance auf eine Lösung."),
+        ["bug.placeholder"] = ("e.g. I played Politics and the turn could not be ended …",
+                               "z. B. Ich habe Politik gespielt und konnte den Zug nicht beenden …"),
+        ["bug.contact"] = ("Contact (optional)", "Kontakt (optional)"),
+        ["bug.contactPlaceholder"] = ("Email, Discord, Reddit …", "E-Mail, Discord, Reddit …"),
+        ["bug.contactHint"] = ("Only used to ask you back about this report or to tell you it is fixed.",
+                               "Wird nur für Rückfragen zu dieser Meldung oder eine Rückmeldung benutzt."),
+        ["bug.context"] = ("Sent along", "Wird mitgeschickt"),
+        ["bug.contextNone"] = ("no session · app version and browser", "keine Session · App-Version und Browser"),
+        ["bug.send"] = ("Send", "Senden"),
+        ["bug.thanks"] = ("Thank you — the report is in.", "Danke, die Meldung ist angekommen."),
+        ["bug.failed"] = ("That did not go through. Please try again in a moment.",
+                          "Das hat nicht geklappt. Bitte gleich noch einmal versuchen."),
         ["update.available"] = ("A new version is available.", "Eine neue Version ist verfügbar."),
         // What the reload does, and that it is safe: the game itself lives on the server, so nothing is lost.
         ["update.hint"] = ("Reload to switch to it — the running game is not affected.",

@@ -421,3 +421,48 @@ public class SessionLogEntry
     /// <summary>Free-form detail: an id (card/objective/agenda/tech) or a small encoded value.</summary>
     public string? Detail { get; set; }
 }
+
+/// <summary>
+/// A bug report typed into the app by whoever hit the problem. Deliberately its own table with NO relation
+/// to <see cref="GameSession"/>: a report about a session must outlive it (the retention worker wipes
+/// sessions, and the interesting reports are often about a game that has since ended), so the session is
+/// referenced by its join CODE, as text, and nothing cascades.
+/// <para>
+/// Read only by the Ops tool over SSH, like <see cref="SessionSummary"/> — reports are free text somebody
+/// typed, so there is no HTTP endpoint that hands them out.
+/// </para>
+/// </summary>
+public class BugReport
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>What the reporter wrote. Capped server-side; the client caps it too.</summary>
+    public string Text { get; set; } = "";
+
+    /// <summary>The session the reporter was in, by join code — not an FK, see the class remark.</summary>
+    public string? JoinCode { get; set; }
+
+    /// <summary>Which seat they held, if any, so a report can be matched to what the log shows.</summary>
+    public string? PlayerName { get; set; }
+
+    /// <summary>Phase and round at the moment of writing, as text, because the point is what the reporter
+    /// saw and not what the session says now.</summary>
+    public string? Context { get; set; }
+
+    /// <summary>Which build this was, straight from the assembly the browser is running.</summary>
+    public string? Version { get; set; }
+
+    /// <summary>The browser's own description of itself. Kept because "iPhone, home screen" and "Chrome on
+    /// Windows" are the first question for half of these reports. No IP address is stored, here or anywhere.</summary>
+    public string? UserAgent { get; set; }
+
+    /// <summary>How to reach the reporter about THIS report — an address, a handle, whatever they chose to
+    /// type. Optional, and the only field here a person puts their own identity into, so it exists for one
+    /// purpose (asking them back, telling them it is fixed) and is never used for anything else.</summary>
+    public string? Contact { get; set; }
+
+    /// <summary>Set once the report has been read in the Ops tool.</summary>
+    public bool IsRead { get; set; }
+    public DateTimeOffset? ReadAtUtc { get; set; }
+}

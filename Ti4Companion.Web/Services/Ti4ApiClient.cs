@@ -30,6 +30,18 @@ public class Ti4ApiClient(HttpClient http)
     public Task<InstanceDto?> GetInstanceAsync()
         => http.GetFromJsonAsync<InstanceDto>("api/instance");
 
+    /// <summary>Send a bug report. Returns false when it did not land, so the dialog can say so instead of
+    /// pretending — a report the reporter believes is filed and is not is worse than no button at all.</summary>
+    public async Task<bool> SendBugReportAsync(BugReportRequest req)
+    {
+        try
+        {
+            var res = await http.PostAsJsonAsync("api/bug-reports", req);
+            return res.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     /// <summary>The operator's announcement, polled while a page is open. Any failure is silence: a banner
     /// that cannot be fetched is not worth an error on a table's screen.</summary>
     public async Task<NoticeDto?> GetNoticeAsync()

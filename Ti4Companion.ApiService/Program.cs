@@ -41,6 +41,11 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("session-read", ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 600, Window = TimeSpan.FromMinutes(1) }));
+    // Bug reports: somebody typing what went wrong. Ten in ten minutes is more than any real reporter
+    // needs and little enough that the table cannot be filled from a script.
+    options.AddPolicy("bug-report", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(10) }));
 });
 
 // Background worker that wipes inactive sessions after their retention window.
@@ -153,6 +158,30 @@ app.MapGet("/api/ping", () => Results.Ok(new { status = "ok", time = DateTimeOff
 // Unauthenticated and unmetered on purpose: every client asks once at startup, before any session exists.
 app.MapGet("/api/instance", (IConfiguration cfg) =>
     Results.Ok(new InstanceDto(cfg["Ti4:InstanceLabel"] ?? "")));
+
+// "Something is wrong": the report lands in the database and is read in the Ops tool over SSH. There is
+// deliberately no endpoint that reads them back — they are free text somebody typed, and this API is public.
+app.MapPost("/api/bug-reports", async (BugReportRequest req, Ti4DbContext db, CancellationToken ct) =>
+{
+    static string? Cap(string? s, int max) =>
+        string.IsNullOrWhiteSpace(s) ? null : s.Trim()[..Math.Min(s.Trim().Length, max)];
+
+    var text = Cap(req.Text, 2000);
+    if (text is null) return Results.BadRequest(new { error = "Say what went wrong." });
+
+    db.BugReports.Add(new BugReport
+    {
+        Text = text,
+        JoinCode = Cap(req.JoinCode, 16),
+        PlayerName = Cap(req.PlayerName, 60),
+        Context = Cap(req.Context, 120),
+        Version = Cap(req.Version, 40),
+        UserAgent = Cap(req.UserAgent, 300),
+        Contact = Cap(req.Contact, 120),
+    });
+    await db.SaveChangesAsync(ct);
+    return Results.Ok();
+}).RequireRateLimiting("bug-report");
 
 // Anything the operator wants to tell everybody, or an empty string. Every client polls this while it is
 // open, so it is metered like the other public reads — and answered from a cached stat(), see NoticeService.

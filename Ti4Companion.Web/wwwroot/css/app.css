@@ -1298,6 +1298,20 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .update-bar .ub-go { flex: 1 1 100%; }
 }
 
+/* Report a problem (BugReportModal). A plain form: the app has no other multi-line input, so the textarea
+   brings its own look rather than borrowing one that does not exist. */
+.bug-modal { width: min(94vw, 34rem); }
+.bug-text, .bug-contact { width: 100%; padding: .5rem .6rem; border-radius: 8px;
+    background: var(--bg-2); border: 1px solid var(--panel-border); color: var(--text);
+    font: inherit; font-size: .9rem; line-height: 1.45; }
+.bug-text { resize: vertical; min-height: 6.5rem; }
+.bug-text:focus, .bug-contact:focus { outline: none; border-color: var(--gold); }
+.bug-label { display: block; margin: .7rem 0 .25rem; font-size: .8rem; color: var(--text-dim); }
+.bug-note { margin: .35rem 0 0; font-size: .74rem; }
+.bug-count { font-size: .74rem; }
+.bug-failed { margin: .6rem 0 0; color: var(--danger); font-size: .82rem; }
+.bug-thanks { display: flex; align-items: center; gap: .5rem; margin: .4rem 0; color: var(--good); font-size: 1rem; }
+
 /* The operator's announcement (AdminNotice). Same idea as the update bar and deliberately the same shape, so
    the app has one way of saying "read this" — but RED and at the TOP, because it comes from outside the game.
    Fixed, full width, and it pays the notch back like every other full-bleed surface. */

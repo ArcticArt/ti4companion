@@ -48,6 +48,8 @@
         <PushToggle />
         <span class="dot @(Store.Connected ? "on" : "off")" title="@(Store.Connected ? "live" : Loc["common.connecting"])"></span>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
+        @* Report a problem, next to the way out. In a session it can name where the reporter was. *@
+        <button class="btn btn-sm btn-ghost ab-bug" @onclick="() => showBug = true" title='@Loc["bug.title"]'><MaterialIcon Name="bug_report" /></button>
         <button class="btn btn-sm btn-ghost" @onclick="() => showExit = true" title='@Loc["nav.leave"]'><MaterialIcon Name="close" /></button>
     }
     else
@@ -55,6 +57,8 @@
         @* No brand here: outside a session the title stands large over the start page itself (see Home). *@
         <div class="spacer"></div>
         <button class="btn btn-sm" @onclick="ToggleLang" title="EN / DE">@(Loc.Lang == Language.En ? "EN" : "DE")</button>
+        @* Also outside a session: "I cannot get into my game" is a report that has to be possible to send. *@
+        <button class="btn btn-sm btn-ghost ab-bug" @onclick="() => showBug = true" title='@Loc["bug.title"]'><MaterialIcon Name="bug_report" /></button>
     }
 </div>
 
@@ -87,6 +91,11 @@
     <p class="legal-meta">Version @AppVersion</p>
 </footer>
 </div>
+
+@if (showBug)
+{
+    <BugReportModal OnClose="() => showBug = false" />
+}
 
 @if (showStats && Store.Session is not null)
 {
@@ -168,16 +177,17 @@
 }
 
 @code {
-    /// <summary>The product version from <c>Directory.Build.props</c>, shown in the footer. The informational
-    /// version carries a <c>+&lt;commit&gt;</c> suffix once a build stamps one, which is for a bug report,
-    /// not for a footer — so it is cut off here.</summary>
-    private static readonly string AppVersion =
+    /// <summary>The product version from <c>Directory.Build.props</c>, shown in the footer and sent with a bug
+    /// report. The informational version carries a <c>+&lt;commit&gt;</c> suffix once a build stamps one,
+    /// which is for a bug report, not for a footer — so it is cut off here.</summary>
+    public static readonly string AppVersion =
         (typeof(MainLayout).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
          ?? typeof(MainLayout).Assembly.GetName().Version?.ToString()
          ?? "").Split('+')[0];
 
     private bool showStats;
+    private bool showBug;
     private bool showQr;
     private bool endGame;
     private void CloseStats() { showStats = false; endGame = false; StateHasChanged(); }

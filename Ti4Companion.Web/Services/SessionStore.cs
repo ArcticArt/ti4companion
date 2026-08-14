@@ -654,7 +654,18 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
             };
         }
 
-        if (_hub.State == HubConnectionState.Disconnected) await _hub.StartAsync();
+        // ⚠️ A hub that will not start must NOT take the session down with it. The state is already loaded and
+        // correct at this point; the hub only makes it live. When StartAsync threw — a network that blocks
+        // WebSockets, a proxy, a browser that refuses the upgrade — the exception travelled out of
+        // ConnectAsync before it ever raised OnChange, and the page sat on "Lädt…" with a fully loaded
+        // session behind it. Seen in a browser here, and it is exactly what a restrictive network does to a
+        // player. Without the hub the app still works: every mutation returns the new state, and a refresh
+        // re-reads it. WithAutomaticReconnect keeps trying in the background.
+        if (_hub.State == HubConnectionState.Disconnected)
+        {
+            try { await _hub.StartAsync(); }
+            catch (Exception ex) { Console.WriteLine($"ti4: live updates unavailable ({ex.Message})"); }
+        }
 
         // Switch groups if we were watching a different session.
         if (_joinedCode is not null && _joinedCode != code)

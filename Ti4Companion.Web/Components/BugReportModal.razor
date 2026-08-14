@@ -1,0 +1,102 @@
+@inherits Ti4ComponentBase
+@inject Ti4ApiClient Api
+@inject IJSRuntime JS
+
+@*
+    "Something is wrong here." A player types what happened, the report lands in the database, and it is read
+    in the Ops tool.
+
+    Everything except the text and the (optional) contact is collected without asking: which session, which
+    seat, which phase and round, which build, which browser. A reporter should not have to know any of that,
+    and "in the agenda phase of round 4, on an iPhone" is usually where a fix starts. No IP address is stored
+    with it, here or on the server.
+*@
+<div class="modal-backdrop centered blurred" @onclick="Close">
+    <div class="modal bug-modal" @onclick:stopPropagation="true">
+        <div class="modal-head">
+            <h3 style="margin:0;"><MaterialIcon Name="bug_report" /> @Loc["bug.title"]</h3>
+        </div>
+        <div class="modal-body">
+            @if (sent)
+            {
+                <p class="bug-thanks"><MaterialIcon Name="check" /> @Loc["bug.thanks"]</p>
+            }
+            else
+            {
+                <p class="faint" style="margin:0 0 .6rem;">@Loc["bug.hint"]</p>
+                <textarea class="bug-text" rows="6" maxlength="2000" @bind="text" @bind:event="oninput"
+                          placeholder="@Loc["bug.placeholder"]" disabled="@busy"></textarea>
+
+                <label class="bug-label">@Loc["bug.contact"]</label>
+                <input class="bug-contact" type="text" maxlength="120" @bind="contact" @bind:event="oninput"
+                       placeholder="@Loc["bug.contactPlaceholder"]" disabled="@busy" />
+                <p class="faint bug-note">@Loc["bug.contactHint"]</p>
+
+                @* What is being sent along, spelled out — nobody should have to guess what leaves their device. *@
+                <p class="faint bug-note">@Loc["bug.context"]: @ContextLine()</p>
+                @if (failed)
+                {
+                    <p class="bug-failed">@Loc["bug.failed"]</p>
+                }
+            }
+        </div>
+        <div class="modal-actions">
+            @if (sent)
+            {
+                <div class="spacer" style="flex:1"></div>
+                <button class="btn btn-gold" @onclick="Close">@Loc["common.close"]</button>
+            }
+            else
+            {
+                <button class="btn" @onclick="Close" disabled="@busy">@Loc["common.cancel"]</button>
+                <div class="spacer" style="flex:1"></div>
+                <span class="faint bug-count">@text.Length/2000</span>
+                <button class="btn btn-gold" @onclick="Send" disabled="@(busy || text.Trim().Length == 0)">
+                    @Loc["bug.send"]
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string text = "";
+    private string contact = "";
+    private bool busy, sent, failed;
+
+    /// <summary>The context line, also shown to the reporter: session, seat, phase and round.</summary>
+    private string ContextLine()
+    {
+        var s = Store.Session;
+        if (s is null) return Loc["bug.contextNone"];
+        var me = Store.Me?.Name;
+        var where = $"{s.JoinCode} · {Loc[$"phase.{s.Phase}"]} · {Loc["turn.round"]} {s.CurrentRound}";
+        return string.IsNullOrWhiteSpace(me) ? where : $"{where} · {me}";
+    }
+
+    private async Task Send()
+    {
+        busy = true;
+        failed = false;
+        var s = Store.Session;
+        var ua = "";
+        try { ua = await JS.InvokeAsync<string>("eval", "navigator.userAgent"); } catch { /* not worth failing over */ }
+
+        var ok = await Api.SendBugReportAsync(new BugReportRequest(
+            Text: text,
+            JoinCode: s?.JoinCode,
+            PlayerName: Store.Me?.Name,
+            Context: s is null ? null : $"{s.Phase} · round {s.CurrentRound}",
+            Version: MainLayout.AppVersion,
+            UserAgent: ua,
+            Contact: string.IsNullOrWhiteSpace(contact) ? null : contact));
+
+        busy = false;
+        if (ok) sent = true; else failed = true;
+        StateHasChanged();
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+}
