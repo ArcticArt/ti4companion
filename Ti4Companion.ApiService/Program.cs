@@ -154,20 +154,40 @@ app.MapGet("/api/activity", async (Ti4DbContext db, CancellationToken ct) =>
     // "end game" records a summary unconditionally, so a session abandoned during setup and then closed
     // would otherwise arrive here as a game.
     var finished = await db.SessionSummaries.AsNoTracking()
-        .Select(s => new { s.SessionId, s.StartedAtUtc, s.LastActivityUtc }).ToListAsync(ct);
+        .Select(s => new { s.SessionId, s.StartedAtUtc, s.LastActivityUtc, s.RecordedAtUtc }).ToListAsync(ct);
 
-    int Games(int hours)
+    // "Running" and "played today" are different questions, so they are counted differently
+    // (2026-08-14, on request — a game the host had ended still showed as running for an hour):
+    //   * played today INCLUDES finished games. That is the whole reason the summaries are unioned in:
+    //     an ended-and-closed game has no session row left, and it is the kind we are surest about.
+    //   * running EXCLUDES them. A finished game is not running, however recently it was touched.
+    //
+    // "Finished" = a summary exists for it. Deliberately that blunt: a first attempt tried to tell
+    // "ended and idle" from "ended but playing on" by asking whether the session had been touched SINCE
+    // the summary was recorded — which never excludes anything, because RECORDING the summary is itself
+    // a mutation and bumps LastActivityUtc past it. Verified failing before this rewrite.
+    // The remaining inaccuracy is the narrow case where a table declares the game over and keeps playing
+    // anyway; it then stops counting as running. The app was told the game ended, so that reading is
+    // defensible, and "back to setup" lands in Setup and is excluded by the line above regardless.
+    var finishedIds = finished.Select(s => s.SessionId).ToHashSet();
+
+    int Games(int hours, bool includeFinished)
     {
         var since = now.AddHours(-hours);
         var ids = new HashSet<Guid>();
         foreach (var s in sessions)
-            if (s.Phase != GamePhase.Setup && s.LastActivityUtc >= since) ids.Add(s.Id);
-        foreach (var s in finished)
-            if (s.StartedAtUtc is not null && s.LastActivityUtc >= since) ids.Add(s.SessionId);
+        {
+            if (s.Phase == GamePhase.Setup || s.LastActivityUtc < since) continue;
+            if (!includeFinished && finishedIds.Contains(s.Id)) continue;
+            ids.Add(s.Id);
+        }
+        if (includeFinished)
+            foreach (var s in finished)
+                if (s.StartedAtUtc is not null && s.LastActivityUtc >= since) ids.Add(s.SessionId);
         return ids.Count;
     }
 
-    return Results.Ok(new ActivityDto(Games(24), Games(1)));
+    return Results.Ok(new ActivityDto(Games(24, includeFinished: true), Games(1, includeFinished: false)));
 }).RequireRateLimiting("session-read");
 
 app.MapContentEndpoints();
