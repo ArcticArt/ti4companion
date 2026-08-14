@@ -395,7 +395,9 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     public async Task AddLocalPlayerAsync(string name)
     {
         if (Session is null) return;
-        await api.JoinSessionAsync(Session.Id, new JoinSessionRequest(name, null, null, Guid.NewGuid().ToString("N")));
+        // No device token: this seat is laid out for somebody who is not here yet. It used to send a
+        // random one, which made every empty chair count as its own device in the statistics.
+        await api.JoinSessionAsync(Session.Id, new JoinSessionRequest(name, null, null, null, null, Unclaimed: true));
         await RefreshAsync();
     }
 

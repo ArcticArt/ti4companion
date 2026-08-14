@@ -595,8 +595,10 @@ public static class SessionEndpoints
             var claimed = session.Players.FirstOrDefault(p => p.Id == claimId);
             if (claimed is null) return Results.NotFound();
             // One device controls one seat: orphan any other player this device currently held.
+            // NULL, not a fresh GUID — an unheld seat belongs to no device, and inventing one made it
+            // count as a separate device in every statistic that asks COUNT(DISTINCT DeviceToken).
             foreach (var other in session.Players.Where(p => p.Id != claimed.Id && p.DeviceToken == deviceToken))
-                other.DeviceToken = Guid.NewGuid().ToString("N");
+                other.DeviceToken = null;
             claimed.DeviceToken = deviceToken;
             if (!string.IsNullOrWhiteSpace(req.Name)) claimed.Name = Clamp(req.Name);
             target = claimed;
@@ -625,7 +627,9 @@ public static class SessionEndpoints
                     FactionId = ClampId(req.FactionId),
                     ColorHex = SanitizeColor(req.ColorHex),
                     SeatOrder = session.Players.Count == 0 ? 0 : session.Players.Max(p => p.SeatOrder) + 1,
-                    DeviceToken = deviceToken,
+                    // A seat the host lays out for an absent player belongs to no device yet — see
+                    // JoinSessionRequest.Unclaimed. Whoever joins later claims it and puts their token on it.
+                    DeviceToken = req.Unclaimed ? null : deviceToken,
                 };
                 session.Players.Add(target);
                 Log(db, session, SessionLogKind.PlayerJoin, target.Id, target.Id);

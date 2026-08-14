@@ -313,9 +313,14 @@ public record CreateSessionRequest(
     string HostName, string? FactionId, string? ColorHex, string? DeviceToken);
 
 /// <summary>Join a session. With <paramref name="ClaimPlayerId"/> set, take over (claim) that existing
-/// non-host seat instead of creating a new player; otherwise a new player is added (capped at 8).</summary>
+/// non-host seat instead of creating a new player; otherwise a new player is added (capped at 8).
+///
+/// <paramref name="Unclaimed"/> is the HOST laying out a seat in setup for somebody who is not here yet.
+/// Such a seat gets NO device token, because no device holds it. It used to be given a freshly generated
+/// one, which made every empty chair look like its own device — a six-player table set up on one iPad
+/// reported six devices. Anyone joining later claims the seat and puts their real token on it.</summary>
 public record JoinSessionRequest(string Name, string? FactionId, string? ColorHex, string? DeviceToken,
-    Guid? ClaimPlayerId = null);
+    Guid? ClaimPlayerId = null, bool Unclaimed = false);
 
 /// <summary>Declare a combat. <paramref name="PlayerId"/> defaults to whoever is up.</summary>
 public record StartCombatRequest(Guid OpponentId, Guid? PlayerId = null);
