@@ -377,9 +377,27 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     // device held there (see RecentSession — the device token alone cannot express that).
 
     /// <summary>Sessions this device has been in, newest first — at most <see cref="MaxRecent"/>.</summary>
-    public async Task<List<RecentSession>> RecentAsync()
+    public async Task<List<RecentSession>> RecentAsync() => (await ReadRecentAsync()).List;
+
+    /// <summary>
+    /// The remembered sessions, and whether the STORAGE actually answered.
+    /// <para>
+    /// ⚠️ The difference is not cosmetic: every writer below rewrites the WHOLE list, so a read that failed
+    /// and came back as "no sessions" would be persisted as exactly that on the next remember — the start
+    /// page would then be empty for good. Same defect as the device token, one key over, and the same report:
+    /// resuming offered nothing, and the code had to be read out of the Ops tool.
+    /// </para>
+    /// </summary>
+    private async Task<(bool Ok, List<RecentSession> List)> ReadRecentAsync()
     {
-        var raw = await storage.GetAsync(KeyRecent);
+        var (ok, raw) = await storage.TryGetAsync(KeyRecent);
+        if (!ok)
+        {
+            // One retry, for the same reason the device token gets one: the interop can fail while the page
+            // is still settling, and that moment passes.
+            await Task.Delay(200);
+            (ok, raw) = await storage.TryGetAsync(KeyRecent);
+        }
         List<RecentSession>? list = null;
         if (!string.IsNullOrWhiteSpace(raw))
         {
@@ -395,13 +413,15 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
             if (!string.IsNullOrWhiteSpace(code) && Guid.TryParse(player, out var legacy))
                 list.Add(new RecentSession(code, "", "", legacy, DateTimeOffset.UtcNow));
         }
-        return list.OrderByDescending(r => r.LastSeen).Take(MaxRecent).ToList();
+        return (ok, list.OrderByDescending(r => r.LastSeen).Take(MaxRecent).ToList());
     }
 
     /// <summary>Record (or refresh) this device's seat in a session, and drop the oldest beyond the cap.</summary>
     private async Task RememberAsync(SessionStateDto s, Guid playerId)
     {
-        var list = await RecentAsync();
+        var (ok, list) = await ReadRecentAsync();
+        // Storage did not answer. Writing now would replace every remembered session with this one alone.
+        if (!ok) return;
         list.RemoveAll(r => string.Equals(r.Code, s.JoinCode, StringComparison.OrdinalIgnoreCase));
         var name = s.Players.FirstOrDefault(p => p.Id == playerId)?.Name ?? "";
         list.Insert(0, new RecentSession(s.JoinCode, s.Name, name, playerId, DateTimeOffset.UtcNow, s.CreatedAtUtc));
@@ -412,7 +432,8 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     /// <summary>Forget a session — it is gone from the server (archived, wiped) or the code was wrong.</summary>
     public async Task ForgetRecentAsync(string code)
     {
-        var list = await RecentAsync();
+        var (ok, list) = await ReadRecentAsync();
+        if (!ok) return;   // see ReadRecentAsync: never write a list we could not read
         if (list.RemoveAll(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase)) == 0) return;
         await storage.SetAsync(KeyRecent, JsonSerializer.Serialize(list));
     }
@@ -424,7 +445,8 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
     /// </summary>
     public async Task ForgetSeatAsync(string code)
     {
-        var list = await RecentAsync();
+        var (ok, list) = await ReadRecentAsync();
+        if (!ok) return;   // see ReadRecentAsync
         var idx = list.FindIndex(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase));
         if (idx < 0 || list[idx].PlayerId == Guid.Empty) return;
         list[idx] = list[idx] with { PlayerId = Guid.Empty, PlayerName = "" };
