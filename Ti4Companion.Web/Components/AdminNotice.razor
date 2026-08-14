@@ -1,0 +1,80 @@
+@inherits Ti4ComponentBase
+@implements IDisposable
+@inject Ti4ApiClient Api
+@inject BrowserStorage Storage
+
+@*
+    An announcement from whoever runs the instance: "the server restarts in ten minutes", "there is a bug in
+    the agenda phase, please reload". Written from the Ops tool into a file on the server (see NoticeService);
+    this only shows it.
+
+    Deliberately the same shape as the update notice, so the app has ONE way of saying "read this" — but red
+    and at the TOP, because it comes from outside the game and is not about a button the reader can press.
+    Dismissable, and the dismissal is remembered per device and per MESSAGE: a device that clicked one away
+    still has to see the next one.
+
+    Polling rather than a push: a client outside a session holds no SignalR connection at all (the hub's
+    groups are per join code), and this has to reach the start page too. The answer is a cached stat() on the
+    server, and the interval is a minute, which is the right order for "in ten minutes".
+*@
+@if (!string.IsNullOrEmpty(notice.Text) && notice.Id != dismissedId)
+{
+    <div class="notice-bar" role="alert">
+        <MaterialIcon Name="campaign" Class="nb-icon" SizeCss="1em" />
+        <div class="nb-text">@notice.Text</div>
+        <button class="btn btn-ghost nb-close" @onclick="Dismiss" title='@Loc["common.close"]'>
+            <MaterialIcon Name="close" />
+        </button>
+    </div>
+}
+
+@code {
+    private const string StorageKey = "ti4.notice";
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
+
+    private NoticeDto notice = new("", "");
+    private string dismissedId = "";
+    private PeriodicTimer? timer;
+    private CancellationTokenSource? cts;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        dismissedId = await Storage.GetAsync(StorageKey) ?? "";
+        await Poll();
+        _ = Loop();
+    }
+
+    private async Task Loop()
+    {
+        cts = new CancellationTokenSource();
+        timer = new PeriodicTimer(Interval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cts.Token)) await Poll();
+        }
+        catch (OperationCanceledException) { /* the page is going away */ }
+    }
+
+    private async Task Poll()
+    {
+        var next = await Api.GetNoticeAsync();
+        if (next is null || (next.Text == notice.Text && next.Id == notice.Id)) return;
+        notice = next;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Dismiss()
+    {
+        dismissedId = notice.Id;
+        await Storage.SetAsync(StorageKey, dismissedId);
+    }
+
+    public override void Dispose()
+    {
+        cts?.Cancel();
+        timer?.Dispose();
+        cts?.Dispose();
+        base.Dispose();
+    }
+}

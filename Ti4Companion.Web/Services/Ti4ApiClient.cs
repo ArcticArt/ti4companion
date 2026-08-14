@@ -22,6 +22,14 @@ public class Ti4ApiClient(HttpClient http)
     public Task<InstanceDto?> GetInstanceAsync()
         => http.GetFromJsonAsync<InstanceDto>("api/instance");
 
+    /// <summary>The operator's announcement, polled while a page is open. Any failure is silence: a banner
+    /// that cannot be fetched is not worth an error on a table's screen.</summary>
+    public async Task<NoticeDto?> GetNoticeAsync()
+    {
+        try { return await http.GetFromJsonAsync<NoticeDto>("api/notice"); }
+        catch { return null; }
+    }
+
     public Task<PushKeyDto?> GetPushKeyAsync()
         => http.GetFromJsonAsync<PushKeyDto>("api/push/key");
 

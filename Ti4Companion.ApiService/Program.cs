@@ -52,6 +52,9 @@ builder.Services.AddHostedService<SessionCleanupWorker>();
 builder.Services.AddHttpClient<PushServiceClient>();
 builder.Services.AddSingleton<PushService>();
 
+// The operator's announcement, read from a file beside the session database (see NoticeService).
+builder.Services.AddSingleton<NoticeService>();
+
 var app = builder.Build();
 
 // Apply migrations to both databases on startup. The master content DB is bootstrapped from the JSON
@@ -114,6 +117,11 @@ app.MapGet("/api/ping", () => Results.Ok(new { status = "ok", time = DateTimeOff
 // Unauthenticated and unmetered on purpose: every client asks once at startup, before any session exists.
 app.MapGet("/api/instance", (IConfiguration cfg) =>
     Results.Ok(new InstanceDto(cfg["Ti4:InstanceLabel"] ?? "")));
+
+// Anything the operator wants to tell everybody, or an empty string. Every client polls this while it is
+// open, so it is metered like the other public reads — and answered from a cached stat(), see NoticeService.
+app.MapGet("/api/notice", (NoticeService notice) => Results.Ok(notice.Current()))
+   .RequireRateLimiting("session-read");
 
 // The VAPID public key a browser needs to subscribe for "you're up". Empty => push is not configured and
 // the client hides the feature. The PRIVATE key never leaves the server (systemd environment, not appsettings).

@@ -118,6 +118,10 @@ Environment=Ti4__PausedRetentionHours=8760
 # Environment=Ti4__Vapid__Subject=mailto:you@example.com
 # Optional: marks a non-production instance with a permanent badge on every screen.
 # Environment=Ti4__InstanceLabel=TEST
+# Optional: where the operator's announcement is read from (a red bar at the top of every client, see
+# below). The default is notice.json beside the session database, which is what you want — set this only
+# if the data directory is somewhere else.
+# Environment=Ti4__NoticePath=/var/lib/ti4companion/notice.json
 # Hardening (the service runs as an unprivileged user)
 NoNewPrivileges=true
 PrivateTmp=true

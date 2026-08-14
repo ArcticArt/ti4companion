@@ -378,6 +378,14 @@ public record SetStatusStageRequest(StatusStage Stage);
 /// LAN address, a renamed subdomain and a second staging box.</summary>
 public record InstanceDto(string Label);
 
+/// <summary>An announcement from whoever runs the instance, shown at the top of every screen until the
+/// reader clicks it away. <paramref name="Text"/> empty means there is nothing to say.
+/// <para>
+/// <paramref name="Id"/> changes whenever the message does, and it is the ONLY thing the client stores when
+/// somebody dismisses it: a device that has closed one message must still be shown the next.
+/// </para></summary>
+public record NoticeDto(string Text, string Id);
+
 /// <summary>How busy the instance is, for the start page. Counts only — never anything that could identify a
 /// session or a player. <paramref name="Active"/> is "last activity within the hour"; the page shows the
 /// number, not the rule.</summary>
