@@ -106,6 +106,42 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+// Every static response must be revalidated before it is used (2026-08-14, found on an iPad still
+// running a build from before 2.0 after several deploys).
+//
+// The reason this is not optional here: `WasmFingerprintAssets` is FALSE — it has to be, or the boot
+// chain 404s under plain static serving (see DEPLOY.md) — so exactly ONE of the 67 files under
+// _framework carries a hash in its name. Every other name is stable while its CONTENT changes with
+// each deploy. Without a Cache-Control header a browser applies HEURISTIC freshness, typically a
+// fraction of the file's age, and then serves yesterday's code under today's name for hours or days
+// without ever asking. An old client against a new API is not a cosmetic problem: rejected requests
+// come back as 400 and the store treats those as "refresh, do not change", so the table taps and
+// nothing happens.
+//
+// `no-cache` does NOT mean "do not store" — it means "revalidate before use", and the ETag turns that
+// into a 304 with no body for everything unchanged. The service worker still does the real caching,
+// so this costs conditional requests, not downloads. Do NOT switch this to `immutable` unless the
+// fingerprints come back.
+app.Use((ctx, next) =>
+{
+    var path = ctx.Request.Path.Value ?? string.Empty;
+    if (!path.StartsWith("/api", StringComparison.OrdinalIgnoreCase)
+        && !path.StartsWith("/hubs", StringComparison.OrdinalIgnoreCase))
+    {
+        // Set at the LAST possible moment. Blazor's framework-files middleware puts its own
+        // `no-cache` on service-worker.js afterwards, and assigning here on the way IN left the
+        // response carrying the header twice — same meaning, but two Cache-Control lines is
+        // ambiguous to read and to any proxy in between. OnStarting runs once every other handler
+        // has had its say, and the typed property REPLACES rather than appends.
+        ctx.Response.OnStarting(() =>
+        {
+            ctx.Response.Headers.CacheControl = "no-cache, must-revalidate";
+            return Task.CompletedTask;
+        });
+    }
+    return next();
+});
+
 // Serve the Blazor WebAssembly client (hosted model: same origin as the API → no CORS).
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

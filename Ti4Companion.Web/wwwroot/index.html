@@ -108,10 +108,31 @@
                         return false;
                     }
                 } catch (e) { /* fall through */ }
+                window.ti4.update.reloading = true;
                 location.reload();
                 return true;
-            }
+            },
+            reloading: false
         };
+        // The new worker now activates by itself (see service-worker.published.js), so the NEXT launch is
+        // always current. This closes the remaining gap: a device that is never relaunched. When the
+        // controller changes we do NOT reload on the spot — that would yank somebody out of their turn —
+        // but the moment the page goes into the background we do, so they come back to the new version.
+        //
+        // Waiting for "hidden" rather than reloading immediately is the whole point. It also costs
+        // nothing to be wrong about: this app's state lives on the server, so a reload restores the same
+        // screen and the same seat, it just takes a second.
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (window.ti4.update.reloading) { return; }   // the user already asked, apply() reloads
+                window.ti4.update.reloading = true;
+                var reloadWhenAway = function () {
+                    if (document.visibilityState === 'hidden') { location.reload(); }
+                };
+                document.addEventListener('visibilitychange', reloadWhenAway);
+                reloadWhenAway();                              // already in the background? then now.
+            });
+        }
         // Resolves once the page is fully loaded and one frame has been painted. Used by the start page's
         // senate backdrop: ~150 pods with 24 photographs must never be laid out while the browser is still
         // pulling the app down, or the very first visit pays for decoration before it gets a page.

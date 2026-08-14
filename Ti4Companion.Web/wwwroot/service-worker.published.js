@@ -19,6 +19,29 @@ const manifestUrlList = self.assetsManifest.assets.map(asset => new URL(asset.ur
 async function onInstall(event) {
     console.info('Service worker: Install');
 
+    // Take over as soon as the new version is cached, instead of waiting for every tab of the origin
+    // to close (2026-08-14). This reverses an earlier decision, and the reason it was made no longer
+    // holds:
+    //
+    //   * The old caution was that activating drops the cache the running version reads from, and that
+    //     its FINGERPRINTED framework files would be gone from the server too, breaking a game
+    //     mid-deploy. But `WasmFingerprintAssets` is false here — exactly one of the 67 files under
+    //     _framework carries a hash — so the names are stable and a late request resolves to the new
+    //     file rather than a 404.
+    //   * The cost of waiting turned out to be the worse half: an installed home-screen app on iOS is
+    //     essentially never fully closed, so a device sat on a pre-2.0 build across several deploys.
+    //     An old client against a new API gets 400s, and the store treats those as "refresh, do not
+    //     change" — the table taps and nothing happens.
+    //
+    // The page that is CURRENTLY open keeps running its old code; only the next launch is new. That is
+    // deliberate: nobody gets yanked out of a turn, and this app's state lives on the server anyway, so
+    // a relaunch costs seconds and loses nothing. UpdateNotice still offers the immediate reload.
+    //
+    // Note this rescues clients whose INSTALLED worker predates the change: skipWaiting is called by
+    // the new worker during its own install, not by the old one.
+    self.skipWaiting();
+
+
     // Fetch and cache all matching items from the assets manifest
     const assetsRequests = self.assetsManifest.assets
         .filter(asset => offlineAssetsInclude.some(pattern => pattern.test(asset.url)))
@@ -35,6 +58,11 @@ async function onActivate(event) {
     await Promise.all(cacheKeys
         .filter(key => key.startsWith(cacheNamePrefix) && key !== cacheName)
         .map(key => caches.delete(key)));
+
+    // Control the already-open pages too, not only the ones opened from here on. Without this, a page
+    // loaded under the previous worker stays uncontrolled until it navigates — on an installed app
+    // that can be days.
+    await self.clients.claim();
 }
 
 // Switch over NOW, because the app asked. A newly installed worker otherwise waits until every tab of the
