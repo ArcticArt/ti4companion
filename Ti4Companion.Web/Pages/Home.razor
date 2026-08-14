@@ -234,11 +234,17 @@
         return local.ToString(pattern, CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// The remembered sessions are what this page is FOR, so they are read before anything that talks to the
+    /// network — and each network call is on its own. An exception here does not stop the page from
+    /// rendering, it stops the REST of this method from running, which is how the start page came up with an
+    /// empty "resume" list while the sessions were sitting in storage all along (reported 2026-08-14).
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
-        await Store.InitAsync();
+        await Store.InitAsync();                 // no longer throws on a failed content fetch
         recent = await Store.RecentAsync();
-        activity = await Store.Api.GetActivityAsync();
+        try { activity = await Store.Api.GetActivityAsync(); } catch { activity = null; }
     }
 
     /// <summary>

@@ -16,8 +16,16 @@ public class Ti4ApiClient(HttpClient http)
         if (!string.IsNullOrEmpty(token)) http.DefaultRequestHeaders.Add(DeviceTokenHeader, token);
     }
 
-    public Task<ContentBundleDto?> GetContentAsync()
-        => http.GetFromJsonAsync<ContentBundleDto>("api/content");
+    /// <summary>The reference content. Null when it could not be fetched — a caller must be able to carry on
+    /// without it, because this is a big download over somebody's phone connection and it fails sometimes.
+    /// It used to throw, and the throw travelled all the way out of <c>OnInitializedAsync</c> on the start
+    /// page, which meant the remembered sessions below it were never even read (reported 2026-08-14: "the
+    /// list was empty, then I created a session and the old one was back").</summary>
+    public async Task<ContentBundleDto?> GetContentAsync()
+    {
+        try { return await http.GetFromJsonAsync<ContentBundleDto>("api/content"); }
+        catch { return null; }
+    }
 
     public Task<InstanceDto?> GetInstanceAsync()
         => http.GetFromJsonAsync<InstanceDto>("api/instance");
