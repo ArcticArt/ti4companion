@@ -281,14 +281,69 @@ public class SessionStore(Ti4ApiClient api, BrowserStorage storage, Loc loc, Nav
         return order;
     }
 
+    /// <summary>True when this page load is running on a token that could NOT be stored — localStorage was
+    /// unreachable. The device then looks new to the server on every load, which is bad, but it is far better
+    /// than overwriting the identity that is sitting in storage and cannot be read at this moment.</summary>
+    public bool DeviceTokenIsVolatile { get; private set; }
+
+    /// <summary>
+    /// The device's identity. Read once, minted only when storage says there is genuinely nothing there.
+    /// <para>
+    /// ⚠️ This used to be <c>GetAsync(...)</c> with a null check, and <see cref="BrowserStorage.GetAsync"/>
+    /// swallows every exception — so a single failed interop call was indistinguishable from "this device is
+    /// new", and the next line then WROTE a fresh token over the existing one. That is how a device loses its
+    /// seat without anyone touching it: the server no longer recognises the token, the by-code read comes back
+    /// with no <c>CallerPlayerId</c>, and the client dutifully gives the seat up. Reported from production
+    /// (2026-08-14): resuming a session failed, joining by code worked, and the Ops tool showed a NEW device
+    /// on the same phone.
+    /// </para>
+    /// <para>
+    /// So: a failed read is retried, never treated as absence; a minted token is read back to make sure it
+    /// actually landed (and to lose a race against another tab in favour of whatever is stored); and if
+    /// storage cannot be reached at all, the token stays in memory rather than replacing what is on disk.
+    /// </para>
+    /// </summary>
+    private async Task EnsureDeviceTokenAsync()
+    {
+        var (ok, stored) = await storage.TryGetAsync(KeyDevice);
+        if (!ok)
+        {
+            // One retry: the interop can fail while the page is still settling (a service worker taking over,
+            // a tab being restored), and that moment passes.
+            await Task.Delay(200);
+            (ok, stored) = await storage.TryGetAsync(KeyDevice);
+        }
+
+        if (!string.IsNullOrEmpty(stored))
+        {
+            DeviceToken = stored;
+            DeviceTokenIsVolatile = false;
+            return;
+        }
+
+        var minted = Guid.NewGuid().ToString("N");
+        if (!ok)
+        {
+            // Storage is unreachable. Use the new token for this page load, but do NOT persist it — there may
+            // be a perfectly good one on disk that we simply could not read.
+            DeviceToken = minted;
+            DeviceTokenIsVolatile = true;
+            Console.WriteLine("ti4: localStorage unreadable — using a temporary device token for this load.");
+            return;
+        }
+
+        var saved = await storage.SetAsync(KeyDevice, minted);
+        // Read back: if another tab minted one at the same time, whichever landed first is the device's, and
+        // if the write silently did nothing we want to know rather than assume.
+        var (readOk, after) = await storage.TryGetAsync(KeyDevice);
+        DeviceToken = readOk && !string.IsNullOrEmpty(after) ? after : minted;
+        DeviceTokenIsVolatile = !saved || !readOk || string.IsNullOrEmpty(after);
+        if (DeviceTokenIsVolatile) Console.WriteLine("ti4: the new device token could not be stored.");
+    }
+
     public async Task InitAsync()
     {
-        DeviceToken = await storage.GetAsync(KeyDevice);
-        if (string.IsNullOrEmpty(DeviceToken))
-        {
-            DeviceToken = Guid.NewGuid().ToString("N");
-            await storage.SetAsync(KeyDevice, DeviceToken);
-        }
+        await EnsureDeviceTokenAsync();
         api.SetDeviceToken(DeviceToken); // identify this device so the server can enforce host rights
 
         var langStr = await storage.GetAsync(KeyLang);
